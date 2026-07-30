@@ -3,7 +3,6 @@ dev = [
   "bandit>=1.8.6",
   "hassil>=3.5.0",
   "home-assistant-intents>=2026.3.24",
-  "mistral-vibe>=2.7.0",
   "pre-commit>=4.3.0",
   "pymarkdownlnt>=0.9.32",
   "pytest>=9.0.3",
@@ -12,7 +11,7 @@ dev = [
   "ruff>=0.13.2",
   "toml-sort>=0.23.1",
   "ty>=0.0.24",
-  "validate-pyproject>=0.20.2"
+  "validate-pyproject>=0.20.2",
 ]
 
 [project]
@@ -20,6 +19,8 @@ name = "ha-mistral-conversation"
 version = "1.0.0"
 description = "A Home Assistant integration that provides a conversation agent powered by Mistral AI"
 readme = "README.md"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.13.2"
 dependencies = [
   "mistralai>=2.0.0",

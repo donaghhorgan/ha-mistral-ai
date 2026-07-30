@@ -116,6 +116,11 @@ structured output are all in scope.
 **Migration** — no `async_migrate_entry`. There are no git tags and no
 releases, so the entry schema is free to change.
 
+**Licence** — GPL-3.0. The `LICENSE` file was already correct; the README and
+`pyproject.toml` have been corrected to match. Applied, see Phase 4.1.
+
+**Vibe tooling** — dropped entirely. Applied, see Phase 4.5.
+
 The subentry model is chosen partly because it dissolves 2.4 by construction:
 settings live in `subentry.data`, and there is no `entry.data`/`entry.options`
 split left to get wrong.
@@ -281,12 +286,11 @@ are that exact error. No amount of mock-patching makes this suite meaningful.
 
 ### Phase 4 — Documentation and repository hygiene
 
-1. **Licence conflict.** `README.md` states "This project is licensed under the
-   MIT License" but `LICENSE` is the 674-line **GNU GPL v3**. These cannot both
-   be right and the discrepancy is legally meaningful. Maintainer decision
-   required: fix the README to say GPL-3.0, or replace `LICENSE` with MIT.
-   Nothing else in Phase 4 should land before this is settled. `pyproject.toml`
-   declares no `license` field at all — set it to match once decided.
+1. ~~**Licence conflict.**~~ **Done.** `README.md` claimed MIT while `LICENSE`
+   is the 674-line GNU GPL v3. Resolved in favour of GPL-3.0: the README now
+   says GPL v3, and `pyproject.toml` (which declared no `license` field at all)
+   now carries `license = "GPL-3.0-only"` with `license-files = ["LICENSE"]`.
+   `LICENSE` itself was already correct and is unchanged.
 2. **README corrections.** The minimum HA version (see section 4); the manual
    installation file tree, which lists `client.py` and `strings.json` (neither
    exists) and omits `entity.py` and `translations/`; the configuration section,
@@ -304,14 +308,17 @@ are that exact error. No amount of mock-patching makes this suite meaningful.
    merged (`#2`-`#10`) but no configuration file is committed on any branch, so
    the behaviour is unpinned. Add `CODEOWNERS` to match the `codeowners` field
    already in `manifest.json`, plus issue templates and `CONTRIBUTING.md`.
-5. **Leftover tooling.** `mistral-vibe` is a dev dependency and `.vibe/` is
-   partially committed via `.gitignore` negations. It pulls `litellm` into
-   `uv.lock` (a large transitive tree for a repo whose only runtime dependency
-   is `mistralai`). Confirm this is intentional; if the `get-api-docs` skill is
-   still wanted, keep it, otherwise drop the dependency.
-6. **`.devcontainer.json`** — `postCreateCommand` installs
-   `@aisuite/chub` globally and the `astral-sh.type` extension ID looks
-   incorrect (the Astral type-checker extension is `astral-sh.ty`). Verify both.
+5. ~~**Leftover tooling.**~~ **Done.** `mistral-vibe` has been dropped, along
+   with the committed `.vibe/skills/get-api-docs/` skill, the four `.gitignore`
+   negation rules that partially committed it, the `npm install -g @aisuite/chub`
+   step in `.devcontainer.json`, and the Node 24 devcontainer feature that
+   existed only to serve it. This removed `litellm` and roughly 60 other
+   transitive packages from `uv.lock`. The skill's one durable lesson — verify
+   third-party APIs against the installed package instead of recalling them —
+   was rewritten into `AGENTS.md` in tool-agnostic form, since section 2 is
+   precisely what happens when that is not done.
+6. **`.devcontainer.json`** — the `astral-sh.type` extension ID looks incorrect
+   (the Astral type-checker extension is `astral-sh.ty`). Verify.
 
 ## 6. Definition of done
 
@@ -323,8 +330,8 @@ are that exact error. No amount of mock-patching makes this suite meaningful.
 - hassfest and HACS validation pass in CI.
 - The minimum Home Assistant version is stated identically in `hacs.json`,
   `pyproject.toml` and `README.md`, and enforced by a pre-commit hook.
-- The licence is stated consistently in `LICENSE`, `README.md` and
-  `pyproject.toml`.
+- ~~The licence is stated consistently in `LICENSE`, `README.md` and
+  `pyproject.toml`.~~ Done.
 - The README describes files and flows that actually exist.
 
 ## 7. Deliberately out of scope
@@ -332,4 +339,5 @@ are that exact error. No amount of mock-patching makes this suite meaningful.
 - Image generation via AI Task. Mistral's SDK exposes it, but no maintainer
   request exists.
 - Migration of existing config entries — see section 3.
-- Any change to `LICENSE`'s chosen licence beyond resolving the contradiction.
+- Relicensing. GPL-3.0 is confirmed as the intended licence; only the README and
+  `pyproject.toml` were corrected to match the existing `LICENSE`.
