@@ -74,17 +74,8 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # These three checks are requirements for listing in the HACS
-          # *default store*, not for installing as a custom repository, which
-          # is how this integration is distributed. They validate GitHub
-          # repository settings rather than anything in the tree, so no commit
-          # can satisfy them:
-          #
-          #   brands       needs an entry in home-assistant/brands
-          #   topics       needs repository topics set in the About section
-          #   description  needs a repository description in the About section
-          #
-          # Set the description and topics under the repository's About
-          # section and drop them from this list to restore full validation.
-          # Everything that does validate the tree itself still runs.
-          ignore: brands topics description
+          # `brands` requires an entry in the home-assistant/brands
+          # repository, which is a separate submission and is only needed to
+          # list in the HACS default store. This integration is installed as a
+          # custom repository, so it does not apply. Every other check runs.
+          ignore: brands
