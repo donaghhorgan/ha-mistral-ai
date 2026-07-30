@@ -1,561 +1,363 @@
 """Tests for the Mistral AI conversation entity."""
 
+from __future__ import annotations
+
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
+import voluptuous as vol
 from homeassistant.components import conversation
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_LLM_HASS_API
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import intent
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_conversation.const import (
-    CONF_API_KEY,
-    CONF_MAX_TOKENS,
     CONF_MODEL,
-    CONF_PROMPT,
     CONF_TEMPERATURE,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_MODEL,
-    DEFAULT_PROMPT,
-    DEFAULT_TEMPERATURE,
-)
-from custom_components.mistral_conversation.conversation import (
-    MistralConversationEntity,
-    async_setup_entry,
+    SUBENTRY_TYPE_CONVERSATION,
 )
 
+from .helpers import make_chunk, make_sdk_error, make_tool_call, stream_of
 
-@pytest.mark.asyncio
-async def test_async_setup_entry():
-    """Test setup of conversation entry."""
-    hass = MagicMock(spec=HomeAssistant)
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    mock_add_entities = MagicMock()
-
-    await async_setup_entry(hass, config_entry, mock_add_entities)
-
-    mock_add_entities.assert_called_once()
-    added_entities = mock_add_entities.call_args[0][0]
-    assert len(added_entities) == 1
-    assert isinstance(added_entities[0], MistralConversationEntity)
+ENTITY_ID = "conversation.mistral_ai_conversation"
 
 
-@pytest.mark.asyncio
-async def test_conversation_entity_initialization():
-    """Test conversation entity initialization."""
-    hass = MagicMock(spec=HomeAssistant)
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: "test_model"}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    assert entity._attr_name == "Mistral AI (test_model)"
-    assert entity._attr_unique_id == "test_entry_id"
-    assert entity._client is None
-
-
-@pytest.mark.asyncio
-async def test_supported_languages():
-    """Test supported languages."""
-    hass = MagicMock(spec=HomeAssistant)
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    languages = entity.supported_languages
-    assert languages == [conversation.MATCH_ALL]
-
-
-@pytest.mark.asyncio
-async def test_async_added_to_hass():
-    """Test entity added to hass."""
-    hass = MagicMock(spec=HomeAssistant)
-
-    # Mock async_add_executor_job to return the result of the function
-    async def mock_executor_job(func):
-        return func()
-
-    hass.async_add_executor_job = mock_executor_job
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_TEMPERATURE: DEFAULT_TEMPERATURE,
-        CONF_MAX_TOKENS: DEFAULT_MAX_TOKENS,
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    with patch(
-        "custom_components.mistral_conversation.conversation.Mistral"
-    ) as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        await entity.async_added_to_hass()
-
-        assert entity._client is not None
-        mock_client_class.assert_called_once_with(api_key="test_api_key")
-
-
-@pytest.mark.asyncio
-async def test_async_process_success():
-    """Test successful conversation processing."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the official Mistral client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "test response"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id="test_conversation_id",
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
-    )
-
-    result = await entity.async_process(user_input)
-
-    assert result.conversation_id == "test_conversation_id"
-    assert result.response.speech["plain"]["speech"] == "test response"
-
-    # Verify client was called correctly
-    # The prompt should be rendered with the actual location name
-    expected_context = DEFAULT_PROMPT.replace("{{ ha_name }}", "Test Home")
-    expected_messages = [
-        {"role": "system", "content": expected_context},
-        {"role": "user", "content": "test question"},
-    ]
-    mock_client.chat.complete_async.assert_awaited_once_with(
-        model=DEFAULT_MODEL,
-        messages=expected_messages,
-        temperature=DEFAULT_TEMPERATURE,
-        max_tokens=DEFAULT_MAX_TOKENS,
-        tools=None,
+async def converse(
+    hass: HomeAssistant, text: str = "hello"
+) -> conversation.ConversationResult:
+    """Send a sentence to the agent under test."""
+    return await conversation.async_converse(
+        hass, text, None, Context(), agent_id=ENTITY_ID
     )
 
 
-@pytest.mark.asyncio
-async def test_async_process_client_not_initialized():
-    """Test conversation processing when client is not initialized."""
-    hass = MagicMock(spec=HomeAssistant)
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
+def speech(result: conversation.ConversationResult) -> str:
+    """Return the spoken text from a conversation result."""
+    return result.response.speech["plain"]["speech"]
 
-    entity = MistralConversationEntity(hass, config_entry)
-    entity._client = None
 
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id="test_conversation_id",
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+async def test_entity_created(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The conversation subentry produces an entity."""
+    state = hass.states.get(ENTITY_ID)
+    assert state is not None
+    assert state.attributes["supported_features"] == 0
+
+
+async def test_supported_languages(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The agent advertises support for every language."""
+    entity = hass.data["entity_components"]["conversation"].get_entity(ENTITY_ID)
+    assert entity.supported_languages == MATCH_ALL
+
+
+async def test_simple_message(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A plain response is returned to the caller."""
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="Hi, how can I help?"))
     )
 
-    with pytest.raises(ConfigEntryNotReady):
-        await entity.async_process(user_input)
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ACTION_DONE
+    assert speech(result) == "Hi, how can I help?"
 
 
-@pytest.mark.asyncio
-async def test_async_process_with_llm_api():
-    """Test conversation processing with LLM API."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {"llm": {"test_llm": MagicMock()}}
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-        CONF_LLM_HASS_API: "test_llm",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "test response"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id="test_conversation_id",
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+async def test_streamed_chunks_are_concatenated(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Content spread over several chunks is joined back together."""
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(
+            make_chunk(content="The kitchen "),
+            make_chunk(content="light is "),
+            make_chunk(content="on."),
+        )
     )
 
-    result = await entity.async_process(user_input)
+    result = await converse(hass)
 
-    assert result.conversation_id == "test_conversation_id"
-    assert result.response.speech["plain"]["speech"] == "test response"
-
-
-@pytest.mark.asyncio
-async def test_async_process_with_template_error():
-    """Test conversation processing with template error."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: "{{ invalid_template_syntax ",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "test response"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id="test_conversation_id",
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
-    )
-
-    result = await entity.async_process(user_input)
-
-    # Should fall back to default prompt when template error occurs
-    assert result.conversation_id == "test_conversation_id"
-    assert result.response.speech["plain"]["speech"] == "test response"
-
-    # Verify client was called with default prompt
-    mock_client.chat.complete_async.assert_awaited_once()
+    assert speech(result) == "The kitchen light is on."
 
 
-@pytest.mark.asyncio
-async def test_async_process_with_client_error():
-    """Test conversation processing with client error."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
+async def test_empty_stream(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A model that returns nothing degrades to an error, not an exception."""
+    mock_client.chat.stream_async = AsyncMock(side_effect=stream_of())
 
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
+    result = await converse(hass)
 
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client to raise an error
-    mock_client = AsyncMock()
-    mock_client.chat.complete_async.side_effect = Exception("API error")
-    entity._client = mock_client
-
-    # Create conversation input
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id="test_conversation_id",
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
-    )
-
-    result = await entity.async_process(user_input)
-
-    # Should return error response
-    assert result.conversation_id == "test_conversation_id"
-    assert result.response.intent is None
     assert result.response.response_type == intent.IntentResponseType.ERROR
 
 
-@pytest.mark.asyncio
-async def test_async_process_without_conversation_id():
-    """Test conversation processing without conversation ID."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
+async def test_model_options_are_sent(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Options configured on the subentry reach the API call.
 
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
+    This is the regression test for settings being written to the subentry but
+    read from the config entry, which silently discarded every one of them.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={CONF_MODEL: "mistral-large-latest", CONF_TEMPERATURE: 0.1},
+    )
+    await hass.async_block_till_done()
 
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "test response"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input without conversation_id
-    user_input = conversation.ConversationInput(
-        text="test question",
-        conversation_id=None,
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="ok"))
     )
 
-    result = await entity.async_process(user_input)
+    await converse(hass)
 
-    # Should generate a new conversation ID
-    assert result.conversation_id is not None
-    assert len(result.conversation_id) > 0
-    assert result.response.speech["plain"]["speech"] == "test response"
-
-
-@pytest.mark.asyncio
-async def test_attribution():
-    """Test attribution property."""
-    hass = MagicMock(spec=HomeAssistant)
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    assert entity.attribution == "Powered by Mistral AI"
+    kwargs = mock_client.chat.stream_async.await_args.kwargs
+    assert kwargs["model"] == "mistral-large-latest"
+    assert kwargs["temperature"] == 0.1
 
 
-@pytest.mark.asyncio
-async def test_conversation_history():
-    """Test that conversation history is properly stored and managed."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-    }
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "test response"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input with specific conversation ID
-    conversation_id = "test_conversation_123"
-    user_input = conversation.ConversationInput(
-        text="Hello, how are you?",
-        conversation_id=conversation_id,
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+async def test_tool_call(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A tool call is executed and its result fed back to the model."""
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
     )
-
-    # Process the conversation
-    result = await entity.async_process(user_input)
-
-    # Verify the response
-    assert result.conversation_id == conversation_id
-    assert result.continue_conversation is True
-
-    # Check that the conversation was processed successfully
-    # Note: Home Assistant manages chat logs internally, not in hass.data
-    assert result.conversation_id == conversation_id
-    assert result.continue_conversation is True
-
-    # Test second message in same conversation
-    user_input2 = conversation.ConversationInput(
-        text="What time is it?",
-        conversation_id=conversation_id,  # Same conversation ID
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={CONF_MODEL: "mistral-small-latest", CONF_LLM_HASS_API: ["assist"]},
     )
+    await hass.async_block_till_done()
 
-    mock_client.generate_response.return_value = "It's 2:30 PM"
-    result2 = await entity.async_process(user_input2)
-
-    # Verify the second response
-    assert result2.conversation_id == conversation_id
-    assert result2.continue_conversation is True
-
-    # Check that the second conversation was processed successfully
-    # Note: Home Assistant manages chat logs internally, not in hass.data
-    assert result2.conversation_id == conversation_id
-    assert result2.continue_conversation is True
-
-
-@pytest.mark.asyncio
-async def test_conversation_context_management():
-    """Test that conversation context is properly passed to the LLM."""
-    hass = MagicMock(spec=HomeAssistant)
-    hass.config = MagicMock()
-    hass.config.location_name = "Test Home"
-    hass.data = {}
-
-    config_entry = MagicMock(spec=ConfigEntry)
-    config_entry.data = {
-        CONF_API_KEY: "test_api_key",
-        CONF_PROMPT: DEFAULT_PROMPT,
-    }
-    config_entry.options = {CONF_MODEL: DEFAULT_MODEL}
-    config_entry.entry_id = "test_entry_id"
-    config_entry.options = {}
-
-    entity = MistralConversationEntity(hass, config_entry)
-
-    # Mock the client
-    mock_client = AsyncMock()
-    mock_chat_response = AsyncMock()
-    mock_message = AsyncMock()
-    mock_message.content = "response with context"
-    mock_choice = AsyncMock()
-    mock_choice.message = mock_message
-    mock_chat_response.choices = [mock_choice]
-    mock_client.chat.complete_async.return_value = mock_chat_response
-    entity._client = mock_client
-
-    # Create conversation input with specific conversation ID
-    conversation_id = "test_context_conversation"
-    user_input = conversation.ConversationInput(
-        text="First message",
-        conversation_id=conversation_id,
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
-    )
-
-    # Process first message
-    await entity.async_process(user_input)
-
-    # Verify first call included user message in history
-    first_call_args = mock_client.chat.complete_async.call_args
-    assert first_call_args[1]["messages"] == [
-        {
-            "role": "system",
-            "content": DEFAULT_PROMPT.replace("{{ ha_name }}", "Test Home"),
-        },
-        {"role": "user", "content": "First message"},
+    # First pass asks for a tool, second pass answers.
+    streams = [
+        stream_of(
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(
+                        index=0,
+                        call_id="call_1",
+                        name="test_tool",
+                        arguments='{"param": "value"}',
+                    )
+                ]
+            )
+        ),
+        stream_of(make_chunk(content="Done.")),
     ]
 
-    # Process second message in same conversation
-    user_input2 = conversation.ConversationInput(
-        text="Second message",
-        conversation_id=conversation_id,
-        language="en",
-        context=None,
-        device_id=None,
-        satellite_id=None,
-        agent_id=None,
+    async def next_stream(*args, **kwargs):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.chat.stream_async = AsyncMock(side_effect=next_stream)
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "turn on the light")
+
+    assert speech(result) == "Done."
+
+    # The tool actually ran, with parsed arguments rather than a raw string.
+    mock_tool.async_call.assert_awaited_once()
+    tool_input = mock_tool.async_call.await_args.args[1]
+    assert tool_input.tool_name == "test_tool"
+    assert tool_input.tool_args == {"param": "value"}
+
+    # The second request carried the tool result back to the model.
+    second_call = mock_client.chat.stream_async.await_args.kwargs
+    roles = [message["role"] for message in second_call["messages"]]
+    assert "tool" in roles
+
+
+async def test_tool_call_arguments_split_across_chunks(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Tool arguments streamed as JSON fragments are reassembled.
+
+    Mistral emits arguments a few characters at a time. Home Assistant runs a
+    tool the moment it is yielded, so a partial one would be called with
+    broken arguments.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={CONF_MODEL: "mistral-small-latest", CONF_LLM_HASS_API: ["assist"]},
+    )
+    await hass.async_block_till_done()
+
+    streams = [
+        stream_of(
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(
+                        index=0, call_id="call_1", name="test_tool", arguments='{"na'
+                    )
+                ]
+            ),
+            make_chunk(tool_calls=[make_tool_call(index=0, arguments='me": "kit')]),
+            make_chunk(tool_calls=[make_tool_call(index=0, arguments='chen"}')]),
+        ),
+        stream_of(make_chunk(content="Done.")),
+    ]
+
+    async def next_stream(*args, **kwargs):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.chat.stream_async = AsyncMock(side_effect=next_stream)
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        await converse(hass, "turn on the kitchen light")
+
+    tool_input = mock_tool.async_call.await_args.args[1]
+    assert tool_input.tool_args == {"name": "kitchen"}
+
+
+async def test_control_feature_requires_llm_api(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The CONTROL feature is only advertised when an LLM API is selected."""
+    assert hass.states.get(ENTITY_ID).attributes["supported_features"] == 0
+
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, subentry, data={CONF_LLM_HASS_API: ["assist"]}
+    )
+    await hass.async_block_till_done()
+
+    assert (
+        hass.states.get(ENTITY_ID).attributes["supported_features"]
+        == conversation.ConversationEntityFeature.CONTROL
     )
 
-    await entity.async_process(user_input2)
 
-    # Verify second call was made (conversation history is managed by chat_log system)
-    second_call_args = mock_client.chat.complete_async.call_args
-    assert second_call_args is not None
-    # The chat_log system handles conversation history internally
-    # We just verify that the second call was made successfully
+@pytest.mark.parametrize(
+    ("status_code", "expected"),
+    [
+        (401, "Invalid Mistral AI API key"),
+        (429, "Rate limited by Mistral AI"),
+        (500, "Error talking to Mistral AI"),
+    ],
+)
+async def test_api_errors_are_reported(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    status_code: int,
+    expected: str,
+) -> None:
+    """API failures surface as an error response rather than an exception."""
+    mock_client.chat.stream_async = AsyncMock(side_effect=make_sdk_error(status_code))
+
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert expected in speech(result)
+
+
+async def test_auth_error_starts_reauth(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A rejected key mid-conversation raises a reauth flow."""
+    mock_client.chat.stream_async = AsyncMock(side_effect=make_sdk_error(401))
+
+    await converse(hass)
+    await hass.async_block_till_done()
+
+    flows = hass.config_entries.flow.async_progress()
+    assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+
+
+async def test_prompt_and_history_are_sent(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The system prompt and prior turns are included in the request."""
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="First answer"))
+    )
+    first = await converse(hass, "first question")
+
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="Second answer"))
+    )
+    await conversation.async_converse(
+        hass,
+        "second question",
+        first.conversation_id,
+        Context(),
+        agent_id=ENTITY_ID,
+    )
+
+    messages = mock_client.chat.stream_async.await_args.kwargs["messages"]
+    roles = [message["role"] for message in messages]
+
+    assert roles[0] == "system"
+    assert "first question" in json.dumps(messages)
+    assert "First answer" in json.dumps(messages)
+    assert messages[-1]["content"] == "second question"
+
+
+async def test_transport_error_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A network failure surfaces as an error response, not a traceback."""
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=httpx.ConnectError("no route to host")
+    )
+
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert "Error talking to Mistral AI" in speech(result)
+
+
+async def test_timeout_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A timeout surfaces as an error response."""
+    mock_client.chat.stream_async = AsyncMock(side_effect=TimeoutError)
+
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR

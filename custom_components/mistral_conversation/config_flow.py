@@ -1,16 +1,24 @@
-"""Config flow for Mistral AI Conversation integration."""
+"""Config flow for the Mistral AI Conversation integration."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
+import httpx
 import voluptuous as vol
-from homeassistant import config_entries
-from homeassistant.const import CONF_LLM_HASS_API
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigEntryState,
+    ConfigFlow,
+    ConfigFlowResult,
+    ConfigSubentryFlow,
+    SubentryFlowResult,
+)
+from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
     NumberSelector,
@@ -26,6 +34,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 from mistralai.client import Mistral
+from mistralai.client.errors import SDKError
 
 from .const import (
     CONF_API_KEY,
@@ -33,15 +42,19 @@ from .const import (
     CONF_MODEL,
     CONF_PROMPT,
     CONF_TEMPERATURE,
+    DEFAULT_AI_TASK_NAME,
+    DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
-    DEFAULT_PROMPT,
     DEFAULT_TEMPERATURE,
     DOMAIN,
+    SUBENTRY_TYPE_AI_TASK_DATA,
+    SUBENTRY_TYPE_CONVERSATION,
+    TIMEOUT,
 )
 
 if TYPE_CHECKING:
-    from types import MappingProxyType
+    from collections.abc import Mapping
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,265 +66,244 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
-OPTIONS_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_MODEL, default=DEFAULT_MODEL): SelectSelector(
-            SelectSelectorConfig(
-                options=[],
-                mode=SelectSelectorMode.DROPDOWN,
-            )
-        ),
-        vol.Optional(CONF_TEMPERATURE, default=DEFAULT_TEMPERATURE): NumberSelector(
-            NumberSelectorConfig(
-                min=0.0,
-                max=2.0,
-                step=0.1,
-                mode=NumberSelectorMode.SLIDER,
-            )
-        ),
-        vol.Optional(CONF_MAX_TOKENS, default=DEFAULT_MAX_TOKENS): NumberSelector(
-            NumberSelectorConfig(
-                min=1,
-                max=4000,
-                step=1,
-                mode=NumberSelectorMode.BOX,
-            )
-        ),
-        vol.Optional(CONF_PROMPT): TemplateSelector(),
-        vol.Optional(CONF_LLM_HASS_API): SelectSelector(
-            SelectSelectorConfig(
-                options=[],
-                mode=SelectSelectorMode.DROPDOWN,
-            )
-        ),
-    }
-)
 
+async def async_list_models(hass: HomeAssistant, api_key: str) -> list[str]:
+    """Return the models available to the given API key.
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
-    # Validate API key
-    api_key = data.get(CONF_API_KEY)
-    if not api_key:
-        raise InvalidAuth("API key is required")
-
-    if not isinstance(api_key, str):
-        raise InvalidAuth("API key must be a string")
-
-    # Validate model
-    model = data.get(CONF_MODEL, DEFAULT_MODEL)
-    if not isinstance(model, str):
-        raise InvalidAuth("Model must be a string")
-
-    if not model.strip():
-        raise InvalidAuth("Model cannot be empty")
-
-    # Validate temperature if provided
-    temperature = data.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE)
-    if temperature is not None:
-        if not isinstance(temperature, (int, float)):
-            raise InvalidAuth("Temperature must be a number")
-        if not (0.0 <= temperature <= 2.0):
-            raise InvalidAuth("Temperature must be between 0.0 and 2.0")
-
-    # Validate max_tokens if provided
-    max_tokens = data.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
-    if max_tokens is not None:
-        if not isinstance(max_tokens, int):
-            raise InvalidAuth("Max tokens must be an integer")
-        if not (max_tokens >= 1):
-            raise InvalidAuth("Max tokens must be at least 1")
-
-    # Validate prompt if provided
-    prompt = data.get(CONF_PROMPT, DEFAULT_PROMPT)
-    if prompt is not None and not isinstance(prompt, str):
-        raise InvalidAuth("Prompt must be a string")
-
+    Raises InvalidAuth if the key is rejected and CannotConnect for any other
+    failure, so callers can map both onto a form error.
+    """
+    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
     try:
-        client = Mistral(api_key=data[CONF_API_KEY])
+        async with asyncio.timeout(TIMEOUT):
+            response = await client.models.list_async()
+    except SDKError as err:
+        if err.status_code in (401, 403):
+            raise InvalidAuth from err
+        raise CannotConnect(str(err)) from err
+    except (TimeoutError, httpx.HTTPError) as err:
+        raise CannotConnect(str(err)) from err
 
-        # Test connection by listing available models
-        try:
-            models = await client.models.list_async()
-            if not models.data:
-                raise CannotConnect(
-                    "Failed to connect to Mistral AI API. Please check your API key and network connection."
-                ) from None
-        except Exception as err:
-            raise CannotConnect(f"Failed to connect to Mistral AI API: {err}") from err
-
-    except aiohttp.ClientError as err:
-        if "timeout" in str(err).lower():
-            raise CannotConnect(
-                "Connection timed out. Please check your network connection."
-            ) from err
-        elif "ssl" in str(err).lower():
-            raise CannotConnect(
-                "SSL certificate error. Please check your system date/time and SSL certificates."
-            ) from err
-        else:
-            raise CannotConnect(f"Network error: {str(err)}") from err
-    except Exception as err:
-        _LOGGER.error("Unexpected error during validation: %s", err)
-        raise CannotConnect(f"Unexpected error: {str(err)}") from err
-
-    # Return info that you want to store in the config entry.
-    return {"title": f"Mistral AI ({data.get(CONF_MODEL, DEFAULT_MODEL)})"}
+    return sorted(
+        model.id for model in (response.data or []) if getattr(model, "id", None)
+    )
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Mistral AI Conversation."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
+    ) -> ConfigFlowResult:
         """Handle the initial step."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user", data_schema=STEP_USER_DATA_SCHEMA
-            )
+        errors: dict[str, str] = {}
 
-        errors = {}
-
-        try:
-            info = await validate_input(self.hass, user_input)
-        except CannotConnect:
-            errors["base"] = "cannot_connect"
-        except InvalidAuth:
-            errors["base"] = "invalid_auth"
-        except Exception:  # pylint: disable=broad-except
-            _LOGGER.exception("Unexpected exception")
-            errors["base"] = "unknown"
-        else:
-            return self.async_create_entry(title=info["title"], data=user_input)
+        if user_input is not None:
+            try:
+                await async_list_models(self.hass, user_input[CONF_API_KEY])
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+            else:
+                return self.async_create_entry(
+                    title="Mistral AI",
+                    data=user_input,
+                    subentries=[
+                        {
+                            "subentry_type": SUBENTRY_TYPE_CONVERSATION,
+                            "data": {},
+                            "title": DEFAULT_CONVERSATION_NAME,
+                            "unique_id": None,
+                        }
+                    ],
+                )
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
-    @staticmethod
-    @staticmethod
-    @config_entries.callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> OptionsFlow:
-        """Create the options flow."""
-        return OptionsFlow(config_entry)
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+        """Handle re-authentication when the API key stops working."""
+        return await self.async_step_reauth_confirm()
 
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm re-authentication with a new API key."""
+        errors: dict[str, str] = {}
 
-async def get_available_models(hass: HomeAssistant, api_key: str) -> list[str]:
-    """Get available models from Mistral AI API."""
-    try:
-        client = Mistral(api_key=api_key)
-        models = await client.models.list_async()
-        return [model.id for model in models.data if hasattr(model, "id")]
-    except Exception as err:
-        _LOGGER.error("Error fetching available models: %s", err)
-        return []
+        if user_input is not None:
+            try:
+                await async_list_models(self.hass, user_input[CONF_API_KEY])
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    self._get_reauth_entry(), data_updates=user_input
+                )
 
-
-class OptionsFlow(config_entries.OptionsFlow):
-    """Mistral AI config flow options handler."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.available_models: list[str] = []
-
-    @config_entries.callback
-    def async_get_options_schema(
-        self, options: MappingProxyType[str, Any]
-    ) -> vol.Schema:
-        """Return the options schema."""
-        # Get available LLM APIs
-        apis: list[SelectOptionDict] = [
-            SelectOptionDict(
-                label=api.name,
-                value=api.id,
-            )
-            for api in llm.async_get_apis(self.hass)
-        ]
-
-        # Use available models if they have been fetched, otherwise use default
-        model_options = (
-            self.available_models if self.available_models else [DEFAULT_MODEL]
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
         )
 
-        return vol.Schema(
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return the subentry types supported by this integration."""
+        return {
+            SUBENTRY_TYPE_CONVERSATION: MistralSubentryFlowHandler,
+            SUBENTRY_TYPE_AI_TASK_DATA: MistralSubentryFlowHandler,
+        }
+
+
+class MistralSubentryFlowHandler(ConfigSubentryFlow):
+    """Flow for managing Mistral AI subentries."""
+
+    @property
+    def _is_new(self) -> bool:
+        """Return whether this is a new subentry rather than a reconfigure."""
+        return self.source == "user"
+
+    async def async_step_set_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Configure a conversation agent or AI task."""
+        entry = self._get_entry()
+        if entry.state is not ConfigEntryState.LOADED:
+            return self.async_abort(reason="entry_not_loaded")
+
+        if user_input is not None:
+            if self._is_new:
+                title = user_input.pop(CONF_NAME)
+                return self.async_create_entry(title=title, data=user_input)
+            return self.async_update_and_abort(
+                entry, self._get_reconfigure_subentry(), data=user_input
+            )
+
+        try:
+            models = await async_list_models(self.hass, entry.data[CONF_API_KEY])
+        except InvalidAuth:
+            return self.async_abort(reason="invalid_auth")
+        except CannotConnect:
+            _LOGGER.exception("Failed to list Mistral AI models")
+            return self.async_abort(reason="cannot_connect")
+
+        options = {} if self._is_new else self._get_reconfigure_subentry().data
+
+        return self.async_show_form(
+            step_id="set_options",
+            data_schema=vol.Schema(
+                _subentry_schema(
+                    self.hass,
+                    is_new=self._is_new,
+                    subentry_type=self._subentry_type,
+                    options=options,
+                    models=models,
+                )
+            ),
+        )
+
+    async_step_user = async_step_set_options
+    async_step_reconfigure = async_step_set_options
+
+
+def _subentry_schema(
+    hass: HomeAssistant,
+    *,
+    is_new: bool,
+    subentry_type: str,
+    options: Mapping[str, Any],
+    models: list[str],
+) -> dict[vol.Marker, Any]:
+    """Build the schema for a subentry options form."""
+    schema: dict[vol.Marker, Any] = {}
+
+    if is_new:
+        default_name = (
+            DEFAULT_AI_TASK_NAME
+            if subentry_type == SUBENTRY_TYPE_AI_TASK_DATA
+            else DEFAULT_CONVERSATION_NAME
+        )
+        schema[vol.Required(CONF_NAME, default=default_name)] = TextSelector()
+
+    # Keep the configured model selectable even if the API stops listing it,
+    # so reconfiguring does not silently drop the user's choice.
+    model_options = sorted({*models, options.get(CONF_MODEL, DEFAULT_MODEL)})
+
+    schema.update(
+        {
+            vol.Required(
+                CONF_MODEL, default=options.get(CONF_MODEL, DEFAULT_MODEL)
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=model_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                    custom_value=True,
+                )
+            ),
+            vol.Optional(
+                CONF_TEMPERATURE,
+                default=options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
+                )
+            ),
+            vol.Optional(
+                CONF_MAX_TOKENS,
+                default=options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1, max=32000, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+        }
+    )
+
+    # Prompts and Home Assistant control only apply to conversation agents.
+    if subentry_type == SUBENTRY_TYPE_CONVERSATION:
+        apis: list[SelectOptionDict] = [
+            SelectOptionDict(label=api.name, value=api.id)
+            for api in llm.async_get_apis(hass)
+        ]
+        schema.update(
             {
                 vol.Optional(
-                    CONF_MODEL,
-                    default=self.config_entry.options.get(CONF_MODEL, DEFAULT_MODEL),
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=model_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(
-                    CONF_TEMPERATURE,
-                    default=self.config_entry.options.get(
-                        CONF_TEMPERATURE, DEFAULT_TEMPERATURE
-                    ),
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=0.0,
-                        max=2.0,
-                        step=0.1,
-                        mode=NumberSelectorMode.SLIDER,
-                    )
-                ),
-                vol.Optional(
-                    CONF_MAX_TOKENS,
-                    default=self.config_entry.options.get(
-                        CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS
-                    ),
-                ): NumberSelector(
-                    NumberSelectorConfig(
-                        min=1,
-                        max=4000,
-                        step=1,
-                        mode=NumberSelectorMode.BOX,
-                    )
-                ),
-                vol.Optional(
                     CONF_PROMPT,
-                    default=self.config_entry.options.get(CONF_PROMPT, DEFAULT_PROMPT),
+                    description={
+                        "suggested_value": options.get(
+                            CONF_PROMPT, llm.DEFAULT_INSTRUCTIONS_PROMPT
+                        )
+                    },
                 ): TemplateSelector(),
                 vol.Optional(
                     CONF_LLM_HASS_API,
                     description={"suggested_value": options.get(CONF_LLM_HASS_API)},
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=apis,
-                        mode=SelectSelectorMode.DROPDOWN,
-                    )
-                ),
+                ): SelectSelector(SelectSelectorConfig(options=apis, multiple=True)),
             }
         )
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        # Fetch available models from API
-        api_key = self.config_entry.data.get(CONF_API_KEY)
-        if api_key:
-            self.available_models = await get_available_models(self.hass, api_key)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=self.async_get_options_schema(self.config_entry.options),
-        )
+    return schema
 
 
-class CannotConnect(HomeAssistantError):
+class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
 
 
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
+class InvalidAuth(Exception):
+    """Error to indicate the API key was rejected."""

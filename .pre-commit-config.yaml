@@ -35,7 +35,11 @@ repos:
     hooks:
       - id: pymarkdown
         name: PyMarkdown Lint
-        args: [scan]
+        # --config is required: pymarkdown does not read config from
+        # pyproject.toml by default, so without it these rules are silently
+        # ignored. It cannot read pyproject.toml itself either, because it
+        # flattens every key and rejects ruff's "__init__.py" per-file-ignore.
+        args: [--config, .pymarkdown.json, scan]
         files: \.md$
 
   # Local hooks
@@ -51,7 +55,7 @@ repos:
         name: Check HA Version Consistency
         entry: python scripts/check_ha_version_consistency.py
         language: system
-        files: ^(hacs\.json|pyproject\.toml)$
+        files: ^(hacs\.json|pyproject\.toml|README\.md)$
         pass_filenames: false
       - id: validate-pyproject
         name: Validate pyproject.toml

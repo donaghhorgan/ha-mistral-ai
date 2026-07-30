@@ -2,21 +2,27 @@
 
 DOMAIN = "mistral_conversation"
 
-# API Configuration
-API_BASE_URL = "https://api.mistral.ai/v1"
-
 # Configuration keys
 CONF_API_KEY = "api_key"
-CONF_MODEL = "model"
-CONF_TEMPERATURE = "temperature"
 CONF_MAX_TOKENS = "max_tokens"
+CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
+CONF_TEMPERATURE = "temperature"
 
 # Default values
+DEFAULT_MAX_TOKENS = 1000
 DEFAULT_MODEL = "mistral-small-latest"
 DEFAULT_TEMPERATURE = 0.7
-DEFAULT_MAX_TOKENS = 1000
-DEFAULT_PROMPT = """You are a helpful assistant integrated with Home Assistant.
-You help users with their smart home queries and general questions.
-The current Home Assistant instance is located at: {{ ha_name }}
-Please be concise and helpful in your responses."""
+
+# Subentry types, and the default title given to each new subentry
+SUBENTRY_TYPE_AI_TASK_DATA = "ai_task_data"
+SUBENTRY_TYPE_CONVERSATION = "conversation"
+
+DEFAULT_AI_TASK_NAME = "Mistral AI task"
+DEFAULT_CONVERSATION_NAME = "Mistral AI conversation"
+
+# Max number of back and forth with the LLM to generate a response
+MAX_TOOL_ITERATIONS = 10
+
+# How long to wait on the API before giving up, in seconds
+TIMEOUT = 30

@@ -11,15 +11,12 @@
             "ppa": true,
             "version": "latest"
         },
-        "ghcr.io/devcontainers/features/node:1": {
-            "version": "24"
-        },
         "ghcr.io/devcontainers-extra/features/uv:1": {},
         "ghcr.io/devcontainers-extra/features/zsh-plugins:0": {
             "plugins": "uv dotenv git python pip"
         }
     },
-    "postCreateCommand": "npm install -g @aisuite/chub && uv sync --dev",
+    "postCreateCommand": "uv sync --dev",
     "customizations": {
         "vscode": {
             "extensions": [

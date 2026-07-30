@@ -9,12 +9,14 @@ integration conventions:
 ```bash
 custom_components/mistral_conversation/
 ├── __init__.py     # Integration setup and entry point
-├── config_flow.py  # Configuration flow handler
+├── ai_task.py      # AI Task platform
+├── config_flow.py  # Config and subentry flow handlers
 ├── const.py        # Application constants
+├── conversation.py # Conversation platform
+├── entity.py       # Shared LLM entity and Mistral API handling
 ├── manifest.json   # Integration metadata
-├── translations/   # Language files
-└── ...
-hacs.json           # Home Assistant Communicty Store (HACS) configuration
+└── translations/   # Language files
+hacs.json           # Home Assistant Community Store (HACS) configuration
 scripts/            # Helper scripts for development
 tests/              # Unit tests
 ```
@@ -48,7 +50,9 @@ tests/              # Unit tests
   Assistant integration code to ensure that best practices are followed.
 - Use the [search](https://developers.home-assistant.io/search/?q=query)
   function to search for relevant content.
-- Use the `get-api-docs` skill to fetch current documentation on dependencies.
+- Verify third-party APIs against the installed package rather than recalling
+  them, e.g. `uv run python -c "import inspect, mistralai.client as m; ..."`.
+  Do not assume a method or exception name exists because it looks plausible.
 - Fix linting errors:
   - Markdown: `uv run pymarkdown fix file.md`
   - Python: `uv run ruff check --fix`

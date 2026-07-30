@@ -11,19 +11,21 @@ interfaces in Home Assistant.
 
 ## Features
 
-- 🤖 **Multiple Model Support**: Choose from various Mistral AI models including
-  mistral-small-latest, mistral-medium-latest, and mistral-large-latest
-- 🎛️ **Configurable Parameters**: Adjust temperature, max tokens, and custom
-  system prompts
-- 🏠 **Home Assistant Integration**: Seamlessly integrates with Home Assistant's
-  conversation system
-- 🔒 **Secure**: API keys are securely stored and encrypted
+- 🤖 **Any available model**: The model list is fetched from the API using your
+  own key, so it reflects what you can actually use
+- 🏠 **Device control**: Optionally expose a Home Assistant LLM API so the agent
+  can control your devices via tool calling
+- ⚡ **Streaming responses**: Replies are streamed back as they are generated
+- 📋 **AI tasks**: Generate data for automations and dashboards, with native
+  structured output
+- 🎛️ **Multiple agents**: Run several agents and tasks off one API key, each
+  with its own model, prompt and parameters
 - 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models
-- ⚙️ **Easy Setup**: Simple configuration through the Home Assistant UI
+- ⚙️ **Easy setup**: Configured entirely through the Home Assistant UI
 
 ## Requirements
 
-- Home Assistant 2023.5.0 or newer
+- Home Assistant 2025.7.0 or newer
 - A Mistral AI API key (get one at [console.mistral.ai](https://console.mistral.ai/))
 
 ## Installation
@@ -49,12 +51,14 @@ interfaces in Home Assistant.
    custom_components/
    └── mistral_conversation/
        ├── __init__.py
-       ├── client.py
+       ├── ai_task.py
        ├── config_flow.py
        ├── const.py
        ├── conversation.py
+       ├── entity.py
        ├── manifest.json
-       └── strings.json
+       └── translations/
+           └── en.json
    ```
 
 4. Restart Home Assistant
@@ -77,25 +81,47 @@ interfaces in Home Assistant.
 4. Create a new API key
 5. Copy the key and use it during the integration setup
 
-### Configuration Options
+Setting up the integration creates one conversation agent to start with. The
+API key is held by the integration itself, and each agent or task is
+configured separately underneath it, so you can run several with different
+models and prompts against the same key.
 
-After setting up the integration, you can configure various options:
+### Adding and configuring agents
 
-- **Model**: Choose from available Mistral AI models
-  - `mistral-small-latest`: Fast and efficient for most tasks
-  - `mistral-medium-latest`: Balanced performance and capability
-  - `mistral-large-latest`: Most capable model for complex tasks
-  - `open-mistral-7b`: Open-source model option
-  - `open-mistral-nemo`: Another open-source option
+1. Go to Settings → Devices & Services → Mistral AI Conversation
+2. Click "Add conversation agent" or "Add AI task"
+3. Configure it, then click "Submit"
+
+To change an existing one, click "Configure" next to it.
+
+### Configuration options
+
+- **Model**: Chosen from the models your API key can actually reach — the
+  list is fetched from the API rather than hard-coded, so it stays correct as
+  Mistral adds and retires models. You can also type a model name directly.
 
 - **Temperature**: Controls randomness in responses (0.0 - 2.0)
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
 
-- **Max Tokens**: Maximum length of responses (1-4000)
+- **Maximum tokens**: Maximum length of responses
 
-- **System Prompt**: Custom instructions for the AI assistant
-  - You can use Home Assistant template variables like `{{ ha_name }}`
+- **Instructions** (conversation agents only): Custom instructions for the
+  assistant. You can use Home Assistant template variables like
+  `{{ ha_name }}`.
+
+- **Control Home Assistant** (conversation agents only): Select a Home
+  Assistant LLM API to let the agent control your devices. Leave it unset for
+  an agent that only answers questions.
+
+### AI tasks
+
+As well as conversation agents, this integration provides
+[AI Task](https://www.home-assistant.io/integrations/ai_task/) entities, which
+generate data for automations and dashboards rather than holding a
+conversation. Add one with "Add AI task", then call
+`ai_task.generate_data` with its entity ID. Passing a structure returns
+validated JSON, using Mistral's native structured output.
 
 ## Usage
 
@@ -106,17 +132,27 @@ Home Assistant voice assistant:
 
 1. Go to Settings → Voice assistants
 2. Select your voice assistant (Assist, Alexa, Google Assistant, etc.)
-3. Set the conversation agent to "Mistral AI"
+3. Set the conversation agent to your Mistral AI agent
 
 ### Automation and Scripts
 
 You can also use the conversation agent in automations and scripts:
 
 ```yaml
-service: conversation.process
+action: conversation.process
 data:
-  agent_id: conversation.mistral_ai_mistral_small_latest
+  agent_id: conversation.mistral_ai_conversation
   text: "What's the weather like today?"
+```
+
+And to generate data with an AI task:
+
+```yaml
+action: ai_task.generate_data
+data:
+  entity_id: ai_task.mistral_ai_task
+  task_name: summarise
+  instructions: "Summarise today's weather in one sentence."
 ```
 
 ### Custom Prompts
@@ -147,12 +183,12 @@ This integration uses the Mistral AI API, which is a paid service. Costs depend 
 
 - **Model used**: Larger models cost more per token
 - **Usage volume**: You pay per token (input + output)
-- **Token limits**: Set appropriate max_tokens to control costs
+- **Token limits**: Set an appropriate maximum to control costs
 
 ### Cost Optimization Tips
 
 1. **Choose the right model**: Use smaller models for simpler tasks
-2. **Set reasonable token limits**: Don't set max_tokens higher than needed
+2. **Set reasonable token limits**: Don't set the maximum higher than needed
 3. **Use concise prompts**: Shorter system prompts reduce input costs
 4. **Monitor usage**: Check your Mistral AI console for usage statistics
 
@@ -175,7 +211,7 @@ This integration uses the Mistral AI API, which is a paid service. Costs depend 
 **Slow responses:**
 
 - Try a smaller/faster model like `mistral-small-latest`
-- Reduce the max_tokens setting
+- Reduce the maximum tokens setting
 - Check your internet connection speed
 
 ### Debug Logging
@@ -203,10 +239,19 @@ Contributions are welcome! Please:
 
 ### Local Development
 
-1. Clone the repository
-2. Set up a development environment with Home Assistant
-3. Link the integration to your development instance
-4. Test your changes
+```bash
+# Install all dependencies, including the dev group
+uv sync --all-groups
+
+# Run the linters, type checker and consistency checks
+uv run pre-commit run --all-files
+
+# Run the tests
+uv run pytest
+```
+
+See [`AGENTS.md`](AGENTS.md) for conventions and
+[`scripts/README.md`](scripts/README.md) for the consistency checks.
 
 ## Support
 
@@ -216,8 +261,8 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE)
-file for details.
+This project is licensed under the GNU General Public License v3.0 - see the
+[LICENSE](LICENSE) file for details.
 
 ## Disclaimer
 
