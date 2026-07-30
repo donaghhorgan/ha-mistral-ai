@@ -1,27 +1,24 @@
-"""Base entity for Mistral AI Conversation integration."""
+"""Base entity for the Mistral AI Conversation integration."""
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-import mistralai
+import httpx
 import voluptuous as vol
 from homeassistant.components import conversation
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigSubentry
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import llm
 from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.json import json_dumps
-from mistralai.client import Mistral
+from mistralai.client.errors import SDKError
 from voluptuous_openapi import convert
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
-
 from .const import (
-    CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
@@ -29,57 +26,68 @@ from .const import (
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DOMAIN,
+    MAX_TOOL_ITERATIONS,
+    TIMEOUT,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, AsyncIterable, Callable
+
+    from . import MistralConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
-# Max number of back and forth with the LLM to generate a response
-MAX_TOOL_ITERATIONS = 10
-
 
 def _format_tool(
-    tool: llm.Tool, custom_serializer: Callable[[Any], Any] | None = None
+    tool: llm.Tool, custom_serializer: Callable[[Any], Any] | None
 ) -> dict[str, Any]:
-    """Format a Home Assistant tool for Mistral AI API."""
-    tool_spec: dict[str, Any] = {
+    """Format a Home Assistant tool for the Mistral AI API."""
+    return {
         "type": "function",
         "function": {
             "name": tool.name,
             "description": tool.description or "",
+            "parameters": convert(tool.parameters, custom_serializer=custom_serializer),
         },
     }
 
-    # Add parameters if tool has a schema
-    if hasattr(tool, "parameters") and tool.parameters:
-        properties: dict[str, dict[str, str]] = {}
-        required: list[str] = []
 
-        for param_name, param_schema in tool.parameters.schema.items():
-            param_info: dict[str, str] = {"type": "string"}  # Default to string
-            if hasattr(param_schema, "description"):
-                param_info["description"] = param_schema.description
-            if param_name in param_schema.required:
-                required.append(param_name)
+def _parse_arguments(arguments: Any) -> dict[str, Any]:
+    """Coerce tool call arguments to a dict.
 
-            properties[param_name] = param_info
+    Mistral types these as ``Union[dict, str]``: complete responses may return
+    either, and streamed responses always deliver a JSON string.
+    """
+    if isinstance(arguments, dict):
+        return arguments
+    if not arguments:
+        return {}
+    try:
+        parsed = json.loads(arguments)
+    except json.JSONDecodeError as err:
+        raise HomeAssistantError(
+            f"Mistral AI returned malformed tool arguments: {arguments!r}"
+        ) from err
+    if not isinstance(parsed, dict):
+        raise HomeAssistantError(
+            f"Mistral AI returned non-object tool arguments: {arguments!r}"
+        )
+    return parsed
 
-        if properties:
-            parameters: dict[str, Any] = {"type": "object", "properties": properties}
-            if required:
-                parameters["required"] = required
-            tool_spec["function"]["parameters"] = parameters
 
-    return tool_spec
-
-
-def _convert_content_to_mistral(
-    content: conversation.Content,
-) -> dict[str, Any]:
-    """Convert Home Assistant chat content to Mistral AI message format."""
+def _convert_content(content: conversation.Content) -> dict[str, Any]:
+    """Convert Home Assistant chat log content to a Mistral AI message."""
     if isinstance(content, conversation.UserContent):
         return {"role": "user", "content": content.content}
-    elif isinstance(content, conversation.AssistantContent):
-        message: dict[str, Any] = {"role": "assistant", "content": content.content or ""}
+
+    if isinstance(content, conversation.SystemContent):
+        return {"role": "system", "content": content.content}
+
+    if isinstance(content, conversation.AssistantContent):
+        message: dict[str, Any] = {
+            "role": "assistant",
+            "content": content.content or "",
+        }
         if content.tool_calls:
             message["tool_calls"] = [
                 {
@@ -87,59 +95,88 @@ def _convert_content_to_mistral(
                     "type": "function",
                     "function": {
                         "name": tool_call.tool_name,
-                        "arguments": json_dumps(tool_call.tool_args),
+                        "arguments": json.dumps(tool_call.tool_args),
                     },
                 }
                 for tool_call in content.tool_calls
             ]
         return message
-    elif isinstance(content, conversation.SystemContent):
-        return {"role": "system", "content": content.content}
-    elif isinstance(content, conversation.ToolResultContent):
+
+    if isinstance(content, conversation.ToolResultContent):
         return {
             "role": "tool",
             "name": content.tool_name,
-            "content": json_dumps(content.tool_result),
             "tool_call_id": content.tool_call_id,
+            "content": json.dumps(content.tool_result),
         }
-    else:
-        raise HomeAssistantError(f"Unsupported content type: {type(content)}")
+
+    raise HomeAssistantError(f"Unsupported content type: {type(content)}")
 
 
 async def _transform_stream(
-    response_stream: AsyncGenerator[Any],
+    stream: AsyncIterable[Any],
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
-    """Transform Mistral AI streaming response for Home Assistant chat log."""
-    async for stream_response in response_stream:
-        # Handle different response formats from Mistral AI
-        if hasattr(stream_response, 'choices') and stream_response.choices:
-            choice = stream_response.choices[0]
-            if hasattr(choice, 'delta'):
-                delta = choice.delta
-                if hasattr(delta, 'content') and delta.content:
-                    yield {"content": delta.content}
-                if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                    tool_calls = []
-                    for tool_call in delta.tool_calls:
-                        if hasattr(tool_call, 'function') and tool_call.function:
-                            tool_calls.append(
-                                llm.ToolInput(
-                                    id=tool_call.id,
-                                    tool_name=tool_call.function.name,
-                                    tool_args=tool_call.function.arguments or {},
-                                )
-                            )
-                    if tool_calls:
-                        yield {"tool_calls": tool_calls}
-        elif hasattr(stream_response, 'data'):
-            # Handle alternative response format
-            data = stream_response.data
-            if hasattr(data, 'choices') and data.choices:
-                choice = data.choices[0]
-                if hasattr(choice, 'delta'):
-                    delta = choice.delta
-                    if hasattr(delta, 'content') and delta.content:
-                        yield {"content": delta.content}
+    """Transform a Mistral AI stream into Home Assistant chat log deltas.
+
+    Tool call arguments arrive as fragments of a JSON string spread across
+    chunks, so they are buffered and only emitted once the stream completes.
+    Home Assistant dispatches a tool call the moment it is yielded, so
+    yielding a partial one would invoke the tool with broken arguments.
+    """
+    started = False
+    # Keyed by the index reported by the API so that parallel tool calls in
+    # one response do not overwrite each other.
+    tool_calls: dict[int, dict[str, Any]] = {}
+
+    async for chunk in stream:
+        data = getattr(chunk, "data", None)
+        if data is None or not data.choices:
+            continue
+
+        delta = data.choices[0].delta
+
+        if not started:
+            yield {"role": "assistant"}
+            started = True
+
+        if delta.content:
+            # Content is usually a plain string, but the API may return a list
+            # of segments instead.
+            if isinstance(delta.content, str):
+                yield {"content": delta.content}
+            else:
+                for part in delta.content:
+                    if text := getattr(part, "text", None):
+                        yield {"content": text}
+
+        for index, tool_call in enumerate(delta.tool_calls or []):
+            key = tool_call.index if tool_call.index is not None else index
+            buffered = tool_calls.setdefault(
+                key, {"id": None, "name": None, "args": ""}
+            )
+            if tool_call.id:
+                buffered["id"] = tool_call.id
+            if tool_call.function is None:
+                continue
+            if tool_call.function.name:
+                buffered["name"] = tool_call.function.name
+            arguments = tool_call.function.arguments
+            if isinstance(arguments, str):
+                buffered["args"] += arguments
+            elif arguments:
+                buffered["args"] = json.dumps(arguments)
+
+    if complete := [call for call in tool_calls.values() if call["name"]]:
+        yield {
+            "tool_calls": [
+                llm.ToolInput(
+                    id=call["id"],
+                    tool_name=call["name"],
+                    tool_args=_parse_arguments(call["args"]),
+                )
+                for call in complete
+            ]
+        }
 
 
 class MistralBaseLLMEntity(Entity):
@@ -148,234 +185,97 @@ class MistralBaseLLMEntity(Entity):
     _attr_has_entity_name = True
     _attr_name: str | None = None
 
-    def __init__(self, entry: ConfigEntry, subentry: conversation.ConfigSubentry | None = None) -> None:
+    def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         self.entry = entry
         self.subentry = subentry
-        self._attr_unique_id = subentry.subentry_id if subentry else entry.entry_id
+        self._attr_unique_id = subentry.subentry_id
 
-        model = subentry.data.get(CONF_MODEL, DEFAULT_MODEL) if subentry else DEFAULT_MODEL
+        model = subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
         self._attr_device_info = dr.DeviceInfo(
-            identifiers={(DOMAIN, self._attr_unique_id)},
-            name=subentry.title if subentry else f"Mistral AI ({model})",
+            identifiers={(DOMAIN, subentry.subentry_id)},
+            name=subentry.title,
             manufacturer="Mistral AI",
             model=model,
             entry_type=dr.DeviceEntryType.SERVICE,
         )
 
-        self._client: Mistral | None = None
-
-    async def async_added_to_hass(self) -> None:
-        """When entity is added to hass."""
-        await super().async_added_to_hass()
-
-        # Initialize Mistral client
-        def _init_client():
-            return Mistral(api_key=self.entry.data[CONF_API_KEY])
-
-        self._client = await self.hass.async_add_executor_job(_init_client)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """When entity will be removed from hass."""
-        if self._client:
-            # Clean up client if needed
-            pass
-        await super().async_will_remove_from_hass()
+    @property
+    def attribution(self) -> str:
+        """Return the attribution."""
+        return "Powered by Mistral AI"
 
     async def _async_handle_chat_log(
         self,
         chat_log: conversation.ChatLog,
+        structure_name: str | None = None,
         structure: vol.Schema | None = None,
-        max_iterations: int = MAX_TOOL_ITERATIONS,
     ) -> None:
         """Generate an answer for the chat log."""
-        if self._client is None:
-            raise HomeAssistantError("Mistral AI client not initialized")
+        options = self.subentry.data
+        client = self.entry.runtime_data
 
-        options = self.subentry.data if self.subentry else self.entry.data
-
-        # Convert chat log content to Mistral format
-        messages = [_convert_content_to_mistral(content) for content in chat_log.content]
-
-        # Prepare API parameters
-        api_params = {
+        model_args: dict[str, Any] = {
             "model": options.get(CONF_MODEL, DEFAULT_MODEL),
-            "messages": messages,
             "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
             "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
         }
 
-        # Add tools if available
-        tools = None
-        if chat_log.llm_api:
-            tools = [_format_tool(tool, chat_log.llm_api.custom_serializer) for tool in chat_log.llm_api.tools]
-            if tools:
-                api_params["tools"] = tools
+        custom_serializer = (
+            chat_log.llm_api.custom_serializer if chat_log.llm_api else None
+        )
 
-        # Handle structured output if requested
-        if structure and chat_log.llm_api:
-            output_format = convert(
-                structure,
-                custom_serializer=chat_log.llm_api.custom_serializer,
-            )
-            # Mistral doesn't have direct structured output, so we use tool approach
-            if tools is None:
-                tools = []
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": "structured_output",
-                    "description": "Use this tool to provide structured output",
-                    "parameters": output_format,
+        if chat_log.llm_api:
+            model_args["tools"] = [
+                _format_tool(tool, custom_serializer) for tool in chat_log.llm_api.tools
+            ]
+
+        if structure and structure_name:
+            # Mistral supports structured output natively, so there is no need
+            # to smuggle the schema through as a synthetic tool.
+            model_args["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": structure_name.replace(" ", "_"),
+                    "schema": convert(structure, custom_serializer=custom_serializer),
+                    "strict": True,
                 },
-            })
-            api_params["tools"] = tools
+            }
 
-        # Tool calling iteration loop
-        for _iteration in range(max_iterations):
+        for _iteration in range(MAX_TOOL_ITERATIONS):
+            # Rebuild the messages each pass so that tool results added by the
+            # previous iteration are included.
+            messages = [_convert_content(content) for content in chat_log.content]
+
             try:
-                # Make the API call
-                response = await self._client.chat.complete_async(**api_params)
+                async with asyncio.timeout(TIMEOUT):
+                    stream = await client.chat.stream_async(
+                        messages=messages, **model_args
+                    )
 
-                # Process the response
-                if not response.choices:
-                    raise HomeAssistantError("No response from Mistral AI API")
+                async for _content in chat_log.async_add_delta_content_stream(
+                    self.entity_id, _transform_stream(stream)
+                ):
+                    pass
+            except SDKError as err:
+                raise self._convert_error(err) from err
+            except (TimeoutError, httpx.HTTPError) as err:
+                _LOGGER.error("Error talking to Mistral AI: %s", err)
+                raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
 
-                choice = response.choices[0]
-                message = choice.message
+            if not chat_log.unresponded_tool_results:
+                break
 
-                # Add assistant response to chat log
-                assistant_content = conversation.AssistantContent(
-                    agent_id=self.unique_id,
-                    content=message.content or "",
-                )
-
-                # Add tool calls if any
-                if message.tool_calls:
-                    assistant_content.tool_calls = [
-                        conversation.ToolCall(
-                            id=tool_call.id,
-                            tool_name=tool_call.function.name,
-                            tool_args=tool_call.function.arguments or {},
-                        )
-                        for tool_call in message.tool_calls
-                    ]
-
-                chat_log.async_add_assistant_content(assistant_content)
-
-                # Handle tool calls
-                if message.tool_calls and chat_log.llm_api:
-                    for tool_call in message.tool_calls:
-                        tool_name = tool_call.function.name
-                        tool_args = tool_call.function.arguments or {}
-
-                        # Find and call the corresponding tool
-                        for tool in chat_log.llm_api.tools:
-                            if tool.name == tool_name:
-                                try:
-                                    tool_result = await tool.async_call(
-                                        self.hass,
-                                        tool_input=tool_args,
-                                        llm_context=chat_log.llm_context,
-                                    )
-
-                                    # Add tool result to chat log
-                                    chat_log.async_add_tool_result(
-                                        conversation.ToolResult(
-                                            tool_name=tool_name,
-                                            tool_call_id=tool_call.id,
-                                            tool_args=tool_args,
-                                            result=tool_result,
-                                        )
-                                    )
-
-                                    # Add tool result to messages for next iteration
-                                    messages.append({
-                                        "role": "tool",
-                                        "name": tool_name,
-                                        "content": json_dumps(tool_result),
-                                        "tool_call_id": tool_call.id,
-                                    })
-
-                                except Exception as err:
-                                    _LOGGER.error("Error calling tool %s: %s", tool_name, err)
-                                    chat_log.async_add_tool_result(
-                                        conversation.ToolResult(
-                                            tool_name=tool_name,
-                                            tool_call_id=tool_call.id,
-                                            tool_args=tool_args,
-                                            error=str(err),
-                                        )
-                                    )
-
-                                    # Add error response to messages
-                                    messages.append({
-                                        "role": "tool",
-                                        "name": tool_name,
-                                        "content": f"Error: {str(err)}",
-                                        "tool_call_id": tool_call.id,
-                                    })
-
-                if not chat_log.unresponded_tool_results:
-                    break
-
-            except mistralai.APIError as err:
-                _LOGGER.error("Mistral AI API error: %s", err)
-                raise HomeAssistantError(f"Mistral AI API error: {err}") from err
-            except mistralai.AuthenticationError as err:
-                _LOGGER.error("Mistral AI authentication error: %s", err)
-                self.entry.async_start_reauth(self.hass)
-                raise HomeAssistantError(
-                    "Authentication error with Mistral AI API, reauthentication required"
-                ) from err
-            except mistralai.RateLimitError as err:
-                _LOGGER.error("Mistral AI rate limit error: %s", err)
-                raise HomeAssistantError("Mistral AI rate limit exceeded") from err
-            except Exception as err:
-                _LOGGER.error("Unexpected error from Mistral AI: %s", err)
-                raise HomeAssistantError(f"Unexpected error from Mistral AI: {err}") from err
-
-    async def _async_handle_chat_log_streaming(
-        self,
-        chat_log: conversation.ChatLog,
-        structure: vol.Schema | None = None,
-    ) -> None:
-        """Generate an answer for the chat log with streaming support."""
-        if self._client is None:
-            raise HomeAssistantError("Mistral AI client not initialized")
-
-        options = self.subentry.data if self.subentry else self.entry.data
-
-        # Convert chat log content to Mistral format
-        messages = [_convert_content_to_mistral(content) for content in chat_log.content]
-
-        # Prepare API parameters
-        api_params = {
-            "model": options.get(CONF_MODEL, DEFAULT_MODEL),
-            "messages": messages,
-            "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
-            "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-            "stream": True,
-        }
-
-        # Add tools if available
-        tools = None
-        if chat_log.llm_api:
-            tools = [_format_tool(tool, chat_log.llm_api.custom_serializer) for tool in chat_log.llm_api.tools]
-            if tools:
-                api_params["tools"] = tools
-
-        try:
-            # Make the streaming API call
-            response_stream = await self._client.chat.complete_stream_async(**api_params)
-
-            # Process the streaming response
-            async for delta_content in chat_log.async_add_delta_content_stream(
-                self.entity_id,
-                _transform_stream(response_stream)
-            ):
-                pass  # Content is added to chat log by the stream processor
-
-        except Exception as err:
-            _LOGGER.error("Error in Mistral AI streaming: %s", err)
-            raise HomeAssistantError(f"Mistral AI streaming error: {err}") from err
+    def _convert_error(self, err: SDKError) -> HomeAssistantError:
+        """Map a Mistral AI SDK error onto a Home Assistant error."""
+        if err.status_code in (401, 403):
+            # Prompt for a new key rather than failing on every future
+            # sentence.
+            self.entry.async_start_reauth(self.hass)
+            return HomeAssistantError(
+                "Invalid Mistral AI API key, please reconfigure the integration"
+            )
+        if err.status_code == 429:
+            return HomeAssistantError("Rate limited by Mistral AI, please try again")
+        _LOGGER.error("Mistral AI API error: %s", err)
+        return HomeAssistantError(f"Error talking to Mistral AI: {err}")

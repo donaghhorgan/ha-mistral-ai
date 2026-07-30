@@ -6,40 +6,79 @@
                 "data": {
                     "api_key": "API Key"
                 }
+            },
+            "reauth_confirm": {
+                "description": "The Mistral AI API key for {name} is no longer working. Please enter a new one.",
+                "data": {
+                    "api_key": "API Key"
+                }
             }
         },
         "error": {
-            "cannot_connect": "Failed to connect to Mistral AI API. Please check your internet connection and try again.",
+            "cannot_connect": "Failed to connect to the Mistral AI API. Please check your internet connection and try again.",
             "invalid_auth": "Invalid API key. Please check your Mistral AI API key and try again.",
             "unknown": "An unexpected error occurred. Please try again."
         },
         "abort": {
-            "already_configured": "Mistral AI Conversation is already configured."
+            "already_configured": "Mistral AI Conversation is already configured.",
+            "reauth_successful": "Re-authentication was successful."
         }
     },
-    "options": {
-        "step": {
-            "init": {
-                "description": "Configure your Mistral AI conversation agent settings.",
-                "data": {
-                    "model": "Model",
-                    "temperature": "Temperature (creativity level)",
-                    "max_tokens": "Maximum tokens per response",
-                    "prompt": "System prompt template",
-                    "llm_hass_api": "Home Assistant LLM API (optional)"
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Add conversation agent",
+                "reconfigure": "Reconfigure conversation agent"
+            },
+            "entry_type": "Conversation agent",
+            "step": {
+                "set_options": {
+                    "description": "Configure the Mistral AI conversation agent.",
+                    "data": {
+                        "name": "Name",
+                        "model": "Model",
+                        "temperature": "Temperature",
+                        "max_tokens": "Maximum tokens per response",
+                        "prompt": "Instructions",
+                        "llm_hass_api": "Control Home Assistant"
+                    },
+                    "data_description": {
+                        "temperature": "Higher values make responses more creative, lower values more focused.",
+                        "prompt": "Instructions given to the model to tell it how it should behave.",
+                        "llm_hass_api": "Allow the agent to control devices in your home."
+                    }
                 }
+            },
+            "abort": {
+                "entry_not_loaded": "Cannot add a conversation agent while the integration is not loaded.",
+                "cannot_connect": "Failed to connect to the Mistral AI API.",
+                "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
             }
-        }
-    },
-    "services": {
-        "process": {
-            "name": "Process conversation",
-            "description": "Process a conversation with Mistral AI",
-            "fields": {
-                "text": {
-                    "name": "Text",
-                    "description": "The text to process"
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "Add AI task",
+                "reconfigure": "Reconfigure AI task"
+            },
+            "entry_type": "AI task",
+            "step": {
+                "set_options": {
+                    "description": "Configure the Mistral AI task.",
+                    "data": {
+                        "name": "Name",
+                        "model": "Model",
+                        "temperature": "Temperature",
+                        "max_tokens": "Maximum tokens per response"
+                    },
+                    "data_description": {
+                        "temperature": "Higher values make responses more creative, lower values more focused."
+                    }
                 }
+            },
+            "abort": {
+                "entry_not_loaded": "Cannot add an AI task while the integration is not loaded.",
+                "cannot_connect": "Failed to connect to the Mistral AI API.",
+                "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
             }
         }
     }

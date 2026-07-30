@@ -9,12 +9,14 @@ integration conventions:
 ```bash
 custom_components/mistral_conversation/
 ├── __init__.py     # Integration setup and entry point
-├── config_flow.py  # Configuration flow handler
+├── ai_task.py      # AI Task platform
+├── config_flow.py  # Config and subentry flow handlers
 ├── const.py        # Application constants
+├── conversation.py # Conversation platform
+├── entity.py       # Shared LLM entity and Mistral API handling
 ├── manifest.json   # Integration metadata
-├── translations/   # Language files
-└── ...
-hacs.json           # Home Assistant Communicty Store (HACS) configuration
+└── translations/   # Language files
+hacs.json           # Home Assistant Community Store (HACS) configuration
 scripts/            # Helper scripts for development
 tests/              # Unit tests
 ```

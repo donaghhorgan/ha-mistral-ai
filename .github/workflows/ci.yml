@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --dev
+          uv sync --all-groups
 
       - name: Run pre-commit hooks
         run: |
@@ -53,8 +53,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --dev
+          uv sync --all-groups
 
       - name: Run tests
         run: |
           uv run pytest
+
+  hassfest:
+    name: Validate with hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: Validate with HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # This repository is installed as a custom repository rather than
+          # being listed in the HACS default store, so the brands check does
+          # not apply.
+          ignore: brands

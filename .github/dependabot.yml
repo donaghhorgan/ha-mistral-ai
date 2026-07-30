@@ -1,0 +1,19 @@
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # pytest-homeassistant-custom-component pins Home Assistant and the
+      # whole pytest stack to exact versions, so these have to move together.
+      test-stack:
+        patterns:
+          - pytest-homeassistant-custom-component
+          - homeassistant
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

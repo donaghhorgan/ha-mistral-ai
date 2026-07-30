@@ -1,18 +1,24 @@
 {
     "domain": "mistral_conversation",
     "name": "Mistral AI Conversation",
-    "version": "1.0.0",
-    "documentation": "https://github.com/donaghhorgan/ha-mistral-conversation",
-    "issue_tracker": "https://github.com/donaghhorgan/ha-mistral-conversation/issues",
-    "dependencies": [],
+    "after_dependencies": [
+        "assist_pipeline",
+        "intent"
+    ],
     "codeowners": [
         "@donaghhorgan"
     ],
-    "requirements": [
-        "aiohttp>=3.8.0",
-        "mistralai>=2.0.0"
-    ],
     "config_flow": true,
+    "dependencies": [
+        "ai_task",
+        "conversation"
+    ],
+    "documentation": "https://github.com/donaghhorgan/ha-mistral-conversation",
     "integration_type": "service",
-    "iot_class": "cloud_polling"
+    "iot_class": "cloud_polling",
+    "issue_tracker": "https://github.com/donaghhorgan/ha-mistral-conversation/issues",
+    "requirements": [
+        "mistralai>=2.1.0"
+    ],
+    "version": "1.0.0"
 }

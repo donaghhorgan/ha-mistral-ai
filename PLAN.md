@@ -1,6 +1,8 @@
 # Repository Remediation Plan
 
-Status: proposed. Scope agreed with the maintainer on 2026-07-30.
+Status: **implemented**. Scope agreed with the maintainer on 2026-07-30;
+phases 1-4 delivered on the same day. Kept as the record of what was wrong and
+why the rebuild took the shape it did. Safe to delete once reviewed.
 
 This document records what is currently broken, the decisions taken about how
 to fix it, and the order of work. It is a working document — delete it once the
@@ -133,15 +135,18 @@ The chosen feature set requires, at minimum:
 - `ConfigSubentryFlow` and `async_get_supported_subentry_types`
 - `Platform.AI_TASK` and the `ai_task` component
 
-All are present in 2026.2.1. The plan targets **2025.7.0** as the floor, since
-that is when core's LLM integrations moved to subentries and `ai_task` shipped.
+**Verified as 2025.7.0**, by probing real installs rather than reading release
+notes. On 2025.6.0, `Platform.AI_TASK`, the `ai_task` module,
+`async_provide_llm_data` and `as_llm_context` are all absent; on 2025.7.0 all
+four are present. Subentry support is *not* the binding constraint — it exists
+in 2025.6 — so dropping AI Task and reverting to the deprecated
+`async_update_llm_data` would buy exactly one month for a real feature loss.
+Nothing in the agreed feature set needs anything newer, so 2025.7.0 is both the
+floor and the right choice.
 
-**Action:** confirm the exact floor against HA core history before merge rather
-than trusting this estimate, then set the same value in all three places that
-currently disagree — `hacs.json` (`2025.5.0`), `pyproject.toml`
-(`homeassistant>=2025.5.0`) and `README.md` (which claims **2023.5.0**). The
-existing `scripts/check_ha_version_consistency.py` covers the first two but not
-the README; extend it.
+Now set consistently in `hacs.json`, `pyproject.toml` and `README.md`, and
+enforced by `scripts/check_ha_version_consistency.py`, which was extended to
+cover the README and verified to fail on drift.
 
 ## 5. Work plan
 
@@ -149,7 +154,7 @@ Sequenced so each phase leaves the tree in a state where the checks that
 already pass keep passing. Phases 1 and 2 are prerequisites for verifying
 anything else.
 
-### Phase 1 — Make the tooling honest
+### Phase 1 — Make the tooling honest (done)
 
 1. Add `[tool.pytest.ini_options]` to `pyproject.toml`. There is none today, so
    `asyncio_mode` is unset and every test needs an explicit
@@ -175,7 +180,7 @@ anything else.
 6. Add `scripts/README.md`. `AGENTS.md` mandates it — one section per script
    with a description and usage examples — and it does not exist.
 
-### Phase 2 — Rebuild the integration
+### Phase 2 — Rebuild the integration (done)
 
 Work against `ollama` and `openai_conversation` in HA core as the reference
 implementations throughout.
@@ -256,7 +261,7 @@ implementations throughout.
    belongs to core). Add strings for the new subentry and reauth flows.
    Consider adding `icons.json`.
 
-### Phase 3 — Rewrite the tests
+### Phase 3 — Rewrite the tests (done)
 
 The existing suite fails for a structural reason: `MagicMock(spec=HomeAssistant)`
 has no `bus`, so the moment real HA code runs — `async_get_chat_session`
@@ -284,7 +289,7 @@ are that exact error. No amount of mock-patching makes this suite meaningful.
 5. Target meaningful coverage of tool calling, streaming and error mapping —
    the three areas that were entirely untested and entirely broken.
 
-### Phase 4 — Documentation and repository hygiene
+### Phase 4 — Documentation and repository hygiene (done)
 
 1. ~~**Licence conflict.**~~ **Done.** `README.md` claimed MIT while `LICENSE`
    is the 674-line GNU GPL v3. Resolved in favour of GPL-3.0: the README now

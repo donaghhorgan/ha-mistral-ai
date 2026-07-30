@@ -65,6 +65,20 @@ def extract_ha_version_from_pyproject(file_path: Path) -> str | None:
         return None
 
 
+def extract_ha_version_from_readme(file_path: Path) -> str | None:
+    """Extract the stated minimum Home Assistant version from README.md."""
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except FileNotFoundError as e:
+        print(f"Error reading README.md: {e}")
+        return None
+
+    match = re.search(
+        r"Home Assistant\s+(\d+\.\d+\.\d+)\s+or newer", content, re.IGNORECASE
+    )
+    return match.group(1) if match else None
+
+
 def compare_versions(hacs_version: str, pyproject_version: str) -> bool:
     """
     Compare versions to ensure they are compatible.
@@ -121,10 +135,12 @@ def main() -> int:
     workspace_root = Path(__file__).parent.parent
     hacs_json_path = workspace_root / "hacs.json"
     pyproject_toml_path = workspace_root / "pyproject.toml"
+    readme_path = workspace_root / "README.md"
 
     print("Checking Home Assistant version consistency...")
     print(f"HACS config: {hacs_json_path}")
     print(f"Project config: {pyproject_toml_path}")
+    print(f"README: {readme_path}")
     print()
 
     # Extract versions
@@ -138,15 +154,19 @@ def main() -> int:
         print("❌ Could not find homeassistant dependency in pyproject.toml")
         return 1
 
+    readme_version = extract_ha_version_from_readme(readme_path)
+    if not readme_version:
+        print("❌ Could not find a stated Home Assistant version in README.md")
+        print("   Expected a line like: 'Home Assistant 2025.7.0 or newer'")
+        return 1
+
     print(f"HACS version: {hacs_version}")
     print(f"PyProject version: {pyproject_version}")
+    print(f"README version: {readme_version}")
     print()
 
     # Compare versions
-    if compare_versions(hacs_version, pyproject_version):
-        print("✅ Home Assistant versions are consistent!")
-        return 0
-    else:
+    if not compare_versions(hacs_version, pyproject_version):
         print("❌ Home Assistant versions are inconsistent!")
         print()
         print("Recommendation:")
@@ -154,6 +174,21 @@ def main() -> int:
             "Update hacs.json to match or exceed the minimum version in pyproject.toml"
         )
         return 1
+
+    # The README is user-facing documentation, so it must state exactly the
+    # version advertised to HACS rather than merely a compatible one.
+    if parse_version(readme_version) != parse_version(hacs_version):
+        print(
+            f"❌ README states Home Assistant {readme_version} but hacs.json "
+            f"advertises {hacs_version}"
+        )
+        print()
+        print("Recommendation:")
+        print("Update the Requirements section of README.md to match hacs.json")
+        return 1
+
+    print("✅ Home Assistant versions are consistent!")
+    return 0
 
 
 if __name__ == "__main__":

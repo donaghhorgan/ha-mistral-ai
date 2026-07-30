@@ -1,0 +1,41 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: Publish release asset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set the version in the manifest
+        # HACS reads the version from the manifest, so it must match the tag.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python - "$version" <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          version = sys.argv[1]
+          path = pathlib.Path("custom_components/mistral_conversation/manifest.json")
+          manifest = json.loads(path.read_text())
+          manifest["version"] = version
+          path.write_text(json.dumps(manifest, indent=4) + "\n")
+          PY
+
+      - name: Build the release archive
+        run: |
+          cd custom_components/mistral_conversation
+          zip -r ../../mistral_conversation.zip .
+
+      - name: Attach the archive to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: mistral_conversation.zip
