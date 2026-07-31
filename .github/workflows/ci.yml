@@ -28,43 +28,54 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-groups
+          uv sync
 
       - name: Run pre-commit hooks
         run: |
           uv run pre-commit run --all-files
 
   test:
+    name: Test (${{ matrix.ha-group }})
     runs-on: ubuntu-latest
+
+    # ha-current and ha-minimum are conflicting dependency groups, each
+    # pinning a different Home Assistant version through
+    # pytest-homeassistant-custom-component. uv locks a separate resolution
+    # for each, so both runs are reproducible and both dependency lists live
+    # in pyproject.toml rather than in this file.
+    #
+    # ha-minimum is the version advertised in hacs.json, so that claim is
+    # backed by a passing run.
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        ha-group: [ha-current, ha-minimum]
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Install UV
         uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
         run: |
-          uv sync --all-groups
+          uv sync --no-default-groups --group dev --group ${{ matrix.ha-group }}
 
       - name: Run tests
         run: |
-          uv run pytest
+          uv run --no-sync pytest
 
   test-latest:
     name: Test against latest Home Assistant
     runs-on: ubuntu-latest
 
-    # The `test` job is bounded by uv.lock, which resolves under the project's
-    # Python 3.13. Home Assistant 2026.5.0 and later require Python 3.14, so
+    # The `test` matrix is bounded by uv.lock, which resolves under the
+    # project's Python 3.13. Home Assistant 2026.5.0 and later require Python 3.14, so
     # the locked environment can never reach them, and without this job the
     # most recent Home Assistant releases -- the ones most users are actually
     # running -- would go untested.
@@ -72,7 +83,7 @@ jobs:
     # This is allowed to fail without blocking: it tracks a moving target and
     # will break when Home Assistant makes a change we have not adapted to
     # yet. That is a signal to act on, not a reason to hold up an unrelated
-    # pull request. `test` and `test-minimum` are the blocking jobs.
+    # pull request. The `test` matrix jobs are the blocking ones.
     continue-on-error: true
 
     env:
@@ -103,55 +114,6 @@ jobs:
             --with PyTurboJPEG \
             --with hassil \
             --with home-assistant-intents \
-            pytest tests/ -q --no-cov
-
-  test-minimum:
-    name: Test against minimum supported Home Assistant
-    runs-on: ubuntu-latest
-
-    # The `test` job runs against whatever Home Assistant version
-    # pytest-homeassistant-custom-component currently pins, which is always
-    # recent. This job runs the same suite against the oldest version we claim
-    # to support in hacs.json, so that claim is backed by a passing run.
-    #
-    # It cannot use uv.lock: pytest-homeassistant-custom-component pins Home
-    # Assistant to an exact version, and a lockfile holds a single resolution,
-    # so the floor has to be installed outside the project environment.
-    #
-    # That also means the transitive dependencies have to be named explicitly.
-    # Setting up the `conversation` component on 2025.8 pulls in mutagen,
-    # haffmpeg, pymicro_vad and pyspeex_noise, which newer releases of
-    # pytest-homeassistant-custom-component provide for us; pycares is pinned
-    # because current versions break aiodns on this Home Assistant version.
-    env:
-      # Pins pytest-homeassistant-custom-component to the release matching the
-      # minimum Home Assistant version in hacs.json. Bump both together.
-      PHCC_VERSION: 0.13.269 # Home Assistant 2025.8.0
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13"
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v7
-
-      - name: Run tests against the minimum Home Assistant version
-        run: |
-          uv run --isolated --no-project --python 3.13 \
-            --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
-            --with "mistralai>=2.1.0" \
-            --with PyTurboJPEG \
-            --with "pycares==4.9.0" \
-            --with hassil \
-            --with home-assistant-intents \
-            --with mutagen \
-            --with ha-ffmpeg \
-            --with pymicro-vad \
-            --with pyspeex-noise \
             pytest tests/ -q --no-cov
 
   hassfest:

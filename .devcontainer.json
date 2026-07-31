@@ -16,7 +16,7 @@
             "plugins": "uv dotenv git python pip"
         }
     },
-    "postCreateCommand": "uv sync --dev",
+    "postCreateCommand": "uv sync",
     "customizations": {
         "vscode": {
             "extensions": [

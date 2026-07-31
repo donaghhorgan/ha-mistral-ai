@@ -240,14 +240,19 @@ Contributions are welcome! Please:
 ### Local Development
 
 ```bash
-# Install all dependencies, including the dev group
-uv sync --all-groups
+# Install dependencies (dev tools plus the current Home Assistant version)
+uv sync
 
 # Run the linters, type checker and consistency checks
 uv run pre-commit run --all-files
 
 # Run the tests
 uv run pytest
+
+# Run the tests against the oldest supported Home Assistant version
+uv sync --no-default-groups --group dev --group ha-minimum
+uv run --no-sync pytest
+uv sync  # switch back
 ```
 
 See [`AGENTS.md`](AGENTS.md) for conventions and
