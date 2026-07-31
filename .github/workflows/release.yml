@@ -12,7 +12,7 @@ jobs:
     name: Publish release asset
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Set the version in the manifest
         # HACS reads the version from the manifest, so it must match the tag.
