@@ -157,7 +157,7 @@ def main() -> int:
     readme_version = extract_ha_version_from_readme(readme_path)
     if not readme_version:
         print("❌ Could not find a stated Home Assistant version in README.md")
-        print("   Expected a line like: 'Home Assistant 2025.7.0 or newer'")
+        print("   Expected a line like: 'Home Assistant 2025.8.0 or newer'")
         return 1
 
     print(f"HACS version: {hacs_version}")

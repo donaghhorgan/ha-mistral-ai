@@ -1222,7 +1222,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "homeassistant", specifier = ">=2025.7.0" },
+    { name = "homeassistant", specifier = ">=2025.8.0" },
     { name = "mistralai", specifier = ">=2.1.0" },
     { name = "voluptuous", specifier = ">=0.13.1" },
 ]
