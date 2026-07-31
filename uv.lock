@@ -1642,13 +1642,13 @@ dev = [
     { name = "validate-pyproject" },
 ]
 ha-current = [
-    { name = "hassil", version = "3.5.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "hassil" },
     { name = "home-assistant-intents", version = "2026.1.28", source = { registry = "https://pypi.org/simple" } },
     { name = "pytest-homeassistant-custom-component", version = "0.13.316", source = { registry = "https://pypi.org/simple" } },
 ]
 ha-minimum = [
     { name = "ha-ffmpeg" },
-    { name = "hassil", version = "2.2.3", source = { registry = "https://pypi.org/simple" } },
+    { name = "hassil" },
     { name = "home-assistant-intents", version = "2025.7.30", source = { registry = "https://pypi.org/simple" } },
     { name = "mutagen" },
     { name = "pycares", version = "4.9.0", source = { registry = "https://pypi.org/simple" } },
@@ -1676,13 +1676,13 @@ dev = [
     { name = "validate-pyproject", specifier = ">=0.20.2" },
 ]
 ha-current = [
-    { name = "hassil", specifier = "==3.5.0" },
+    { name = "hassil", specifier = "==3.10.0" },
     { name = "home-assistant-intents", specifier = "==2026.1.28" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.316" },
 ]
 ha-minimum = [
     { name = "ha-ffmpeg" },
-    { name = "hassil", specifier = "==2.2.3" },
+    { name = "hassil", specifier = "==3.10.0" },
     { name = "home-assistant-intents", specifier = "==2025.7.30" },
     { name = "mutagen" },
     { name = "pycares", specifier = "==4.9.0" },
@@ -1796,32 +1796,16 @@ wheels = [
 
 [[package]]
 name = "hassil"
-version = "2.2.3"
+version = "3.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyyaml", version = "6.0.2", source = { registry = "https://pypi.org/simple" } },
+    { name = "pyyaml", version = "6.0.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current'" },
     { name = "unicode-rbnf" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/f4/bf2f642321114c4ca4586efb194274905388a09b1c95e52529eba2fd4d51/hassil-2.2.3.tar.gz", hash = "sha256:8516ebde2caf72362ea566cd677cb382138be3f5d36889fee21bb313bfd7d0d8", size = 46867, upload-time = "2025-02-04T17:36:22.142Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/43/f03045634765d117c16bb93e3296dc33f5b53e1a6d0e7c182aeb03a32222/hassil-3.10.0.tar.gz", hash = "sha256:798798a3a4216fa33e940fc92f74b32041f3065c8fce0543661e105f52273441", size = 58696, upload-time = "2026-07-17T19:27:42.805Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/54/ae/684cf7117bdd757bb7d92c20deb528db2d42a3d018fc788f1c415421d809/hassil-2.2.3-py3-none-any.whl", hash = "sha256:d22032c5268e6bdfc7fb60fa8f52f3a955d5ca982ccbfe535ed074c593e66bdf", size = 42097, upload-time = "2025-02-04T17:36:21.09Z" },
-]
-
-[[package]]
-name = "hassil"
-version = "3.5.0"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.14'",
-    "python_full_version < '3.14'",
-]
-dependencies = [
-    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "unicode-rbnf" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/87/bf/9630f99bcc3dca337e3905571d1e06f0317fcc1aec2d3b5a0933b810f9cf/hassil-3.5.0.tar.gz", hash = "sha256:bed39573626d76bfc0681a709a6b64e4de82a680371bd29238473f6711392597", size = 61144, upload-time = "2025-12-02T20:21:08.435Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7a/4e/94d688f7fb23b6e898922a077d7e32a6f412372ff285567d890a8791de7f/hassil-3.5.0-py3-none-any.whl", hash = "sha256:87b2a48164b2de1d693edbe4204b3a7c3b72dc7c5c3829774de8824ecc62ab96", size = 51788, upload-time = "2025-12-02T20:21:07.125Z" },
+    { url = "https://files.pythonhosted.org/packages/15/1b/44e15dc73b9938d9f06bfa234070671b7428f7ab0c1eca1c3efe3298e05f/hassil-3.10.0-py3-none-any.whl", hash = "sha256:333fc0f20771e443da8cab2136d97a32f6adf33d9ac5003f1f98021e1c8ba3f4", size = 49028, upload-time = "2026-07-17T19:27:41.663Z" },
 ]
 
 [[package]]

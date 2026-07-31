@@ -23,13 +23,13 @@ ha-current = [
   # Pinned to what this Home Assistant version declares in the conversation
   # component's manifest. They are not interchangeable across versions:
   # hassil 3.11 dropped hassil.fuzzy, which HA 2026.2 imports.
-  "hassil==3.5.0",
+  "hassil==3.10.0",
   "home-assistant-intents==2026.1.28",
 ]
 ha-minimum = [
   "pytest-homeassistant-custom-component==0.13.269", # HA 2025.8.0, the floor in hacs.json
   # As above, matching what HA 2025.8.0 declares.
-  "hassil==2.2.3",
+  "hassil==3.10.0",
   "home-assistant-intents==2025.7.30",
   # Setting up the conversation component on 2025.8 needs these; newer
   # releases of pytest-homeassistant-custom-component provide them for us.
