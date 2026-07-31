@@ -93,11 +93,16 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Run tests against the latest Home Assistant version
+        # hassil and home-assistant-intents are needed to set up the
+        # `conversation` component. The project gets them from its dev group,
+        # which an isolated run does not have, so they are named here too.
         run: |
           uv run --isolated --no-project --python 3.14 \
             --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
             --with "mistralai>=2.1.0" \
             --with PyTurboJPEG \
+            --with hassil \
+            --with home-assistant-intents \
             pytest tests/ -q --no-cov
 
   test-minimum:
