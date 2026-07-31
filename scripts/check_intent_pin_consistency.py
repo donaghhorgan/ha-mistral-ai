@@ -31,8 +31,8 @@ PHCC = "pytest-homeassistant-custom-component"
 def installed_home_assistant() -> tuple[str, dict[str, str]] | None:
     """Return the installed HA version and what it pins, or None."""
     try:
-        from homeassistant.const import __version__ as ha_version
         import homeassistant.components.conversation as conversation
+        from homeassistant.const import __version__ as ha_version
     except ImportError as err:
         print(f"❌ Could not import Home Assistant: {err}")
         return None
