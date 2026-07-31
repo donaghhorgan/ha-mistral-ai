@@ -51,6 +51,12 @@ repos:
         language: system
         files: ^(pyproject\.toml|\.python-version|\.devcontainer\.json|\.github/workflows/.*\.yml)$
         pass_filenames: false
+      - id: intent-pin-consistency
+        name: Check Intent Pin Consistency
+        entry: uv run python scripts/check_intent_pin_consistency.py
+        language: system
+        files: ^(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
       - id: ha-version-consistency
         name: Check HA Version Consistency
         entry: python scripts/check_ha_version_consistency.py
