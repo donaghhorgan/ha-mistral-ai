@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import base64
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 import voluptuous as vol
 from homeassistant.components import conversation
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 
 from custom_components.mistral_conversation.entity import (
+    _async_convert_messages,
     _convert_content,
     _format_tool,
     _parse_arguments,
@@ -18,6 +22,9 @@ from custom_components.mistral_conversation.entity import (
 )
 
 from .helpers import make_chunk, make_stream, make_tool_call
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_convert_user_content() -> None:
@@ -277,3 +284,112 @@ async def test_transform_stream_ignores_tool_call_without_function() -> None:
     )
 
     assert not any("tool_calls" in delta for delta in deltas)
+
+
+async def test_convert_messages_without_attachments(hass: HomeAssistant) -> None:
+    """A plain user turn keeps its content as a string."""
+    messages = await _async_convert_messages(
+        hass, [conversation.UserContent(content="hello")]
+    )
+
+    assert messages == [{"role": "user", "content": "hello"}]
+
+
+async def test_convert_messages_with_image_attachment(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """An image attachment is inlined as a base64 data URI chunk."""
+    image = tmp_path / "snapshot.jpg"
+    image.write_bytes(b"fake-jpeg-bytes")
+
+    content = conversation.UserContent(
+        content="what is this?",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media", mime_type="image/jpeg", path=image
+            )
+        ],
+    )
+
+    messages = await _async_convert_messages(hass, [content])
+
+    assert messages[0]["role"] == "user"
+    text, chunk = messages[0]["content"]
+    assert text == {"type": "text", "text": "what is this?"}
+    assert chunk["type"] == "image_url"
+    assert chunk["image_url"] == (
+        "data:image/jpeg;base64," + base64.b64encode(b"fake-jpeg-bytes").decode()
+    )
+
+
+async def test_convert_messages_rejects_non_image(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A non-image attachment is rejected rather than silently dropped."""
+    doc = tmp_path / "notes.txt"
+    doc.write_bytes(b"hello")
+
+    content = conversation.UserContent(
+        content="read this",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media", mime_type="text/plain", path=doc
+            )
+        ],
+    )
+
+    with pytest.raises(HomeAssistantError, match="Only images are supported"):
+        await _async_convert_messages(hass, [content])
+
+
+async def test_convert_messages_missing_file(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A missing attachment file is reported clearly."""
+    content = conversation.UserContent(
+        content="look",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media",
+                mime_type="image/png",
+                path=tmp_path / "gone.png",
+            )
+        ],
+    )
+
+    with pytest.raises(HomeAssistantError, match="does not exist"):
+        await _async_convert_messages(hass, [content])
+
+
+async def test_transform_stream_thinking_content() -> None:
+    """Reasoning chunks are surfaced as thinking content, not as the answer."""
+
+    class Thought:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    class ThinkPart:
+        type = "thinking"
+
+        def __init__(self, *thoughts: Thought) -> None:
+            self.thinking = list(thoughts)
+
+    class TextPart:
+        type = "text"
+
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    deltas = await collect(
+        _transform_stream(
+            make_stream(
+                [make_chunk(content=[ThinkPart(Thought("hmm")), TextPart("answer")])]
+            )
+        )
+    )
+
+    assert deltas == [
+        {"role": "assistant"},
+        {"thinking_content": "hmm"},
+        {"content": "answer"},
+    ]

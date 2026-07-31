@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-import asyncio
+import base64
 import json
 import logging
+from mimetypes import guess_file_type
 from typing import TYPE_CHECKING, Any
 
 import httpx
 import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import llm
 from homeassistant.helpers.entity import Entity
+from homeassistant.util import slugify
 from mistralai.client.errors import SDKError
 from voluptuous_openapi import convert
 
@@ -32,6 +35,7 @@ from .const import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable
+    from pathlib import Path
 
     from . import MistralConfigEntry
 
@@ -113,6 +117,64 @@ def _convert_content(content: conversation.Content) -> dict[str, Any]:
     raise HomeAssistantError(f"Unsupported content type: {type(content)}")
 
 
+async def _async_attachment_chunks(
+    hass: HomeAssistant, attachments: list[conversation.Attachment]
+) -> list[dict[str, Any]]:
+    """Read attachments and convert them to Mistral content chunks.
+
+    Mistral takes images inline as data URIs, so the files have to be read and
+    base64 encoded. That is blocking, hence the executor.
+    """
+
+    def _read() -> list[dict[str, Any]]:
+        chunks: list[dict[str, Any]] = []
+        for attachment in attachments:
+            path: Path = attachment.path
+            if not path.exists():
+                raise HomeAssistantError(f"`{path}` does not exist")
+
+            mime_type = attachment.mime_type or guess_file_type(path)[0]
+            if not mime_type or not mime_type.startswith("image/"):
+                raise HomeAssistantError(
+                    "Only images are supported by the Mistral AI API, "
+                    f"`{path}` is not an image"
+                )
+
+            encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+            chunks.append(
+                {
+                    "type": "image_url",
+                    "image_url": f"data:{mime_type};base64,{encoded}",
+                }
+            )
+        return chunks
+
+    return await hass.async_add_executor_job(_read)
+
+
+async def _async_convert_messages(
+    hass: HomeAssistant, contents: list[conversation.Content]
+) -> list[dict[str, Any]]:
+    """Convert a chat log into Mistral messages, including any attachments."""
+    messages: list[dict[str, Any]] = []
+
+    for content in contents:
+        message = _convert_content(content)
+
+        # A user turn carrying images becomes a list of chunks rather than a
+        # plain string. Only user turns can carry attachments.
+        if isinstance(content, conversation.UserContent) and content.attachments:
+            chunks = await _async_attachment_chunks(hass, content.attachments)
+            message["content"] = [
+                {"type": "text", "text": content.content},
+                *chunks,
+            ]
+
+        messages.append(message)
+
+    return messages
+
+
 async def _transform_stream(
     stream: AsyncIterable[Any],
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
@@ -140,13 +202,17 @@ async def _transform_stream(
             started = True
 
         if delta.content:
-            # Content is usually a plain string, but the API may return a list
-            # of segments instead.
+            # Content is usually a plain string, but reasoning models return a
+            # list of chunks, mixing text with the model's thinking.
             if isinstance(delta.content, str):
                 yield {"content": delta.content}
             else:
                 for part in delta.content:
-                    if text := getattr(part, "text", None):
+                    if getattr(part, "type", None) == "thinking":
+                        for thought in getattr(part, "thinking", None) or []:
+                            if text := getattr(thought, "text", None):
+                                yield {"thinking_content": text}
+                    elif text := getattr(part, "text", None):
                         yield {"content": text}
 
         for index, tool_call in enumerate(delta.tool_calls or []):
@@ -225,10 +291,14 @@ class MistralBaseLLMEntity(Entity):
             chat_log.llm_api.custom_serializer if chat_log.llm_api else None
         )
 
-        if chat_log.llm_api:
-            model_args["tools"] = [
+        if chat_log.llm_api and (
+            tools := [
                 _format_tool(tool, custom_serializer) for tool in chat_log.llm_api.tools
             ]
+        ):
+            # An empty tools list is rejected by the API, so only send it when
+            # the selected LLM API actually exposes something.
+            model_args["tools"] = tools
 
         if structure and structure_name:
             # Mistral supports structured output natively, so there is no need
@@ -236,7 +306,7 @@ class MistralBaseLLMEntity(Entity):
             model_args["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": structure_name.replace(" ", "_"),
+                    "name": slugify(structure_name),
                     "schema": convert(structure, custom_serializer=custom_serializer),
                     "strict": True,
                 },
@@ -245,13 +315,16 @@ class MistralBaseLLMEntity(Entity):
         for _iteration in range(MAX_TOOL_ITERATIONS):
             # Rebuild the messages each pass so that tool results added by the
             # previous iteration are included.
-            messages = [_convert_content(content) for content in chat_log.content]
+            messages = await _async_convert_messages(self.hass, chat_log.content)
 
             try:
-                async with asyncio.timeout(TIMEOUT):
-                    stream = await client.chat.stream_async(
-                        messages=messages, **model_args
-                    )
+                # timeout_ms is applied by the SDK per read, so a stalled
+                # stream fails rather than hanging, while a long but steady
+                # response is left alone. Wrapping the loop in a deadline
+                # instead would also cut off legitimate tool execution.
+                stream = await client.chat.stream_async(
+                    messages=messages, timeout_ms=TIMEOUT * 1000, **model_args
+                )
 
                 async for _content in chat_log.async_add_delta_content_stream(
                     self.entity_id, _transform_stream(stream)

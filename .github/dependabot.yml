@@ -17,3 +17,15 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # Without this, hook versions in .pre-commit-config.yaml drift silently.
+  # That matters most for ruff, which is pinned both here and in the dev
+  # group: if the two diverge, CI and local runs use different linters.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pre-commit-hooks:
+        patterns:
+          - "*"

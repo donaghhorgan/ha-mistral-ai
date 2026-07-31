@@ -8,27 +8,35 @@ on:
   pull_request:
     branches: [main, dev]
 
+# A new push supersedes whatever is already running for the same ref. Never
+# cancel on main, where each run is the record for a distinct commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.13"]
 
     steps:
       - uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.13"
 
       - name: Install UV
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Install dependencies
+        # --locked fails if uv.lock is out of date with pyproject.toml. A
+        # plain `uv sync` would silently regenerate it and pass, leaving the
+        # committed lockfile wrong.
         run: |
-          uv sync
+          uv sync --locked
 
       - name: Run pre-commit hooks
         run: |
@@ -61,10 +69,12 @@ jobs:
 
       - name: Install UV
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Install dependencies
         run: |
-          uv sync --no-default-groups --group dev --group ${{ matrix.ha-group }}
+          uv sync --locked --no-default-groups --group dev --group ${{ matrix.ha-group }}
 
       - name: Run tests
         run: |
@@ -102,6 +112,8 @@ jobs:
 
       - name: Install UV
         uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Run tests against the latest Home Assistant version
         # hassil and home-assistant-intents are needed to set up the
