@@ -4,7 +4,7 @@
         {
             "label": "Install Dependencies",
             "type": "shell",
-            "command": "uv sync --dev",
+            "command": "uv sync",
             "group": "build",
             "presentation": {
                 "echo": true,

@@ -46,10 +46,22 @@ tests/              # Unit tests
 - Python code should be written for the version in [`.python-version`](.python-version)
 - The integration is tested against three Home Assistant versions, because no
   single environment can cover the supported range:
-  - `test-minimum` — the floor named in `hacs.json`, on Python 3.13
-  - `test` — whatever `uv.lock` resolves, on Python 3.13
+  - `test (ha-current)` — whatever `uv.lock` resolves, on Python 3.13
+  - `test (ha-minimum)` — the floor named in `hacs.json`, on Python 3.13
   - `test-latest` — the newest release, on Python 3.14, since Home Assistant
     2026.5.0 and later require it. Advisory only; it tracks a moving target.
+
+  The first two are conflicting dependency groups in `pyproject.toml`, so uv
+  locks a resolution for each and both are reproducible. Switch between them
+  with `uv sync --no-default-groups --group dev --group <group>`; a plain
+  `uv sync` gets `ha-current`. Note that `uv sync --all-groups` cannot work
+  here, because the groups conflict by design.
+
+  `test-latest` cannot be a group: it needs Python 3.14, which `uv.lock`
+  cannot resolve under `requires-python = ">=3.13.2"`. Marker-gating it makes
+  the lock succeed but silently resolves to nothing on 3.13, which would give
+  a job that passes while testing the wrong version. It stays an isolated
+  `uv run --with` install for that reason.
 
   The project itself stays on Python 3.13 so that the floor remains
   reachable. Do not raise `requires-python` to 3.14 without also raising the

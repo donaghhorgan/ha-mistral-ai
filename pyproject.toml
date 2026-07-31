@@ -5,12 +5,30 @@ dev = [
   "home-assistant-intents>=2026.3.24",
   "pre-commit>=4.3.0",
   "pymarkdownlnt>=0.9.32",
-  "pytest-homeassistant-custom-component==0.13.316",
   "pyturbojpeg>=2.5.0",
   "ruff>=0.13.2",
   "toml-sort>=0.23.1",
   "ty>=0.0.24",
   "validate-pyproject>=0.20.2",
+]
+# pytest-homeassistant-custom-component pins Home Assistant to an exact
+# version, so the version we test against is chosen by picking one of these
+# groups. They are declared as conflicting in [tool.uv], which makes uv lock a
+# separate resolution for each, so both are reproducible.
+#
+# Sync one at a time: `uv sync --no-default-groups --group dev --group ha-minimum`.
+# A plain `uv sync` gets dev + ha-current, per default-groups below.
+ha-current = ["pytest-homeassistant-custom-component==0.13.316"] # HA 2026.2.3
+ha-minimum = [
+  "pytest-homeassistant-custom-component==0.13.269", # HA 2025.8.0, the floor in hacs.json
+  # Setting up the conversation component on 2025.8 needs these; newer
+  # releases of pytest-homeassistant-custom-component provide them for us.
+  "ha-ffmpeg",
+  "mutagen",
+  "pymicro-vad",
+  "pyspeex-noise",
+  # Current pycares releases break aiodns on this Home Assistant version.
+  "pycares==4.9.0",
 ]
 
 [project]
@@ -26,6 +44,15 @@ dependencies = [
   "homeassistant>=2025.8.0",
   "voluptuous>=0.13.1"
 ]
+
+[tool.uv]
+conflicts = [
+  [
+    { group = "ha-current" },
+    { group = "ha-minimum" }
+  ]
+]
+default-groups = ["dev", "ha-current"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=custom_components.mistral_conversation --cov-report=term-missing"
