@@ -39,11 +39,11 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" } },
-    { name = "josepy" },
-    { name = "pyopenssl", version = "25.3.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "pyrfc3339" },
-    { name = "requests", version = "2.32.5", source = { registry = "https://pypi.org/simple" } },
+    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "josepy", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyopenssl", version = "25.3.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyrfc3339", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "requests", version = "2.32.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/39/55/767394a0fdd70ab69f14368109c8db50a1ed937615ab02458120f5356e37/acme-5.2.2.tar.gz", hash = "sha256:7702d5b99149d5cd9cd48a9270c04693e925730c023ca3e1b853ab43746a9d01", size = 90013, upload-time = "2025-12-10T18:17:17.808Z" }
 wheels = [
@@ -110,9 +110,9 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "mashumaro" },
-    { name = "orjson", version = "3.11.5", source = { registry = "https://pypi.org/simple" } },
+    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "mashumaro", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "orjson", version = "3.11.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e4/e0/f8865efa28ce22e44e3526f18654c7a69a6f0d0e8523e2aaf743f2798fd8/aiohasupervisor-0.3.3.tar.gz", hash = "sha256:24e268f58f37f9d8dafadba2ef9d860292ff622bc6e78b1ca4ef5e5095d1bbc8", size = 44696, upload-time = "2025-10-01T14:55:57.98Z" }
 wheels = [
@@ -345,9 +345,9 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "propcache", version = "0.4.1", source = { registry = "https://pypi.org/simple" } },
-    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "voluptuous" },
+    { name = "propcache", version = "0.4.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ec/4b/973067092ee348e331d125acd60c45245f11663373c219650814b43d0025/annotatedyaml-1.0.2.tar.gz", hash = "sha256:f9a49952994ef1952ca17d27bb6478342eb1189d2c28e4c0ddbbb32065471fb0", size = 15366, upload-time = "2025-10-04T14:36:26.655Z" }
 wheels = [
@@ -1331,7 +1331,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "fnvhash" },
+    { name = "fnvhash", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b9/19/10f4e1b4bbfe7cf162d20bb4d54bd62935d652e2ea107ddb0b5a6c4e8b75/fnv_hash_fast-1.6.0.tar.gz", hash = "sha256:a09feefad2c827192dc4306826df3ffb7c6288f25ab7976d4588fdae9cbb7661", size = 5675, upload-time = "2025-10-04T19:35:00.172Z" }
 wheels = [
@@ -1504,7 +1504,7 @@ name = "grpcio"
 version = "1.78.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/06/8a/3d098f35c143a89520e568e6539cc098fcd294495910e359889ce8741c84/grpcio-1.78.0.tar.gz", hash = "sha256:7382b95189546f375c174f53a5fa873cef91c4b8005faa05cc5b3beea9c4f1c5", size = 12852416, upload-time = "2026-02-06T09:57:18.093Z" }
 wheels = [
@@ -1603,7 +1603,7 @@ dev = [
     { name = "pymarkdownlnt", specifier = ">=0.9.32" },
     { name = "pyturbojpeg", specifier = ">=2.5.0" },
     { name = "ruff", specifier = ">=0.13.2" },
-    { name = "toml-sort", specifier = ">=0.23.1" },
+    { name = "toml-sort", specifier = ">=0.24.4" },
     { name = "ty", specifier = ">=0.0.24" },
     { name = "validate-pyproject", specifier = ">=0.20.2" },
 ]
@@ -1700,23 +1700,23 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "acme", version = "5.2.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "async-timeout" },
-    { name = "atomicwrites-homeassistant" },
-    { name = "attrs", version = "25.4.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "ciso8601", version = "2.3.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" } },
-    { name = "grpcio" },
-    { name = "icmplib" },
-    { name = "josepy" },
-    { name = "pycognito" },
-    { name = "pyjwt" },
-    { name = "sentence-stream", version = "1.2.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "snitun", version = "0.45.1", source = { registry = "https://pypi.org/simple" } },
-    { name = "voluptuous" },
-    { name = "webrtc-models" },
-    { name = "yarl", version = "1.22.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "acme", version = "5.2.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "async-timeout", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "atomicwrites-homeassistant", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "attrs", version = "25.4.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "ciso8601", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "grpcio", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "icmplib", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "josepy", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pycognito", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyjwt", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "sentence-stream", version = "1.2.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "snitun", version = "0.45.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "webrtc-models", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "yarl", version = "1.22.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8b/9d/60316d7866c5818b8002e3d570b9d8042d5dd923a659d542b245f89c955b/hass_nabucasa-1.12.0.tar.gz", hash = "sha256:06bc4ebe89ffd08b744aa6540a2ebc44a82f60e2e74645e3b7498385c88d722c", size = 114395, upload-time = "2026-01-28T12:42:34.214Z" }
 wheels = [
@@ -1828,56 +1828,56 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "aiodns", version = "4.0.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "aiohasupervisor", version = "0.3.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "aiohttp-asyncmdnsresolver" },
-    { name = "aiohttp-cors" },
-    { name = "aiohttp-fast-zlib" },
-    { name = "aiozoneinfo" },
-    { name = "annotatedyaml", version = "1.0.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "astral" },
-    { name = "async-interrupt" },
-    { name = "atomicwrites-homeassistant" },
-    { name = "attrs", version = "25.4.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "audioop-lts" },
-    { name = "awesomeversion", version = "25.8.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "bcrypt", version = "5.0.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "certifi" },
-    { name = "ciso8601", version = "2.3.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "cronsim", version = "2.7", source = { registry = "https://pypi.org/simple" } },
-    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" } },
-    { name = "fnv-hash-fast", version = "1.6.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "hass-nabucasa", version = "1.12.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "home-assistant-bluetooth" },
-    { name = "httpx" },
-    { name = "ifaddr" },
-    { name = "jinja2" },
-    { name = "lru-dict" },
-    { name = "orjson", version = "3.11.5", source = { registry = "https://pypi.org/simple" } },
-    { name = "packaging" },
-    { name = "pillow", version = "12.0.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "propcache", version = "0.4.1", source = { registry = "https://pypi.org/simple" } },
-    { name = "psutil-home-assistant" },
-    { name = "pyjwt" },
-    { name = "pyopenssl", version = "25.3.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "python-slugify" },
-    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "requests", version = "2.32.5", source = { registry = "https://pypi.org/simple" } },
-    { name = "securetar" },
-    { name = "sqlalchemy" },
-    { name = "standard-aifc" },
-    { name = "standard-telnetlib" },
-    { name = "typing-extensions" },
-    { name = "ulid-transform", version = "1.5.2", source = { registry = "https://pypi.org/simple" } },
-    { name = "urllib3" },
-    { name = "uv", version = "0.9.26", source = { registry = "https://pypi.org/simple" } },
-    { name = "voluptuous" },
-    { name = "voluptuous-openapi", version = "0.2.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "voluptuous-serialize", version = "2.7.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "webrtc-models" },
-    { name = "yarl", version = "1.22.0", source = { registry = "https://pypi.org/simple" } },
-    { name = "zeroconf", version = "0.148.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "aiodns", version = "4.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohasupervisor", version = "0.3.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohttp-asyncmdnsresolver", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohttp-cors", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiohttp-fast-zlib", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "aiozoneinfo", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "annotatedyaml", version = "1.0.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "astral", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "async-interrupt", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "atomicwrites-homeassistant", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "attrs", version = "25.4.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "audioop-lts", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "awesomeversion", version = "25.8.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "bcrypt", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "certifi", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "ciso8601", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "cronsim", version = "2.7", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "fnv-hash-fast", version = "1.6.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "hass-nabucasa", version = "1.12.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "home-assistant-bluetooth", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "httpx", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "ifaddr", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "jinja2", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "lru-dict", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "orjson", version = "3.11.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "packaging", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pillow", version = "12.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "propcache", version = "0.4.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "psutil-home-assistant", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyjwt", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyopenssl", version = "25.3.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "python-slugify", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pyyaml", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "requests", version = "2.32.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "securetar", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "sqlalchemy", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "standard-aifc", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "standard-telnetlib", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "typing-extensions", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "ulid-transform", version = "1.5.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "urllib3", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "uv", version = "0.9.26", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "voluptuous-openapi", version = "0.2.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "voluptuous-serialize", version = "2.7.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "webrtc-models", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "yarl", version = "1.22.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "zeroconf", version = "0.148.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/de/0f/e5dec842a1374f9f04a3131ed96723f2e57bbd9ac58f1536f4b4cdc166c4/homeassistant-2026.2.3.tar.gz", hash = "sha256:524231671dc853421987c81b8d9f714641194bded45bce454f98ac3723f28874", size = 30909057, upload-time = "2026-02-20T21:03:11.603Z" }
 wheels = [
@@ -2854,10 +2854,10 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "annotated-types" },
-    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://pypi.org/simple" } },
-    { name = "typing-extensions" },
-    { name = "typing-inspection" },
+    { name = "annotated-types", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pydantic-core", version = "2.41.4", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "typing-extensions", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "typing-inspection", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8d/35/d319ed522433215526689bad428a94058b6dd12190ce7ddd78618ac14b28/pydantic-2.12.2.tar.gz", hash = "sha256:7b8fa15b831a4bbde9d5b84028641ac3080a4ca2cbd4a621a661687e741624fd", size = 816358, upload-time = "2025-10-14T15:02:21.842Z" }
 wheels = [
@@ -2901,7 +2901,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/df/18/d0944e8eaaa3efd0a91b0f1fc537d3be55ad35091b6a87638211ba691964/pydantic_core-2.41.4.tar.gz", hash = "sha256:70e47929a9d4a1905a67e4b687d5946026390568a8e952b92824118063cee4d5", size = 457557, upload-time = "2025-10-14T10:23:47.909Z" }
 wheels = [
@@ -3150,7 +3150,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" } },
+    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/be/97b83a464498a79103036bc74d1038df4a7ef0e402cfaf4d5e113fb14759/pyopenssl-25.3.0.tar.gz", hash = "sha256:c981cb0a3fd84e8602d7afc209522773b94c1c2446a3c710a75b06fe1beae329", size = 184073, upload-time = "2025-09-17T00:32:21.037Z" }
 wheels = [
@@ -3753,7 +3753,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "regex" },
+    { name = "regex", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7d/96/e982ce20637bf6f78b1733c6fe5da29a357695d84a7928b5866a5ab5802a/sentence_stream-1.2.0.tar.gz", hash = "sha256:92c7b6aa515d1d2a44693b719c77e3144dd6bbccd405261eee7a065d01191f71", size = 9492, upload-time = "2025-08-27T18:55:27.573Z" }
 wheels = [
@@ -3793,8 +3793,8 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" } },
-    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" } },
+    { name = "aiohttp", version = "3.13.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "cryptography", version = "46.0.5", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/48/e2/b5bbf04971d1c3e07a3e16a706ea3c1a4b711c6d8c9566e8012772d3351a/snitun-0.45.1.tar.gz", hash = "sha256:d76d48cf4190ea59e8f63892da9c18499bfc6ca796220a463c6f3b32099d661c", size = 43335, upload-time = "2025-09-25T05:24:07.89Z" }
 wheels = [
@@ -3910,14 +3910,14 @@ wheels = [
 
 [[package]]
 name = "toml-sort"
-version = "0.24.3"
+version = "0.24.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "tomlkit" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/15/65/d62fb175769355a65c2c5e53a155cf28f2162af4e4067f11d8af89c0a4a3/toml_sort-0.24.3.tar.gz", hash = "sha256:74c3cab5c1ecaf76c8239addc15342de548fb39598694f1298550d0fe2673a81", size = 17773, upload-time = "2025-09-10T02:43:54.955Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/c5/d6f650fdcf8e1f83096815fa67fb13a9a345b99da6015c60c4b7e4a8ea2b/toml_sort-0.24.4.tar.gz", hash = "sha256:429b69f5b98b7047a11380c80ecf0838556bdea1a8902d0be564961c48841423", size = 17793, upload-time = "2026-03-24T14:05:53.637Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/1c/f5a9a4f918ff0e1578fdc3f607a7ec704c5da1b13ddc290fd0aefa97ff2e/toml_sort-0.24.3-py3-none-any.whl", hash = "sha256:d70642f54827b4c17a6cde788dcb45d598c1eb9833544a2fcec5eb7b0b744ed4", size = 16538, upload-time = "2025-09-10T02:43:53.67Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/5a/1f0e54df4eacf0f4d8f94ba50cf72be33d2a3f04babdfb1931bead48a0ab/toml_sort-0.24.4-py3-none-any.whl", hash = "sha256:125aa5fb94f33c542c6901040456145dd38f79bbb310b56b436a93057d30a739", size = 16577, upload-time = "2026-03-24T14:05:54.757Z" },
 ]
 
 [[package]]
@@ -4236,7 +4236,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "voluptuous" },
+    { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a3/15/ac7a98afd478e9afc804354fe9d9715e0e560a590fdd425b22b65a152bb3/voluptuous_openapi-0.2.0.tar.gz", hash = "sha256:2366be934c37bb5fd8ed6bd5a2a46b1079b57dfbdf8c6c02e88f4ca13e975073", size = 15789, upload-time = "2025-08-21T04:49:16.755Z" }
 wheels = [
@@ -4264,7 +4264,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "voluptuous" },
+    { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/70/03a9b61324e1bb8b16682455b8b953bccd1001a28e43478c86f539e26285/voluptuous_serialize-2.7.0.tar.gz", hash = "sha256:d0da959f2fd93c8f1eb779c5d116231940493b51020c2c1026bab76eb56cd09e", size = 9202, upload-time = "2025-08-17T10:43:04.31Z" }
 wheels = [

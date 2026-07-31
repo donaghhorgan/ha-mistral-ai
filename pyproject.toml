@@ -7,7 +7,7 @@ dev = [
   "pymarkdownlnt>=0.9.32",
   "pyturbojpeg>=2.5.0",
   "ruff>=0.13.2",
-  "toml-sort>=0.23.1",
+  "toml-sort>=0.24.4",
   "ty>=0.0.24",
   "validate-pyproject>=0.20.2",
 ]
