@@ -2,11 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.13.2"
 resolution-markers = [
-    "extra != 'group-23-ha-mistral-conversation-ha-current' and extra == 'group-23-ha-mistral-conversation-ha-minimum'",
-    "python_full_version >= '3.14' and extra == 'group-23-ha-mistral-conversation-ha-current' and extra != 'group-23-ha-mistral-conversation-ha-minimum'",
-    "python_full_version < '3.14' and extra == 'group-23-ha-mistral-conversation-ha-current' and extra != 'group-23-ha-mistral-conversation-ha-minimum'",
-    "python_full_version >= '3.14' and extra != 'group-23-ha-mistral-conversation-ha-current' and extra != 'group-23-ha-mistral-conversation-ha-minimum'",
-    "python_full_version < '3.14' and extra != 'group-23-ha-mistral-conversation-ha-current' and extra != 'group-23-ha-mistral-conversation-ha-minimum'",
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
 ]
 conflicts = [[
     { package = "ha-mistral-conversation", group = "ha-current" },
@@ -17,6 +14,10 @@ conflicts = [[
 name = "acme"
 version = "4.1.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "cryptography", version = "45.0.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "josepy", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -54,8 +55,12 @@ wheels = [
 name = "aiodns"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
-    { name = "pycares", version = "4.9.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pycares", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/17/0a/163e5260cecc12de6abc259d158d9da3b8ec062ab863107dcdb1166cdcef/aiodns-3.5.0.tar.gz", hash = "sha256:11264edbab51896ecf546c18eb0dd56dff0428c6aa6d2cd87e643e07300eb310", size = 14380, upload-time = "2025-06-13T16:21:53.595Z" }
 wheels = [
@@ -71,7 +76,7 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 dependencies = [
-    { name = "pycares", version = "5.0.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "pycares", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/da/97235e953109936bfeda62c1f9f1a7c5652d4dc49f2b5911f9ae1043afa9/aiodns-4.0.0.tar.gz", hash = "sha256:17be26a936ba788c849ba5fd20e0ba69d8c46e6273e846eb5430eae2630ce5b1", size = 26204, upload-time = "2026-01-10T22:33:27.211Z" }
 wheels = [
@@ -91,6 +96,10 @@ wheels = [
 name = "aiohasupervisor"
 version = "0.3.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "aiohttp", version = "3.12.15", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "mashumaro", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -123,6 +132,10 @@ wheels = [
 name = "aiohttp"
 version = "3.12.15"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "aiohappyeyeballs", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "aiosignal", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -314,6 +327,10 @@ wheels = [
 name = "annotatedyaml"
 version = "0.4.5"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "propcache", version = "0.3.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "pyyaml", version = "6.0.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -461,6 +478,10 @@ wheels = [
 name = "attrs"
 version = "25.3.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/5a/b0/1367933a8532ee6ff8d63537de4f1177af4bff9f3e829baf7331f595bb24/attrs-25.3.0.tar.gz", hash = "sha256:75d7cefc7fb576747b2c81b4442d4d4a1ce0900973527c011d1030fd3bf4af1b", size = 812032, upload-time = "2025-03-13T11:10:22.779Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/06/bb80f5f86020c4551da315d78b3ab75e8228f89f0162f2c3a819e407941a/attrs-25.3.0-py3-none-any.whl", hash = "sha256:427318ce031701fea540783410126f03899a97ffc6f61596ad581ac2e40e3bc3", size = 63815, upload-time = "2025-03-13T11:10:21.14Z" },
@@ -523,6 +544,10 @@ wheels = [
 name = "awesomeversion"
 version = "25.5.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/5e/95/bd19ef0ef6735bd7131c0310f71432ea5fdf3dc2b3245a262d1f34bae55e/awesomeversion-25.5.0.tar.gz", hash = "sha256:d64c9f3579d2f60a5aa506a9dd0b38a74ab5f45e04800f943a547c1102280f31", size = 11693, upload-time = "2025-05-29T12:38:02.352Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dd/99/dc26ce0845a99f90fd99464a1d9124d5eacaa8bac92072af059cf002def4/awesomeversion-25.5.0-py3-none-any.whl", hash = "sha256:34a676ae10e10d3a96829fcc890a1d377fe1a7a2b98ee19951631951c2aebff6", size = 13998, upload-time = "2025-05-29T12:38:01.127Z" },
@@ -561,6 +586,10 @@ wheels = [
 name = "bcrypt"
 version = "4.3.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/bb/5d/6d7433e0f3cd46ce0b43cd65e1db465ea024dbb8216fb2404e919c2ad77b/bcrypt-4.3.0.tar.gz", hash = "sha256:3a3fd2204178b6d2adcf09cb4f6426ffef54762577a7c9b54c159008cb288c18", size = 25697, upload-time = "2025-02-28T01:24:09.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/2c/3d44e853d1fe969d229bd58d39ae6902b3d924af0e2b5a60d17d4b809ded/bcrypt-4.3.0-cp313-cp313t-macosx_10_12_universal2.whl", hash = "sha256:f01e060f14b6b57bbb72fc5b4a83ac21c443c9a2ee708e04a10e9192f90a6281", size = 483719, upload-time = "2025-02-28T01:22:34.539Z" },
@@ -978,6 +1007,10 @@ wheels = [
 name = "ciso8601"
 version = "2.3.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/09/e9/d83711081c997540aee59ad2f49d81f01d33e8551d766b0ebde346f605af/ciso8601-2.3.2.tar.gz", hash = "sha256:ec1616969aa46c51310b196022e5d3926f8d3fa52b80ec17f6b4133623bd5434", size = 28214, upload-time = "2024-12-09T12:26:40.768Z" }
 
 [[package]]
@@ -1034,6 +1067,10 @@ wheels = [
 name = "coverage"
 version = "7.10.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/6d/8f/6ac7fbb29e35645065f7be835bfe3e0cce567f80390de2f3db65d83cb5e3/coverage-7.10.0.tar.gz", hash = "sha256:2768885aef484b5dcde56262cbdfba559b770bfc46994fe9485dc3614c7a5867", size = 819816, upload-time = "2025-07-24T16:53:00.896Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/a7/a47f64718c2229b7860a334edd4e6ff41ec8513f3d3f4246284610344392/coverage-7.10.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:d883fee92b9245c0120fa25b5d36de71ccd4cfc29735906a448271e935d8d86d", size = 215143, upload-time = "2025-07-24T16:51:14.105Z" },
@@ -1144,6 +1181,10 @@ wheels = [
 name = "cronsim"
 version = "2.6"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/5b/d8/cfb8d51a51f6076ffa09902c02978c7db9764cca78f4ee832e691d20f44b/cronsim-2.6.tar.gz", hash = "sha256:5aab98716ef90ab5ac6be294b2c3965dbf76dc869f048846a0af74ebb506c10d", size = 20315, upload-time = "2024-11-02T14:34:02.475Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8c/dd/9c40c4e0f4d3cb6cf52eb335e9cc1fa140c1f3a87146fb6987f465b069da/cronsim-2.6-py3-none-any.whl", hash = "sha256:5e153ff8ed64da7ee8d5caac470dbeda8024ab052c3010b1be149772b4801835", size = 13500, upload-time = "2024-12-04T12:53:57.443Z" },
@@ -1165,6 +1206,10 @@ wheels = [
 name = "cryptography"
 version = "45.0.3"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "cffi", marker = "(platform_python_implementation != 'PyPy' and extra == 'group-23-ha-mistral-conversation-ha-minimum') or (extra == 'group-23-ha-mistral-conversation-ha-current' and extra == 'group-23-ha-mistral-conversation-ha-minimum')" },
 ]
@@ -1341,6 +1386,10 @@ wheels = [
 name = "fnv-hash-fast"
 version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "fnvhash", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -1651,7 +1700,7 @@ ha-minimum = [
     { name = "hassil", version = "2.2.3", source = { registry = "https://pypi.org/simple" } },
     { name = "home-assistant-intents", version = "2025.7.30", source = { registry = "https://pypi.org/simple" } },
     { name = "mutagen" },
-    { name = "pycares", version = "4.9.0", source = { registry = "https://pypi.org/simple" } },
+    { name = "pycares" },
     { name = "pymicro-vad" },
     { name = "pyspeex-noise" },
     { name = "pytest-homeassistant-custom-component", version = "0.13.269", source = { registry = "https://pypi.org/simple" } },
@@ -1685,7 +1734,7 @@ ha-minimum = [
     { name = "hassil", specifier = "==2.2.3" },
     { name = "home-assistant-intents", specifier = "==2025.7.30" },
     { name = "mutagen" },
-    { name = "pycares", specifier = "==4.9.0" },
+    { name = "pycares", specifier = "==5.0.1" },
     { name = "pymicro-vad" },
     { name = "pyspeex-noise" },
     { name = "pytest-homeassistant-custom-component", specifier = "==0.13.269" },
@@ -1741,6 +1790,10 @@ wheels = [
 name = "hass-nabucasa"
 version = "0.111.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "acme", version = "4.1.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "aiohttp", version = "3.12.15", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -1798,6 +1851,10 @@ wheels = [
 name = "hassil"
 version = "2.2.3"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "pyyaml", version = "6.0.2", source = { registry = "https://pypi.org/simple" } },
     { name = "unicode-rbnf" },
@@ -1840,6 +1897,10 @@ wheels = [
 name = "home-assistant-intents"
 version = "2025.7.30"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/17/90/e4e1d717a8300262cfda96dee8e06aaad3b5918f40f62e5e88b6c4a245cb/home_assistant_intents-2025.7.30.tar.gz", hash = "sha256:e29f8886254df288c01f3dfac719e5a6b5ee7acaa3436cea1f56fe3a3ff6c05f", size = 2640629, upload-time = "2025-07-30T15:37:41.234Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fc/86/36dc529193f44f52d61bbe3ba9b10efc561bb7eeccb43bb762082081fd0c/home_assistant_intents-2025.7.30-py3-none-any.whl", hash = "sha256:d614004a7533bb88b54f7a447e7418cf0ba6de9d302db14064b121359bd09e3c", size = 2667247, upload-time = "2025-07-30T15:37:39.762Z" },
@@ -1862,6 +1923,10 @@ wheels = [
 name = "homeassistant"
 version = "2025.8.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "aiodns", version = "3.5.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "aiohasupervisor", version = "0.3.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -2422,6 +2487,10 @@ wheels = [
 name = "orjson"
 version = "3.11.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/19/3b/fd9ff8ff64ae3900f11554d5cfc835fb73e501e043c420ad32ec574fe27f/orjson-3.11.1.tar.gz", hash = "sha256:48d82770a5fd88778063604c566f9c7c71820270c9cc9338d25147cbf34afd96", size = 5393373, upload-time = "2025-07-25T14:33:52.898Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c9/e9/880ef869e6f66279ce3a381a32afa0f34e29a94250146911eee029e56efc/orjson-3.11.1-cp313-cp313-macosx_10_15_x86_64.macosx_11_0_arm64.macosx_10_15_universal2.whl", hash = "sha256:53cfefe4af059e65aabe9683f76b9c88bf34b4341a77d329227c2424e0e59b0e", size = 240835, upload-time = "2025-07-25T14:32:54.507Z" },
@@ -2516,6 +2585,10 @@ wheels = [
 name = "pillow"
 version = "11.3.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/f3/0d/d0d6dea55cd152ce3d6767bb38a8fc10e33796ba4ba210cbab9354b6d238/pillow-11.3.0.tar.gz", hash = "sha256:3828ee7586cd0b2091b6209e5ad53e20d0649bbe87164a459d0676e035e8f523", size = 47113069, upload-time = "2025-07-01T09:16:30.666Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1e/93/0952f2ed8db3a5a4c7a11f91965d6184ebc8cd7cbb7941a260d5f018cd2d/pillow-11.3.0-cp313-cp313-ios_13_0_arm64_iphoneos.whl", hash = "sha256:1c627742b539bba4309df89171356fcb3cc5a9178355b2727d1b74a6cf155fbd", size = 2128328, upload-time = "2025-07-01T09:14:35.276Z" },
@@ -2690,6 +2763,10 @@ wheels = [
 name = "propcache"
 version = "0.3.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/16/43264e4a779dd8588c21a70f0709665ee8f611211bdd2c87d952cfa7c776/propcache-0.3.2.tar.gz", hash = "sha256:20d7d62e4e7ef05f221e0db2856b979540686342e7dd9973b815599c7057e168", size = 44139, upload-time = "2025-06-09T22:56:06.081Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/d1/8c747fafa558c603c4ca19d8e20b288aa0c7cda74e9402f50f31eb65267e/propcache-0.3.2-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:ca592ed634a73ca002967458187109265e980422116c0a107cf93d81f95af945", size = 71286, upload-time = "2025-06-09T22:54:54.369Z" },
@@ -2854,40 +2931,10 @@ wheels = [
 
 [[package]]
 name = "pycares"
-version = "4.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cffi", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/37/4d4f8ac929e98aad64781f37d9429e82ba65372fc89da0473cdbecdbbb03/pycares-4.9.0.tar.gz", hash = "sha256:8ee484ddb23dbec4d88d14ed5b6d592c1960d2e93c385d5e52b6fad564d82395", size = 655365, upload-time = "2025-06-13T00:37:49.923Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/10/da/e0240d156c6089bf2b38afd01600fe9db8b1dd6e53fb776f1dca020b1124/pycares-4.9.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:574d815112a95ab09d75d0a9dc7dea737c06985e3125cf31c32ba6a3ed6ca006", size = 145589, upload-time = "2025-06-13T00:37:17.154Z" },
-    { url = "https://files.pythonhosted.org/packages/27/c5/1d4abd1a33b7fbd4dc0e854fcd6c76c4236bdfe1359dafb0a8349694462d/pycares-4.9.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:50e5ab06361d59625a27a7ad93d27e067dc7c9f6aa529a07d691eb17f3b43605", size = 140730, upload-time = "2025-06-13T00:37:18.088Z" },
-    { url = "https://files.pythonhosted.org/packages/24/4d/3ff037cd7fb7a6d9f1bf4289b96ff2d6ac59d098f02bbf3b18cb0a0ab576/pycares-4.9.0-cp313-cp313-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:785f5fd11ff40237d9bc8afa441551bb449e2812c74334d1d10859569e07515c", size = 587384, upload-time = "2025-06-13T00:37:19.047Z" },
-    { url = "https://files.pythonhosted.org/packages/66/92/be8f527017769148687e45a4e5afd8d849aee2b145cda59003ad5a531aaf/pycares-4.9.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e194a500e403eba89b91fb863c917495c5b3dfcd1ce0ee8dc3a6f99a1360e2fc", size = 628273, upload-time = "2025-06-13T00:37:20.304Z" },
-    { url = "https://files.pythonhosted.org/packages/a7/8d/e88cfdd08f7065ae52817b930834964320d0e43955f6ac68d2ab35728912/pycares-4.9.0-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:112dd49cdec4e6150a8d95b197e8b6b7b4468a3170b30738ed9b248cb2240c04", size = 665481, upload-time = "2025-06-13T00:37:21.727Z" },
-    { url = "https://files.pythonhosted.org/packages/e0/9d/a2661f9c8e1e7fa842586d7b24710e78f068d26f768eea7a7437c249a2f6/pycares-4.9.0-cp313-cp313-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:94aa3c2f3eb0aa69160137134775501f06c901188e722aac63d2a210d4084f99", size = 648157, upload-time = "2025-06-13T00:37:22.801Z" },
-    { url = "https://files.pythonhosted.org/packages/43/b9/d04ea1de2a7d4e8a00b2b00a0ee94d7b0434f00eb55f5941ffa287c1dab2/pycares-4.9.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b510d71255cf5a92ccc2643a553548fcb0623d6ed11c8c633b421d99d7fa4167", size = 629244, upload-time = "2025-06-13T00:37:23.868Z" },
-    { url = "https://files.pythonhosted.org/packages/d9/c8/7f81ccdd856ddc383d3f82708b4f4022761640f3baec6d233549960348b8/pycares-4.9.0-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:5c6aa30b1492b8130f7832bf95178642c710ce6b7ba610c2b17377f77177e3cd", size = 621120, upload-time = "2025-06-13T00:37:25.164Z" },
-    { url = "https://files.pythonhosted.org/packages/fd/96/9386654a244caafd77748e626da487f1a56f831e3db5ef1337410be3e5f6/pycares-4.9.0-cp313-cp313-musllinux_1_2_i686.whl", hash = "sha256:e5767988e044faffe2aff6a76aa08df99a8b6ef2641be8b00ea16334ce5dea93", size = 593493, upload-time = "2025-06-13T00:37:26.198Z" },
-    { url = "https://files.pythonhosted.org/packages/76/bd/73286f329d03fef071e8517076dc62487e4478a3c85c4c59d652e6a663e5/pycares-4.9.0-cp313-cp313-musllinux_1_2_ppc64le.whl", hash = "sha256:b9928a942820a82daa3207509eaba9e0fa9660756ac56667ec2e062815331fcb", size = 669086, upload-time = "2025-06-13T00:37:27.278Z" },
-    { url = "https://files.pythonhosted.org/packages/2f/2a/0f623426225828f2793c3f86463ef72f6ecf6df12fe240a4e68435e8212f/pycares-4.9.0-cp313-cp313-musllinux_1_2_s390x.whl", hash = "sha256:556c854174da76d544714cdfab10745ed5d4b99eec5899f7b13988cd26ff4763", size = 652103, upload-time = "2025-06-13T00:37:28.361Z" },
-    { url = "https://files.pythonhosted.org/packages/04/d8/7db6eee011f414f21e3d53a0ad81593baa87a332403d781c2f86d3eef315/pycares-4.9.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:d42e2202ca9aa9a0a9a6e43a4a4408bbe0311aaa44800fa27b8fd7f82b20152a", size = 628373, upload-time = "2025-06-13T00:37:29.797Z" },
-    { url = "https://files.pythonhosted.org/packages/72/a4/1a9b96678afb4f31651885129fbfa2cd44e78a438fd545c7b8d317a1f381/pycares-4.9.0-cp313-cp313-win32.whl", hash = "sha256:cce8ef72c9ed4982c84114e6148a4e42e989d745de7862a0ad8b3f1cdc05def2", size = 118511, upload-time = "2025-06-13T00:37:30.854Z" },
-    { url = "https://files.pythonhosted.org/packages/79/e4/6724c71a08a91f2685ca60ca35d7950c187a2d79a776461130a6cb5b0d5e/pycares-4.9.0-cp313-cp313-win_amd64.whl", hash = "sha256:318cdf24f826f1d2f0c5a988730bd597e1683296628c8f1be1a5b96643c284fe", size = 143746, upload-time = "2025-06-13T00:37:32.015Z" },
-    { url = "https://files.pythonhosted.org/packages/ee/f8/b4d4bf71ae92727a0b3a9b9092c2e722833c1ca50ebd0414824843cb84fd/pycares-4.9.0-cp313-cp313-win_arm64.whl", hash = "sha256:faa9de8e647ed06757a2c117b70a7645a755561def814da6aca0d766cf71a402", size = 115646, upload-time = "2025-06-13T00:37:33.251Z" },
-]
-
-[[package]]
-name = "pycares"
 version = "5.0.1"
 source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.14'",
-    "python_full_version < '3.14'",
-]
 dependencies = [
-    { name = "cffi", marker = "extra == 'group-23-ha-mistral-conversation-ha-current' or extra != 'group-23-ha-mistral-conversation-ha-minimum'" },
+    { name = "cffi" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/df/a0/9c823651872e6a0face3f0311de2a40c8bbcb9c8dcb15680bd019ac56ac7/pycares-5.0.1.tar.gz", hash = "sha256:5a3c249c830432631439815f9a818463416f2a8cbdb1e988e78757de9ae75081", size = 652222, upload-time = "2026-01-01T12:37:00.604Z" }
 wheels = [
@@ -2958,6 +3005,10 @@ wheels = [
 name = "pydantic"
 version = "2.11.7"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "annotated-types", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "pydantic-core", version = "2.33.2", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -2992,6 +3043,10 @@ wheels = [
 name = "pydantic-core"
 version = "2.33.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "typing-extensions", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -3287,6 +3342,10 @@ wheels = [
 name = "pyopenssl"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "cryptography", version = "45.0.3", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -3340,6 +3399,10 @@ wheels = [
 name = "pytest"
 version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "colorama", marker = "(sys_platform == 'win32' and extra == 'group-23-ha-mistral-conversation-ha-minimum') or (extra == 'group-23-ha-mistral-conversation-ha-current' and extra == 'group-23-ha-mistral-conversation-ha-minimum')" },
     { name = "iniconfig", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -3393,6 +3456,10 @@ wheels = [
 name = "pytest-asyncio"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "pytest", version = "8.4.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -3421,6 +3488,10 @@ wheels = [
 name = "pytest-cov"
 version = "6.2.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "coverage", version = "7.10.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "pluggy" },
@@ -3480,6 +3551,10 @@ wheels = [
 name = "pytest-homeassistant-custom-component"
 version = "0.13.269"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "coverage", version = "7.10.0", source = { registry = "https://pypi.org/simple" } },
     { name = "freezegun" },
@@ -3700,6 +3775,10 @@ wheels = [
 name = "pyyaml"
 version = "6.0.2"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/54/ed/79a089b6be93607fa5cdaedf301d7dfb23af5f25c398d5ead2525b063e17/pyyaml-6.0.2.tar.gz", hash = "sha256:d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e", size = 130631, upload-time = "2024-08-06T20:33:50.674Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/e3/3af305b830494fa85d95f6d95ef7fa73f2ee1cc8ef5b495c7c3269fb835f/PyYAML-6.0.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:efdca5630322a10774e8e98e1af481aad470dd62c3170801852d752aa7a783ba", size = 181309, upload-time = "2024-08-06T20:32:43.4Z" },
@@ -3780,6 +3859,10 @@ wheels = [
 name = "requests"
 version = "2.32.4"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "certifi", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "charset-normalizer", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -3902,6 +3985,10 @@ wheels = [
 name = "sentence-stream"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "regex", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -3948,6 +4035,10 @@ wheels = [
 name = "snitun"
 version = "0.40.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "aiohttp", version = "3.12.15", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "async-timeout", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -4041,6 +4132,10 @@ wheels = [
 name = "syrupy"
 version = "4.9.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "pytest", version = "8.4.1", source = { registry = "https://pypi.org/simple" } },
 ]
@@ -4229,6 +4324,10 @@ wheels = [
 name = "ulid-transform"
 version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/d4/f2/16c8e6f3d82debedeb1b09bec889ad4a1ca8a71d2d269c156dd80d049c2e/ulid_transform-1.4.0.tar.gz", hash = "sha256:5914a3c4277b0d25ebb67f47bfee2167ac858d970249ea275221fb3e5d91c9a0", size = 16023, upload-time = "2025-03-07T10:44:02.653Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5c/1d/c43d3e1bda52a321f6cde3526b3634602958dc8ccf1f20fd6616767fd1a1/ulid_transform-1.4.0-cp313-cp313-manylinux_2_36_x86_64.whl", hash = "sha256:9b1429ca7403696b290e4e97ffadbf8ed0b7470a97ad7e273372c3deae5bfb2f", size = 51566, upload-time = "2025-03-07T10:44:00.79Z" },
@@ -4308,6 +4407,10 @@ wheels = [
 name = "uv"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 sdist = { url = "https://files.pythonhosted.org/packages/27/e7/d3868a493e0d2f119dc7d0f24f98126bf629a486fb16274b532f4bdb8842/uv-0.7.1.tar.gz", hash = "sha256:40a15f1fc73df852d7655530e5768e29dc7227ab25d9baeb711a8dde9e7f8234", size = 3290658, upload-time = "2025-04-30T10:08:01.832Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/3d/0790d3e02c9c4af9ee3e85dc1f9ba0822a426434298bd5e7f93d22382bf1/uv-0.7.1-py3-none-linux_armv6l.whl", hash = "sha256:ea2024e6a9daeea3ff6cab8ad4afe3b2aa0be9e07bad57646a749896e58648ad", size = 16643155, upload-time = "2025-04-30T10:06:58.31Z" },
@@ -4399,6 +4502,10 @@ wheels = [
 name = "voluptuous-openapi"
 version = "0.1.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -4427,6 +4534,10 @@ wheels = [
 name = "voluptuous-serialize"
 version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "voluptuous", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]
@@ -4631,6 +4742,10 @@ wheels = [
 name = "yarl"
 version = "1.20.1"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "idna", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
     { name = "multidict", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
@@ -4761,6 +4876,10 @@ wheels = [
 name = "zeroconf"
 version = "0.147.0"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 dependencies = [
     { name = "ifaddr", marker = "extra == 'group-23-ha-mistral-conversation-ha-minimum'" },
 ]

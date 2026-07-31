@@ -38,7 +38,7 @@ ha-minimum = [
   "pymicro-vad",
   "pyspeex-noise",
   # Current pycares releases break aiodns on this Home Assistant version.
-  "pycares==4.9.0",
+  "pycares==5.0.1",
 ]
 
 [project]
