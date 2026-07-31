@@ -1,12 +1,12 @@
 [dependency-groups]
 dev = [
   "bandit>=1.8.6",
-  "hassil>=3.5.0",
-  "home-assistant-intents>=2026.3.24",
   "pre-commit>=4.3.0",
   "pymarkdownlnt>=0.9.32",
   "pyturbojpeg>=2.5.0",
-  "ruff>=0.13.2",
+  # Keep in step with the ruff-pre-commit rev in .pre-commit-config.yaml.
+  # If the two drift, `uv run ruff` and CI enforce different rules.
+  "ruff>=0.16.1",
   "toml-sort>=0.23.1",
   "ty>=0.0.24",
   "validate-pyproject>=0.20.2",
@@ -18,9 +18,19 @@ dev = [
 #
 # Sync one at a time: `uv sync --no-default-groups --group dev --group ha-minimum`.
 # A plain `uv sync` gets dev + ha-current, per default-groups below.
-ha-current = ["pytest-homeassistant-custom-component==0.13.316"] # HA 2026.2.3
+ha-current = [
+  "pytest-homeassistant-custom-component==0.13.316", # HA 2026.2.3
+  # Pinned to what this Home Assistant version declares in the conversation
+  # component's manifest. They are not interchangeable across versions:
+  # hassil 3.11 dropped hassil.fuzzy, which HA 2026.2 imports.
+  "hassil==3.5.0",
+  "home-assistant-intents==2026.1.28",
+]
 ha-minimum = [
   "pytest-homeassistant-custom-component==0.13.269", # HA 2025.8.0, the floor in hacs.json
+  # As above, matching what HA 2025.8.0 declares.
+  "hassil==2.2.3",
+  "home-assistant-intents==2025.7.30",
   # Setting up the conversation component on 2025.8 needs these; newer
   # releases of pytest-homeassistant-custom-component provide them for us.
   "ha-ffmpeg",

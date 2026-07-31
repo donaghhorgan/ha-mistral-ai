@@ -335,6 +335,22 @@ class MistralBaseLLMEntity(Entity):
             except (TimeoutError, httpx.HTTPError) as err:
                 _LOGGER.error("Error talking to Mistral AI: %s", err)
                 raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
+            except HomeAssistantError:
+                # Raised by tool execution, or by our own conversion above.
+                # Already meaningful, so let it through untouched.
+                raise
+            except Exception as err:
+                # The SDK keeps adding exception types that inherit from
+                # neither SDKError nor httpx.HTTPError -- 2.8.0 added
+                # StreamDisconnectedError for mid-stream SSE errors -- and
+                # they are only reachable from private modules, so catching
+                # them by name would tie us to SDK internals. Anything
+                # unexpected becomes a clean error rather than a traceback in
+                # the user's face.
+                _LOGGER.exception("Unexpected error from Mistral AI")
+                raise HomeAssistantError(
+                    f"Unexpected error from Mistral AI: {err}"
+                ) from err
 
             if not chat_log.unresponded_tool_results:
                 break

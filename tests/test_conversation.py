@@ -11,6 +11,7 @@ import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import intent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -361,3 +362,43 @@ async def test_timeout_is_reported(
     result = await converse(hass)
 
     assert result.response.response_type == intent.IntentResponseType.ERROR
+
+
+async def test_unexpected_sdk_error_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An SDK exception of an unfamiliar type still degrades gracefully.
+
+    The Mistral SDK adds exception types over time that inherit from neither
+    SDKError nor httpx.HTTPError -- 2.8.0 added StreamDisconnectedError for
+    mid-stream SSE errors -- and they are only reachable from private
+    modules. Whatever the type, the user should get an error response rather
+    than a traceback.
+    """
+
+    class StreamDisconnectedError(Exception):
+        """Stand-in with the same shape: a plain Exception subclass."""
+
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=StreamDisconnectedError("stream closed unexpectedly")
+    )
+
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert "Unexpected error from Mistral AI" in speech(result)
+
+
+async def test_home_assistant_error_is_not_rewrapped(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An error we already raised keeps its own message."""
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=HomeAssistantError("something specific went wrong")
+    )
+
+    result = await converse(hass)
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert "something specific went wrong" in speech(result)
+    assert "Unexpected error" not in speech(result)
