@@ -23,7 +23,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.13.2"
 dependencies = [
   "mistralai>=2.1.0",
-  "homeassistant>=2025.7.0",
+  "homeassistant>=2025.8.0",
   "voluptuous>=0.13.1"
 ]
 

@@ -32,7 +32,7 @@ uv run pre-commit run ha-version-consistency --all-files
 Example failure:
 
 ```text
-❌ README states Home Assistant 2023.5.0 but hacs.json advertises 2025.7.0
+❌ README states Home Assistant 2023.5.0 but hacs.json advertises 2025.8.0
 ```
 
 ## `check_manifest_consistency.py`

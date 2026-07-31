@@ -135,18 +135,26 @@ The chosen feature set requires, at minimum:
 - `ConfigSubentryFlow` and `async_get_supported_subentry_types`
 - `Platform.AI_TASK` and the `ai_task` component
 
-**Verified as 2025.7.0**, by probing real installs rather than reading release
-notes. On 2025.6.0, `Platform.AI_TASK`, the `ai_task` module,
-`async_provide_llm_data` and `as_llm_context` are all absent; on 2025.7.0 all
-four are present. Subentry support is *not* the binding constraint — it exists
-in 2025.6 — so dropping AI Task and reverting to the deprecated
-`async_update_llm_data` would buy exactly one month for a real feature loss.
-Nothing in the agreed feature set needs anything newer, so 2025.7.0 is both the
-floor and the right choice.
+**Corrected to 2025.8.0.** This was originally set to 2025.7.0 on the strength
+of probing four hand-picked APIs, all of which are present there. That method
+was not good enough: the code also uses
+`conversation.async_get_result_from_chat_log` and `GenDataTask.structure`,
+neither of which exists in 2025.7.0, and neither of which was on the list.
 
-Now set consistently in `hacs.json`, `pyproject.toml` and `README.md`, and
-enforced by `scripts/check_ha_version_consistency.py`, which was extended to
-cover the README and verified to fail on drift.
+Running the actual test suite against each release settles it — 2025.7.0 fails
+11 tests, with every conversation turn dying on the missing
+`async_get_result_from_chat_log`, while 2025.8.0 passes all 65. Because HACS
+enforces the `homeassistant` key in `hacs.json`, the original claim would have
+let a 2025.7.x user install a build that broke on their first sentence.
+
+The lesson, and the reason for the `test-minimum` CI job: probing a list of
+symbols you thought of is not a substitute for running the suite. The job runs
+the full suite against the version named in `hacs.json`, so the floor is backed
+by a passing run rather than by an assumption.
+
+Set consistently in `hacs.json`, `pyproject.toml` and `README.md`, and enforced
+by `scripts/check_ha_version_consistency.py`, which was extended to cover the
+README and verified to fail on drift.
 
 ## 5. Work plan
 

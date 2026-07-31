@@ -25,7 +25,7 @@ interfaces in Home Assistant.
 
 ## Requirements
 
-- Home Assistant 2025.7.0 or newer
+- Home Assistant 2025.8.0 or newer
 - A Mistral AI API key (get one at [console.mistral.ai](https://console.mistral.ai/))
 
 ## Installation
