@@ -59,6 +59,52 @@ jobs:
         run: |
           uv run pytest
 
+  test-latest:
+    name: Test against latest Home Assistant
+    runs-on: ubuntu-latest
+
+    # The `test` job is bounded by uv.lock, which resolves under the project's
+    # Python 3.13. Home Assistant 2026.5.0 and later require Python 3.14, so
+    # the locked environment can never reach them, and without this job the
+    # most recent Home Assistant releases -- the ones most users are actually
+    # running -- would go untested.
+    #
+    # This is allowed to fail without blocking: it tracks a moving target and
+    # will break when Home Assistant makes a change we have not adapted to
+    # yet. That is a signal to act on, not a reason to hold up an unrelated
+    # pull request. `test` and `test-minimum` are the blocking jobs.
+    continue-on-error: true
+
+    env:
+      # Pins pytest-homeassistant-custom-component to the newest release with
+      # a stable Home Assistant pin. Dependabot does not manage this, so it
+      # needs bumping by hand every so often.
+      PHCC_VERSION: 0.13.348 # Home Assistant 2026.7.4
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v7
+
+      - name: Run tests against the latest Home Assistant version
+        # hassil and home-assistant-intents are needed to set up the
+        # `conversation` component. The project gets them from its dev group,
+        # which an isolated run does not have, so they are named here too.
+        run: |
+          uv run --isolated --no-project --python 3.14 \
+            --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
+            --with "mistralai>=2.1.0" \
+            --with PyTurboJPEG \
+            --with hassil \
+            --with home-assistant-intents \
+            pytest tests/ -q --no-cov
+
   test-minimum:
     name: Test against minimum supported Home Assistant
     runs-on: ubuntu-latest

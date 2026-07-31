@@ -46,6 +46,10 @@ class VersionChecker:
             return f"{parts[0]}.{parts[1]}"
         return version
 
+    def parse_version(self, version: str) -> tuple[int, ...]:
+        """Parse a version string into a comparable tuple of integers."""
+        return tuple(int(part) for part in version.split(".") if part.isdigit())
+
     def check_pyproject_toml(self) -> dict[str, Any]:
         """Check pyproject.toml for Python version configurations."""
         pyproject_path = self.project_root / "pyproject.toml"
@@ -248,13 +252,31 @@ class VersionChecker:
                         f"doesn't match requires-python ({canonical_version})"
                     )
 
-            # Check GitHub Actions
-            for gh_version in set(github_versions):
-                gh_version_clean = self.extract_major_minor(gh_version)
-                if gh_version_clean != canonical_version:
+            # Check GitHub Actions.
+            #
+            # CI must exercise the declared minimum, but is allowed to test
+            # newer versions as well: the test-latest job deliberately runs on
+            # a newer Python, because recent Home Assistant releases require
+            # one. Anything *older* than requires-python is still an error,
+            # since the project could not run there at all.
+            gh_versions_clean = {
+                self.extract_major_minor(v) for v in set(github_versions)
+            }
+
+            if canonical_version not in gh_versions_clean:
+                self.add_error(
+                    f"No GitHub Actions job runs on the declared Python "
+                    f"version ({canonical_version}); found "
+                    f"{', '.join(sorted(gh_versions_clean))}"
+                )
+
+            for gh_version_clean in sorted(gh_versions_clean):
+                if self.parse_version(gh_version_clean) < self.parse_version(
+                    canonical_version
+                ):
                     self.add_error(
                         f"GitHub Actions Python version ({gh_version_clean}) "
-                        f"doesn't match requires-python ({canonical_version})"
+                        f"is older than requires-python ({canonical_version})"
                     )
 
         # Print results
