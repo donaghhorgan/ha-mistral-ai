@@ -25,6 +25,7 @@ async def test_entity_created(
     assert (
         state.attributes["supported_features"]
         == ai_task.AITaskEntityFeature.GENERATE_DATA
+        | ai_task.AITaskEntityFeature.SUPPORT_ATTACHMENTS
     )
 
 
