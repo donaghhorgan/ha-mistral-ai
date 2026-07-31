@@ -11,6 +11,17 @@ updates:
         patterns:
           - pytest-homeassistant-custom-component
           - homeassistant
+    ignore:
+      # These are not ours to choose. Each Home Assistant release pins them
+      # exactly in the conversation component's manifest, and the pins differ
+      # between the versions we test: 2026.2.3 wants hassil 3.5.0 while
+      # 2025.8.0 wants 2.2.3. They are pinned per group in pyproject.toml to
+      # match, and move only when the Home Assistant version does. Bumping
+      # them on their own upstream release schedule breaks the build --
+      # hassil 3.11 dropped hassil.fuzzy, which Home Assistant 2026.2
+      # imports.
+      - dependency-name: hassil
+      - dependency-name: home-assistant-intents
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
