@@ -44,6 +44,16 @@ tests/              # Unit tests
 ### Code Style and Coding Conventions
 
 - Python code should be written for the version in [`.python-version`](.python-version)
+- The integration is tested against three Home Assistant versions, because no
+  single environment can cover the supported range:
+  - `test-minimum` — the floor named in `hacs.json`, on Python 3.13
+  - `test` — whatever `uv.lock` resolves, on Python 3.13
+  - `test-latest` — the newest release, on Python 3.14, since Home Assistant
+    2026.5.0 and later require it. Advisory only; it tracks a moving target.
+
+  The project itself stays on Python 3.13 so that the floor remains
+  reachable. Do not raise `requires-python` to 3.14 without also raising the
+  minimum Home Assistant version to one that requires it.
 - Write unit tests for new functionality
 - Consult the [Home Assistant Developer
   Docs](https://developers.home-assistant.io/) when making changes to Home

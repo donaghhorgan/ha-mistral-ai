@@ -54,6 +54,12 @@ Checks that the Python version agrees across `.python-version`,
 matrix in `.github/workflows/`, so local development, the devcontainer and CI
 cannot silently diverge.
 
+CI is held to a looser rule than the rest: at least one job must run on the
+declared version, and jobs may additionally run on *newer* ones. That allows
+the `test-latest` job to exercise recent Home Assistant releases, which
+require Python 3.14, without the project itself moving off 3.13. A CI job on
+an *older* Python than `requires-python` is still an error.
+
 ```bash
 uv run python scripts/check_python_version_consistency.py
 uv run pre-commit run python-version-consistency --all-files
