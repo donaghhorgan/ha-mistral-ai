@@ -9,7 +9,7 @@ dev = [
   "ruff>=0.13.2",
   "toml-sort>=0.23.1",
   "ty>=0.0.24",
-  "validate-pyproject>=0.20.2",
+  "validate-pyproject>=0.25",
 ]
 # pytest-homeassistant-custom-component pins Home Assistant to an exact
 # version, so the version we test against is chosen by picking one of these
