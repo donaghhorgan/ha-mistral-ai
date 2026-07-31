@@ -22,6 +22,16 @@ updates:
       # imports.
       - dependency-name: hassil
       - dependency-name: home-assistant-intents
+      # Same shape. pycares is pinned in ha-minimum because releases after
+      # 4.9.0 removed attributes that the aiodns shipped with Home Assistant
+      # 2025.8.0 references at import time:
+      #
+      #   AttributeError: module 'pycares' has no attribute
+      #   'ares_query_a_result'
+      #
+      # ha-current resolves 5.0.1 quite happily, so this constrains only the
+      # floor, and it lifts when the floor does.
+      - dependency-name: pycares
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
