@@ -1,12 +1,15 @@
 # Development scripts
 
-Consistency checks that guard against configuration drift between the files
-that all have to agree about the same thing. Each one runs as a `local`
+Mostly consistency checks that guard against configuration drift between the
+files that all have to agree about the same thing. Each check runs as a `local`
 pre-commit hook (see [`.pre-commit-config.yaml`](../.pre-commit-config.yaml))
 and is only triggered when a file it cares about changes.
 
 All of them exit `0` on success and `1` with an explanation on failure, so they
 can be run directly as well as through pre-commit.
+
+The exception is `generate_brand_assets.py`, which is a one-off generator
+rather than a check and is not wired into pre-commit.
 
 ## `check_ha_version_consistency.py`
 
@@ -97,4 +100,20 @@ an *older* Python than `requires-python` is still an error.
 ```bash
 uv run python scripts/check_python_version_consistency.py
 uv run pre-commit run python-version-consistency --all-files
+```
+
+## `generate_brand_assets.py`
+
+Draws the icon set that
+[home-assistant/brands](https://github.com/home-assistant/brands) expects, into
+[`brands/custom_integrations/mistral_conversation/`](../brands). Home Assistant
+and HACS take an integration's icon from that repository rather than from this
+one, so without an entry there the integration shows a blank tile.
+
+Not a pre-commit hook: the output is committed, and it only needs rerunning if
+the design changes. See [`brands/README.md`](../brands/README.md) for what the
+mark is, why it is not Mistral AI's own, and how to submit it.
+
+```bash
+uv run python scripts/generate_brand_assets.py
 ```
