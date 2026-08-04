@@ -12,10 +12,13 @@ to. See `brands/README.md` for the standing this repository claims to it --
 short version, none, beyond identifying the service.
 
 It is drawn from a grid rather than resampled from a source file. The mark is
-flat-coloured pixel art, so a grid reproduces it exactly at any size, with no
-resampling artefacts and no source file to keep in the repository. The trade
-is that the grid below is a *transcription*: if it disagrees with Mistral's
-own artwork, the artwork is right and this is a bug.
+flat-coloured pixel art on an exact 7x5 grid -- every cell in the artwork is a
+single flat colour, and every row is one colour -- so a grid reproduces it
+exactly at any size, with no resampling artefacts.
+
+The grid and the colours below were sampled from Mistral's artwork rather than
+eyeballed. That artwork is not kept here, because this reproduces it; it is in
+the history at f910fdb if the sampling ever needs rechecking.
 """
 
 import sys
@@ -33,7 +36,7 @@ GRID = (
 )
 
 # One colour per row, top to bottom.
-ROW_COLOURS = ("#FFD800", "#FFAF00", "#FF8205", "#FA500F", "#E10500")
+ROW_COLOURS = ("#FFAF01", "#FF8204", "#FA500F", "#E51300", "#C4001D")
 
 # Pillow draws with hard edges, and at 7 cells across a 256px canvas the cell
 # boundaries do not land on whole pixels. Rendering large and scaling down is

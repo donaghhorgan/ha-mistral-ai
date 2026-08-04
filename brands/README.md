@@ -34,15 +34,19 @@ this directory, since removing it here alone changes nothing users can see.
 
 ## How it is drawn
 
-The mark is flat-coloured pixel art, so
+The mark is flat-coloured pixel art on an exact 7×5 grid: every cell in
+Mistral's artwork is a single flat colour, and every row is one colour. So
 [`generate_brand_assets.py`](../scripts/generate_brand_assets.py) reproduces it
 from a cell grid rather than resampling a source file. That renders exactly at
-any size, keeps the design reviewable as a diff, and avoids carrying someone
-else's artwork as an opaque binary.
+any size, with no resampling artefacts, and keeps the design reviewable as a
+diff rather than as an opaque binary.
 
-The cost is that the grid is a transcription. If it disagrees with Mistral's
-own artwork, the artwork is right and the grid is a bug — fix the grid and
-regenerate rather than editing the PNGs.
+The grid and the five row colours were sampled from Mistral's artwork, and the
+generated icons are checked back against it cell by cell. The artwork itself is
+not kept here, since this reproduces it — it is in the history at `f910fdb` if
+the sampling ever needs rechecking.
+
+Edit the grid and regenerate; never edit the PNGs.
 
 ## Submitting it
 
