@@ -110,9 +110,11 @@ Draws the icon set that
 and HACS take an integration's icon from that repository rather than from this
 one, so without an entry there the integration shows a blank tile.
 
+The mark is Mistral AI's, drawn from a cell grid rather than resampled from a
+source file, so it renders exactly at any size and stays reviewable as a diff.
 Not a pre-commit hook: the output is committed, and it only needs rerunning if
-the design changes. See [`brands/README.md`](../brands/README.md) for what the
-mark is, why it is not Mistral AI's own, and how to submit it.
+the grid changes. See [`brands/README.md`](../brands/README.md) for the
+standing this project claims to the mark and how to submit it.
 
 ```bash
 uv run python scripts/generate_brand_assets.py

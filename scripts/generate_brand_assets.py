@@ -7,15 +7,15 @@ They read them from home-assistant/brands, keyed by domain, which is why this
 integration currently shows a blank tile. Getting an icon means opening a pull
 request there adding `custom_integrations/mistral_conversation/`.
 
-The mark drawn here is deliberately *not* Mistral AI's logo. This integration
-is not officially associated with Mistral AI, and shipping their artwork under
-that banner is not ours to do. It is a speech bubble -- this is a conversation
-agent -- filled with a warm yellow-to-red ramp, which places it alongside the
-service it talks to without borrowing the mark itself.
+The mark is Mistral AI's, used to identify the service this integration talks
+to. See `brands/README.md` for the standing this repository claims to it --
+short version, none, beyond identifying the service.
 
-If you would rather ship the official artwork, replace the generated files
-with it rather than editing this script; see `brands/README.md` for the sizes
-and the trim rule they have to satisfy.
+It is drawn from a grid rather than resampled from a source file. The mark is
+flat-coloured pixel art, so a grid reproduces it exactly at any size, with no
+resampling artefacts and no source file to keep in the repository. The trade
+is that the grid below is a *transcription*: if it disagrees with Mistral's
+own artwork, the artwork is right and this is a bug.
 """
 
 import sys
@@ -23,31 +23,26 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-# Everything below is expressed against a 256x256 design grid and scaled up
-# before drawing, so the geometry reads the same whatever we render at.
-CANVAS = 256
+# The mark, one character per cell. "X" is filled, "." is transparent.
+GRID = (
+    ".X...X.",
+    ".XX.XX.",
+    ".XXXXX.",
+    ".X.X.X.",
+    "XXX.XXX",
+)
 
-# Pillow draws with hard edges. Rendering large and scaling down is what
-# produces the antialiasing, so the rounded corners and the tail do not stair-
-# step at the sizes these are actually seen at.
+# One colour per row, top to bottom.
+ROW_COLOURS = ("#FFD800", "#FFAF00", "#FF8205", "#FA500F", "#E10500")
+
+# Pillow draws with hard edges, and at 7 cells across a 256px canvas the cell
+# boundaries do not land on whole pixels. Rendering large and scaling down is
+# what keeps those edges clean.
 SUPERSAMPLE = 8
-WORK = CANVAS * SUPERSAMPLE
-
-# The bubble body, and the tail hanging off its bottom-left. Together their
-# bounding box is the full canvas: brands rejects images with transparent
-# padding around the mark.
-BODY_BOTTOM = 194
-CORNER_RADIUS = 62
-TAIL = ((80, 150), (80, CANVAS), (152, 194))
-
-# Five flat bands rather than a smooth gradient. At 32px -- the size in the
-# integrations list, which is where this icon does its work -- a smooth ramp
-# muddies into a single orange, while bands stay legible.
-BANDS = ("#FFD800", "#FFAF00", "#FF8205", "#FA500F", "#E10500")
 
 # brands wants icon.png at 256 and icon@2x.png at 512. logo.png is optional
-# and falls back to the icon, so it is not generated: a logo is a wordmark,
-# and the only honest wordmark here would be Mistral's own.
+# and falls back to the icon, so none is generated: a logo is a wordmark, and
+# Mistral's wordmark is a bigger borrow than the glyph for no benefit here.
 OUTPUTS = {"icon.png": 256, "icon@2x.png": 512}
 
 OUTPUT_DIR = (
@@ -58,63 +53,51 @@ OUTPUT_DIR = (
 )
 
 
-def scale(value: int) -> int:
-    """Scale a design-grid coordinate up to the working canvas."""
-    return round(value * WORK / CANVAS)
+def render(size: int) -> Image.Image:
+    """Draw the mark centred on a transparent square canvas of `size`."""
+    columns = len(GRID[0])
+    rows = len(GRID)
 
+    # The icon has to be square, but the mark is wider than it is tall. Fill
+    # the width and centre vertically: that leaves the image trimmed on the
+    # axis it can be trimmed on, which is what brands checks for.
+    cell = size / columns
+    top = (size - cell * rows) / 2
 
-def build_mask() -> Image.Image:
-    """Draw the bubble silhouette as an alpha mask on the working canvas."""
-    mask = Image.new("L", (WORK, WORK), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rounded_rectangle(
-        (0, 0, WORK - 1, scale(BODY_BOTTOM) - 1),
-        radius=scale(CORNER_RADIUS),
-        fill=255,
-    )
-    draw.polygon([(scale(x), scale(y)) for x, y in TAIL], fill=255)
-    return mask
+    work = size * SUPERSAMPLE
+    image = Image.new("RGBA", (work, work), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
 
+    for row_index, row in enumerate(GRID):
+        for column_index, character in enumerate(row):
+            if character != "X":
+                continue
+            left = round(column_index * cell * SUPERSAMPLE)
+            right = round((column_index + 1) * cell * SUPERSAMPLE)
+            upper = round((top + row_index * cell) * SUPERSAMPLE)
+            lower = round((top + (row_index + 1) * cell) * SUPERSAMPLE)
+            draw.rectangle(
+                (left, upper, right - 1, lower - 1),
+                fill=ROW_COLOURS[row_index],
+            )
 
-def build_colours() -> Image.Image:
-    """Draw the colour bands across the whole working canvas."""
-    colours = Image.new("RGB", (WORK, WORK))
-    draw = ImageDraw.Draw(colours)
-
-    for index, colour in enumerate(BANDS):
-        top = scale(round(index * BODY_BOTTOM / len(BANDS)))
-        # The last band runs to the foot of the canvas so the tail, which
-        # hangs below the body, is a continuation of it rather than a gap.
-        if index == len(BANDS) - 1:
-            bottom = WORK
-        else:
-            bottom = scale(round((index + 1) * BODY_BOTTOM / len(BANDS)))
-        draw.rectangle((0, top, WORK, bottom), fill=colour)
-
-    return colours
-
-
-def render(mask: Image.Image, colours: Image.Image, size: int) -> Image.Image:
-    """Downsample the mask and the colours separately, then combine them."""
-    # Resizing the two layers apart from each other keeps the transparent
-    # background out of the arithmetic. Resizing a single RGBA image instead
-    # would blend the colours towards black along every edge, because the
-    # pixels outside the silhouette are transparent *black*.
-    icon = colours.resize((size, size), Image.Resampling.LANCZOS).convert("RGBA")
-    icon.putalpha(mask.resize((size, size), Image.Resampling.LANCZOS))
-    return icon
+    return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def main() -> int:
     """Write the icon set, and report what was written."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    if len(ROW_COLOURS) != len(GRID):
+        print(f"❌ {len(GRID)} grid rows but {len(ROW_COLOURS)} colours")
+        return 1
+    if len({len(row) for row in GRID}) != 1:
+        print("❌ Grid rows are not all the same width")
+        return 1
 
-    mask = build_mask()
-    colours = build_colours()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for name, size in OUTPUTS.items():
         path = OUTPUT_DIR / name
-        render(mask, colours, size).save(path, "PNG", optimize=True)
+        render(size).save(path, "PNG", optimize=True)
         print(f"✅ Wrote {path.relative_to(Path(__file__).parent.parent)} ({size}px)")
 
     return 0

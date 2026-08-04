@@ -20,17 +20,29 @@ brands/
 The files are generated, not hand-drawn — see
 [`scripts/generate_brand_assets.py`](../scripts/generate_brand_assets.py).
 
-## What the mark is, and what it is not
+## Whose mark this is
 
-It is a speech bubble filled with a warm yellow-to-red ramp. It is **not**
-Mistral AI's logo. This integration is not officially associated with Mistral
-AI, and shipping their artwork under that banner is not ours to do. The palette
-places it next to the service it talks to; the silhouette says what it is, a
-conversation agent.
+It is Mistral AI's, and this project claims nothing beyond using it to
+identify the service the integration talks to. This integration is not
+officially associated with Mistral AI, as the README says. That is the same
+footing every other third-party integration in `brands` stands on, including
+the ones Home Assistant ships itself.
 
-If Mistral AI would prefer their own mark used here, or would prefer this one
-not used, that is their call to make and the assets should be replaced or
-withdrawn accordingly.
+If Mistral AI would rather it were not used here, that is entirely their call
+and the entry should be withdrawn on request — from `brands` as well as from
+this directory, since removing it here alone changes nothing users can see.
+
+## How it is drawn
+
+The mark is flat-coloured pixel art, so
+[`generate_brand_assets.py`](../scripts/generate_brand_assets.py) reproduces it
+from a cell grid rather than resampling a source file. That renders exactly at
+any size, keeps the design reviewable as a diff, and avoids carrying someone
+else's artwork as an opaque binary.
+
+The cost is that the grid is a transcription. If it disagrees with Mistral's
+own artwork, the artwork is right and the grid is a bug — fix the grid and
+regenerate rather than editing the PNGs.
 
 ## Submitting it
 
@@ -45,13 +57,18 @@ by hand:
 Before opening it, check the requirements in that repository's own
 documentation rather than trusting this list — they are enforced in CI, and
 they change. At the time of writing they are a square PNG at 256x256 with a
-`@2x` variant at 512x512, transparent background, and no transparent padding
-around the mark. `icon.png` here satisfies all three: its alpha bounding box is
-the full 256x256 canvas.
+`@2x` variant at 512x512, on a transparent background, trimmed of surplus
+padding.
+
+The mark is wider than it is tall, so it cannot fill a square canvas. It fills
+the width and is centred vertically: `icon.png` has an alpha bounding box of
+`(0, 34, 256, 222)`, which is trimmed on the axis it can be trimmed on. If
+`brands` rejects the remaining vertical margin, the fix is to crop to a square
+and accept the mark being smaller, not to add matching side padding.
 
 `logo.png` is optional and falls back to the icon, so none is provided. A logo
-is a wordmark, and the only honest wordmark for this integration would be
-Mistral's own.
+is a wordmark, and Mistral's wordmark is a larger borrow than the glyph for no
+benefit here.
 
 ## Afterwards
 
