@@ -16,10 +16,16 @@ custom_components/mistral_conversation/
 ├── entity.py       # Shared LLM entity and Mistral API handling
 ├── manifest.json   # Integration metadata
 └── translations/   # Language files
+brands/             # Icon set staged for home-assistant/brands
 hacs.json           # Home Assistant Community Store (HACS) configuration
 scripts/            # Helper scripts for development
 tests/              # Unit tests
 ```
+
+`brands/` is not read by Home Assistant. Icons live in
+[home-assistant/brands](https://github.com/home-assistant/brands), and that
+directory mirrors the layout that repository expects so the submission is a
+copy; see [`brands/README.md`](./brands/README.md).
 
 ## Development Workflow
 
