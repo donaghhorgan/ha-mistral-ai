@@ -14,20 +14,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Third-party actions are pinned to a commit SHA rather than a tag. A tag is
+# mutable: whoever controls the action can move v7 to point at different code
+# after it has been reviewed, and every workflow picks it up on the next run. A
+# SHA cannot be moved. The trailing comment records which version each SHA is,
+# and Dependabot keeps the SHA and the comment in step.
+#
+# The two validator actions further down are deliberately left on a moving ref.
+# The reasoning is next to each of them.
 jobs:
   lint:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
 
@@ -60,15 +68,15 @@ jobs:
         ha-group: [ha-current, ha-minimum]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
 
@@ -103,15 +111,15 @@ jobs:
       PHCC_VERSION: 0.13.348 # Home Assistant 2026.7.4
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           enable-cache: true
 
@@ -132,14 +140,22 @@ jobs:
     name: Validate with hassfest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Deliberately not SHA-pinned. hassfest checks the manifest against Home
+      # Assistant's *current* requirements, so pinning it freezes the rules it
+      # enforces and the job quietly stops testing the thing it exists to
+      # test. Upstream has tagged exactly once, years ago, so there is no
+      # release for Dependabot to bump towards either.
       - uses: home-assistant/actions/hassfest@master
 
   hacs:
     name: Validate with HACS
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Not SHA-pinned either, for the same reason: it validates against what
+      # HACS requires today, and HACS documents @main as the supported way to
+      # use it. A pin would test yesterday's rules.
       - uses: hacs/action@main
         with:
           category: integration
