@@ -58,6 +58,21 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Applied to conversation subentries when they are created, matching the
+# official Home Assistant LLM integrations -- openai_conversation, anthropic
+# and google_generative_ai_conversation all enable the Assist API on a new
+# conversation agent. Ollama is the exception, and local models being poor at
+# tool calling is the reason, which does not apply here.
+#
+# Leaving it unset produces an agent that answers questions and cannot control
+# anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
+# Home Assistant will not offer it where control is required -- which reads as
+# the integration being broken rather than as a setting being off.
+RECOMMENDED_CONVERSATION_OPTIONS = {
+    CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
+    CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,
+}
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_API_KEY): TextSelector(
@@ -117,7 +132,7 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
                     subentries=[
                         {
                             "subentry_type": SUBENTRY_TYPE_CONVERSATION,
-                            "data": {},
+                            "data": dict(RECOMMENDED_CONVERSATION_OPTIONS),
                             "title": DEFAULT_CONVERSATION_NAME,
                             "unique_id": None,
                         }
@@ -203,7 +218,25 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             _LOGGER.exception("Failed to list Mistral AI models")
             return self.async_abort(reason="cannot_connect")
 
-        options = {} if self._is_new else self._get_reconfigure_subentry().data
+        if not self._is_new:
+            options = dict(self._get_reconfigure_subentry().data)
+        elif self._subentry_type == SUBENTRY_TYPE_AI_TASK_DATA:
+            # AI tasks generate data; they are never given Home Assistant
+            # control, so there is nothing to seed.
+            options = {}
+        else:
+            options = dict(RECOMMENDED_CONVERSATION_OPTIONS)
+
+        # A selected API can disappear -- whatever provided it gets removed --
+        # and the stale id would otherwise be shown as selected, saved back,
+        # and then fail every single message, because async_provide_llm_data
+        # resolves it and raises on an id it does not know. Both
+        # openai_conversation and ollama filter here for the same reason.
+        if selected := options.get(CONF_LLM_HASS_API):
+            if isinstance(selected, str):
+                selected = [selected]
+            valid = {api.id for api in llm.async_get_apis(self.hass)}
+            options[CONF_LLM_HASS_API] = [api for api in selected if api in valid]
 
         return self.async_show_form(
             step_id="set_options",

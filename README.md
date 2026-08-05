@@ -104,15 +104,23 @@ To change an existing one, click "Configure" next to it.
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
 
-- **Maximum tokens**: Maximum length of responses
+- **Maximum tokens**: Maximum length of responses. The default is 1000. A
+  structured AI task that needs more than this comes back as truncated JSON,
+  which surfaces as `Error with Mistral AI structured response` — a parse
+  failure that reads like a model problem but is a length one.
 
 - **Instructions** (conversation agents only): Custom instructions for the
   assistant. You can use Home Assistant template variables like
   `{{ ha_name }}`.
 
-- **Control Home Assistant** (conversation agents only): Select a Home
-  Assistant LLM API to let the agent control your devices. Leave it unset for
-  an agent that only answers questions.
+- **Control Home Assistant** (conversation agents only): Selects a Home
+  Assistant LLM API, which is what lets the agent control your devices. New
+  conversation agents get the Assist API by default, matching Home
+  Assistant's own OpenAI, Anthropic and Google integrations.
+
+  Clearing it gives an agent that only answers questions. Note that it then
+  stops advertising the `CONTROL` feature, so Home Assistant will not offer it
+  anywhere control is required — the agent is not broken, it is scoped.
 
 ### AI tasks
 

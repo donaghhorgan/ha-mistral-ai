@@ -7,14 +7,16 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from homeassistant.config_entries import SOURCE_USER
-from homeassistant.const import CONF_NAME
+from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import llm
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_conversation.const import (
     CONF_API_KEY,
     CONF_MODEL,
+    CONF_PROMPT,
     CONF_TEMPERATURE,
     DEFAULT_MODEL,
     DOMAIN,
@@ -248,3 +250,83 @@ async def test_subentry_aborts_when_api_unreachable(
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "cannot_connect"
+
+
+def _suggested(result: dict, key: str) -> object:
+    """Return the suggested value a form offers for a key, or None."""
+    for marker in result["data_schema"].schema:
+        if marker.schema == key:
+            return (marker.description or {}).get("suggested_value")
+    return None
+
+
+async def test_new_conversation_agent_can_control_home_assistant(
+    hass: HomeAssistant, mock_client: MagicMock
+) -> None:
+    """The agent created with the entry gets the Assist API, as HA's own do.
+
+    Without it the agent answers questions and controls nothing, and does not
+    advertise ConversationEntityFeature.CONTROL, so Home Assistant will not
+    offer it where control is required. That reads as a broken integration
+    rather than an unset option.
+    """
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "test-api-key"}
+    )
+    await hass.async_block_till_done()
+
+    subentry = next(iter(result["result"].subentries.values()))
+    assert subentry.data[CONF_LLM_HASS_API] == [llm.LLM_API_ASSIST]
+    assert subentry.data[CONF_PROMPT] == llm.DEFAULT_INSTRUCTIONS_PROMPT
+
+
+async def test_new_subentry_form_seeds_assist_for_conversation_only(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Conversation agents are seeded with Assist; AI tasks are not offered it."""
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+    assert _suggested(result, CONF_LLM_HASS_API) == [llm.LLM_API_ASSIST]
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_AI_TASK_DATA),
+        context={"source": SOURCE_USER},
+    )
+    # AI tasks generate data and are never given control, so the field is absent.
+    assert not any(
+        marker.schema == CONF_LLM_HASS_API for marker in result["data_schema"].schema
+    )
+
+
+async def test_stale_llm_api_is_dropped_from_the_form(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An API that no longer exists is not offered back as selected.
+
+    Whatever provided it can be removed after the fact. Keeping the id would
+    save it straight back and then fail every message, because resolving an
+    unknown API id raises.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_LLM_HASS_API: [llm.LLM_API_ASSIST, "gone"]},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+
+    assert _suggested(result, CONF_LLM_HASS_API) == [llm.LLM_API_ASSIST]
