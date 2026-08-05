@@ -16,6 +16,7 @@ from homeassistant.helpers import selector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.ai_task import SUPPORTED_FEATURES
+from custom_components.mistral_ai.const import DEFAULT_MODEL
 
 from .helpers import make_chunk, make_sdk_error, stream_of
 
@@ -324,6 +325,69 @@ async def test_generate_image_records_the_assistant_turn(
         )
 
     assert [content.content for content in logs] == ["Here is your bicycle."]
+
+
+@requires_image_support
+async def test_image_generation_withdrawn_for_a_model_without_tools(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_client: MagicMock,
+    mock_models_response: MagicMock,
+) -> None:
+    """A model that cannot call tools does not advertise image generation.
+
+    Image generation is a built-in connector passed as a tool, so a model
+    that cannot call tools cannot produce an image whatever is asked of it.
+    Advertising it anyway pushed the failure out to automation run time.
+    """
+    for card in mock_models_response.data:
+        if card.id == DEFAULT_MODEL:
+            card.capabilities.function_calling = False
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    features = hass.states.get(ENTITY_ID).attributes["supported_features"]
+    assert not features & ai_task.AITaskEntityFeature.GENERATE_IMAGE
+    # The rest of the entity is untouched.
+    assert features & ai_task.AITaskEntityFeature.GENERATE_DATA
+
+
+@requires_image_support
+async def test_image_generation_kept_when_capabilities_cannot_be_read(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A failed lookup leaves the feature alone.
+
+    Withdrawing a feature that works, because a listing call did not, is worse
+    than the error it would prevent.
+    """
+    mock_client.models.retrieve_async = AsyncMock(side_effect=make_sdk_error(500))
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    features = hass.states.get(ENTITY_ID).attributes["supported_features"]
+    assert features & ai_task.AITaskEntityFeature.GENERATE_IMAGE
+
+
+@requires_image_support
+async def test_missing_image_names_the_model(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """A model that passes the check but generates nothing says which it was.
+
+    function_calling is a precondition for the connector, not a guarantee, so
+    this failure survives the capability gate and has to be diagnosable.
+    """
+    mock_image_client.chat.complete_async = AsyncMock(
+        return_value=_completion("I cannot do that")
+    )
+
+    with pytest.raises(HomeAssistantError, match=DEFAULT_MODEL):
+        await ai_task.async_generate_image(
+            hass, task_name="poster", entity_id=ENTITY_ID, instructions="a bicycle"
+        )
 
 
 async def test_structure_with_selectors_converts(

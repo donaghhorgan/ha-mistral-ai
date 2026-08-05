@@ -49,6 +49,16 @@ CAPABILITY_AUDIO_TRANSCRIPTION = "audio_transcription"
 CAPABILITY_COMPLETION_CHAT = "completion_chat"
 CAPABILITY_AUDIO_SPEECH = "audio_speech"
 
+# There is no image_generation capability. The endpoint reports audio, ocr,
+# vision, function_calling and a dozen others, and none of them says whether a
+# model can produce an image.
+#
+# Image generation is a built-in connector, passed as a tool, so calling tools
+# is a precondition for it: a model without this certainly cannot generate an
+# image. It is not proof that it can, which is why the AI task entity still
+# handles an empty result rather than trusting the flag.
+CAPABILITY_FUNCTION_CALLING = "function_calling"
+
 # Asked of the speech endpoint, and handed to Home Assistant as the file
 # extension. mp3 because it is what the media player pipeline handles with the
 # least ceremony; the API also offers pcm, wav, flac and opus.
