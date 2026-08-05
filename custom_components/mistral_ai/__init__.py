@@ -11,6 +11,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.typing import ConfigType
 from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
@@ -31,10 +32,22 @@ type MistralConfigEntry = ConfigEntry[Mistral]
 
 async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> bool:
     """Set up Mistral AI from a config entry."""
-    # Constructing the client builds an httpx client, which loads the SSL
-    # context from disk, so it must not run in the event loop.
+    # Hand the SDK Home Assistant's shared httpx client rather than letting it
+    # build its own. Nothing here closes the client, and an options change
+    # reloads the entry, so a private pool would be abandoned every time the
+    # user touched a setting. The SDK records that the client was supplied and
+    # leaves it alone on teardown, so the shared one is never closed under us.
+    #
+    # The executor hop stays regardless: the constructor also builds a
+    # synchronous httpx client when it is not given one, and that loads the SSL
+    # context from disk. We never call the synchronous methods, but the client
+    # is built either way.
     client = await hass.async_add_executor_job(
-        partial(Mistral, api_key=entry.data[CONF_API_KEY])
+        partial(
+            Mistral,
+            api_key=entry.data[CONF_API_KEY],
+            async_client=get_async_client(hass),
+        )
     )
 
     # Verify credentials during setup so that a bad key surfaces as a reauth

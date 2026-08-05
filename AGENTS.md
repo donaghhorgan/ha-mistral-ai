@@ -14,6 +14,7 @@ custom_components/mistral_ai/
 ├── const.py        # Application constants
 ├── conversation.py # Conversation platform
 ├── entity.py       # Shared LLM entity and Mistral API handling
+├── helpers.py      # Shared API helpers used by more than one platform
 ├── manifest.json   # Integration metadata
 └── translations/   # Language files
 brands/             # Icon set staged for home-assistant/brands

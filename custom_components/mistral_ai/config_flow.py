@@ -20,6 +20,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
+from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -51,6 +52,7 @@ from .const import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_STT_NAME,
+    DEFAULT_STT_TEMPERATURE,
     DEFAULT_TEMPERATURE,
     DEFAULT_TTS_NAME,
     DOMAIN,
@@ -61,6 +63,7 @@ from .const import (
     TIMEOUT,
     WEB_SEARCH_TOOLS,
 )
+from .helpers import async_list_voices
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -105,10 +108,26 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
+async def async_create_client(hass: HomeAssistant, api_key: str) -> Mistral:
+    """Build a client for a key that has no loaded config entry behind it.
+
+    Only the two paths that validate a key the user has just typed need this.
+    Everywhere else the entry is loaded and `entry.runtime_data` already holds
+    a client, which is cheaper and avoids building one per form render.
+
+    See the note in `__init__.py` for why the client is both handed Home
+    Assistant's httpx client and built in the executor anyway.
+    """
+    async_client = get_async_client(hass)
+    return await hass.async_add_executor_job(
+        partial(Mistral, api_key=api_key, async_client=async_client)
+    )
+
+
 async def async_list_models(
-    hass: HomeAssistant, api_key: str, *, capability: str | None = None
+    client: Mistral, *, capability: str | None = None
 ) -> list[str]:
-    """Return the models available to the given API key.
+    """Return the models available to the given client.
 
     `capability` filters to models advertising it, e.g. audio_transcription.
     Filtering on what the API reports rather than on model names keeps the
@@ -118,7 +137,6 @@ async def async_list_models(
     Raises InvalidAuth if the key is rejected and CannotConnect for any other
     failure, so callers can map both onto a form error.
     """
-    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
     try:
         async with asyncio.timeout(TIMEOUT):
             response = await client.models.list_async()
@@ -140,36 +158,6 @@ async def async_list_models(
     return sorted(model.id for model in models)
 
 
-async def async_list_voices(
-    hass: HomeAssistant, api_key: str
-) -> list[SelectOptionDict]:
-    """Return the voices available to the given API key.
-
-    Voices are per account -- custom ones are created against it -- so the
-    list has to come from the API rather than from a table here. A failure is
-    not fatal: the rest of the form is still usable, and the endpoint chooses
-    a voice when none is given.
-    """
-    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
-    try:
-        async with asyncio.timeout(TIMEOUT):
-            response = await client.audio.voices.list_async()
-    except (SDKError, TimeoutError, httpx.HTTPError) as err:
-        _LOGGER.debug("Could not list Mistral AI voices: %s", err)
-        return []
-
-    voices = []
-    for voice in getattr(response, "items", None) or []:
-        # Languages and description are what make one voice distinguishable
-        # from twenty others in a dropdown.
-        label = voice.name
-        if languages := getattr(voice, "languages", None):
-            label = f"{label} ({', '.join(languages)})"
-        voices.append(SelectOptionDict(label=label, value=voice.id))
-
-    return sorted(voices, key=lambda option: option["label"])
-
-
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Mistral AI."""
 
@@ -183,7 +171,8 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                await async_list_models(self.hass, user_input[CONF_API_KEY])
+                client = await async_create_client(self.hass, user_input[CONF_API_KEY])
+                await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -221,7 +210,8 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                await async_list_models(self.hass, user_input[CONF_API_KEY])
+                client = await async_create_client(self.hass, user_input[CONF_API_KEY])
+                await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -278,10 +268,14 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 entry, self._get_reconfigure_subentry(), data=user_input
             )
 
+        # The entry is loaded, so it already holds a client. Building another
+        # one here would mean a fresh connection pool for every render of this
+        # form, and this form is rendered often.
+        client = entry.runtime_data
+
         try:
             models = await async_list_models(
-                self.hass,
-                entry.data[CONF_API_KEY],
+                client,
                 capability=SUBENTRY_CAPABILITIES.get(self._subentry_type),
             )
         except InvalidAuth:
@@ -312,7 +306,10 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
 
         voices: list[SelectOptionDict] = []
         if self._subentry_type == SUBENTRY_TYPE_TTS:
-            voices = await async_list_voices(self.hass, entry.data[CONF_API_KEY])
+            voices = [
+                SelectOptionDict(label=voice.name, value=voice.voice_id)
+                for voice in await async_list_voices(client)
+            ]
 
         return self.async_show_form(
             step_id="set_options",
@@ -364,25 +361,36 @@ def _subentry_schema(
     # so reconfiguring does not silently drop the user's choice.
     model_options = sorted({*models, default_model})
 
-    schema.update(
-        {
-            vol.Required(CONF_MODEL, default=default_model): SelectSelector(
-                SelectSelectorConfig(
-                    options=model_options,
-                    mode=SelectSelectorMode.DROPDOWN,
-                    custom_value=True,
-                )
-            ),
+    schema[vol.Required(CONF_MODEL, default=default_model)] = SelectSelector(
+        SelectSelectorConfig(
+            options=model_options,
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=True,
+        )
+    )
+
+    # Not offered for text-to-speech, because the speech endpoint takes no such
+    # argument -- `audio.speech.complete_async` has no temperature parameter.
+    # Offering it stored a setting that could never do anything.
+    #
+    # Transcription does take one, and gets a lower default: see
+    # DEFAULT_STT_TEMPERATURE.
+    if subentry_type != SUBENTRY_TYPE_TTS:
+        default_temperature = (
+            DEFAULT_STT_TEMPERATURE
+            if subentry_type == SUBENTRY_TYPE_STT
+            else DEFAULT_TEMPERATURE
+        )
+        schema[
             vol.Optional(
                 CONF_TEMPERATURE,
-                default=options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
-                )
-            ),
-        }
-    )
+                default=options.get(CONF_TEMPERATURE, default_temperature),
+            )
+        ] = NumberSelector(
+            NumberSelectorConfig(
+                min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
+            )
+        )
 
     # Only offered when the account has voices to choose between. Left out
     # rather than shown empty, because an empty dropdown reads as a fault when

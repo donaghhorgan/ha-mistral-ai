@@ -14,7 +14,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from mistralai.client.errors import SDKError
 
-from .const import CONF_MODEL, SPEECH_LANGUAGES, SUBENTRY_TYPE_STT, TIMEOUT
+from .const import (
+    CONF_MODEL,
+    CONF_TEMPERATURE,
+    DEFAULT_STT_TEMPERATURE,
+    SPEECH_LANGUAGES,
+    SUBENTRY_TYPE_STT,
+    TIMEOUT,
+)
 from .entity import MistralBaseEntity
 
 if TYPE_CHECKING:
@@ -130,6 +137,9 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
                     "content_type": "audio/wav",
                 },
                 language=metadata.language.split("-")[0],
+                temperature=self.subentry.data.get(
+                    CONF_TEMPERATURE, DEFAULT_STT_TEMPERATURE
+                ),
                 timeout_ms=TIMEOUT * 1000,
             )
         except (SDKError, TimeoutError, httpx.HTTPError) as err:
