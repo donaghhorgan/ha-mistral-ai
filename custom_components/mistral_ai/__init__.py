@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from functools import partial
 
 import httpx
 from homeassistant.config_entries import ConfigEntry
@@ -15,6 +14,7 @@ from homeassistant.helpers.typing import ConfigType
 from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
+from .client import async_create_client
 from .const import CONF_API_KEY, DOMAIN, TIMEOUT
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -31,11 +31,7 @@ type MistralConfigEntry = ConfigEntry[Mistral]
 
 async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> bool:
     """Set up Mistral AI from a config entry."""
-    # Constructing the client builds an httpx client, which loads the SSL
-    # context from disk, so it must not run in the event loop.
-    client = await hass.async_add_executor_job(
-        partial(Mistral, api_key=entry.data[CONF_API_KEY])
-    )
+    client = await async_create_client(hass, entry.data[CONF_API_KEY])
 
     # Verify credentials during setup so that a bad key surfaces as a reauth
     # flow, rather than as a failure on the user's first sentence.

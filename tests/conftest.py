@@ -114,13 +114,9 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     voices.items = [voice]
     client.audio.voices.list_async = AsyncMock(return_value=voices)
 
-    with (
-        patch("custom_components.mistral_ai.Mistral", return_value=client),
-        patch(
-            "custom_components.mistral_ai.config_flow.Mistral",
-            return_value=client,
-        ),
-    ):
+    # One patch point now: both the integration and the config flow build
+    # their client through custom_components.mistral_ai.client.
+    with patch("custom_components.mistral_ai.client.Mistral", return_value=client):
         yield client
 
 
