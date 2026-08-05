@@ -80,13 +80,21 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         client = self.entry.runtime_data
         model = self.subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
 
+        # Built from the chat log rather than from task.instructions alone.
+        # Home Assistant has already put the instructions into the log as a
+        # user turn, carrying task.attachments with them, so converting the log
+        # is what makes reference images reach the API -- naming the
+        # instructions directly dropped them, while the entity went on
+        # advertising SUPPORT_ATTACHMENTS.
+        messages = await self._async_chat_log_messages(chat_log)
+
         # Not streamed. There is nothing to stream for an image, and going
         # through the ordinary completion call keeps this away from
         # _transform_stream, which is built around text deltas.
         try:
             response = await client.chat.complete_async(
                 model=model,
-                messages=[{"role": "user", "content": task.instructions}],
+                messages=messages,
                 tools=[{"type": IMAGE_GENERATION_TOOL}],
                 timeout_ms=TIMEOUT * 1000,
             )
@@ -97,7 +105,20 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
 
         choices = getattr(response, "choices", None)
         message = choices[0].message if choices else None
-        chunk = _find_generated_file(getattr(message, "content", None))
+        content = getattr(message, "content", None)
+
+        # Record the assistant turn. Home Assistant adds the user side before
+        # calling us, so leaving this out traced an image task as a question
+        # with no answer, and the conversation debug view showed nothing at
+        # all. Done before the checks below so a refusal is still recorded --
+        # what the model said is the only clue as to why there is no image.
+        chat_log.async_add_assistant_content_without_tools(
+            conversation.AssistantContent(
+                agent_id=self.entity_id, content=_message_text(content)
+            )
+        )
+
+        chunk = _find_generated_file(content)
         if chunk is None:
             raise HomeAssistantError("Mistral AI returned no image")
 
@@ -159,6 +180,26 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             conversation_id=chat_log.conversation_id,
             data=data,
         )
+
+
+def _message_text(content: Any) -> str | None:
+    """Return the text a message carries, ignoring any file chunks.
+
+    Content is a plain string for an ordinary reply, but image generation
+    returns a list mixing whatever the model said with the file reference.
+    """
+    if content is None or isinstance(content, str):
+        return content
+
+    # isinstance rather than a truth test: a chunk carrying a non-string in
+    # `text` would otherwise fail the join with a TypeError, which is a poor
+    # way to report that an image came back in an unexpected shape.
+    text = "".join(
+        chunk_text
+        for chunk in content
+        if isinstance(chunk_text := getattr(chunk, "text", None), str)
+    )
+    return text or None
 
 
 def _find_generated_file(content: Any) -> Any | None:
