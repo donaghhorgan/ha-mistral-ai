@@ -9,6 +9,7 @@ import httpx
 import pytest
 from homeassistant.components import tts
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import UNDEFINED
 
 from .conftest import TTS_MODEL, VOICE_ID
 from .helpers import make_sdk_error
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-ENTITY_ID = "tts.mistral_ai_text_to_speech"
+ENTITY_ID = "tts.mistral_ai_tts"
 AUDIO = b"ID3 fake mp3 bytes"
 
 
@@ -187,3 +188,28 @@ async def test_no_voices_reports_none(
     await hass.async_block_till_done()
 
     assert _entity(hass).async_get_supported_voices("en") is None
+
+
+async def test_entity_has_a_resolvable_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The entity must have a name, not inherit one from its device.
+
+    Home Assistant's text-to-speech component refuses an engine whose name
+    is None or UNDEFINED:
+
+        if engine_instance.name is None or engine_instance.name is UNDEFINED:
+            raise HomeAssistantError("TTS engine name is not set.")
+
+    Using _attr_has_entity_name with _attr_name = None gives exactly that,
+    and it fails before any request is made -- so it looks identical in the
+    UI, logs nothing from this integration, and every playback fails. The
+    other tests here call async_get_tts_audio directly on the entity, which
+    bypasses that check entirely, which is how it shipped.
+    """
+    entity = _entity(hass)
+
+    assert entity.name is not None
+    assert entity.name is not UNDEFINED
+    assert isinstance(entity.name, str)
+    assert entity.name

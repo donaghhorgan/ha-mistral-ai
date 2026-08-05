@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 STT_MODEL = "voxtral-mini-latest"
 TTS_MODEL = "voxtral-speech-latest"
 VOICE_ID = "voice-abc"
+NON_CHAT_MODEL = "mistral-ocr-latest"
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +64,12 @@ def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
     card = MagicMock()
     card.id = model_id
     card.capabilities = SimpleNamespace(
-        **{"audio_transcription": False, "audio_speech": False, **capabilities}
+        **{
+            "audio_transcription": False,
+            "audio_speech": False,
+            "completion_chat": False,
+            **capabilities,
+        }
     )
     return card
 
@@ -73,10 +79,13 @@ def mock_models_response() -> MagicMock:
     """Return a models.list_async() response covering each capability."""
     response = MagicMock()
     response.data = [
-        _model_card(DEFAULT_MODEL),
-        _model_card("mistral-large-latest"),
+        _model_card(DEFAULT_MODEL, completion_chat=True),
+        _model_card("mistral-large-latest", completion_chat=True),
         _model_card(STT_MODEL, audio_transcription=True),
         _model_card(TTS_MODEL, audio_speech=True),
+        # A key can reach plenty of models that have no business in any of
+        # these dropdowns -- OCR, embeddings, coding models.
+        _model_card(NON_CHAT_MODEL),
     ]
     return response
 
@@ -105,13 +114,9 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     voices.items = [voice]
     client.audio.voices.list_async = AsyncMock(return_value=voices)
 
-    with (
-        patch("custom_components.mistral_ai.Mistral", return_value=client),
-        patch(
-            "custom_components.mistral_ai.config_flow.Mistral",
-            return_value=client,
-        ),
-    ):
+    # One patch point now: both the integration and the config flow build
+    # their client through custom_components.mistral_ai.client.
+    with patch("custom_components.mistral_ai.client.Mistral", return_value=client):
         yield client
 
 
@@ -126,25 +131,25 @@ def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
             ConfigSubentryData(
                 subentry_type=SUBENTRY_TYPE_CONVERSATION,
                 data={CONF_MODEL: DEFAULT_MODEL},
-                title="Mistral AI conversation",
+                title="Mistral AI Conversation",
                 unique_id=None,
             ),
             ConfigSubentryData(
                 subentry_type=SUBENTRY_TYPE_AI_TASK_DATA,
                 data={CONF_MODEL: DEFAULT_MODEL},
-                title="Mistral AI task",
+                title="Mistral AI Task",
                 unique_id=None,
             ),
             ConfigSubentryData(
                 subentry_type=SUBENTRY_TYPE_STT,
                 data={CONF_MODEL: STT_MODEL},
-                title="Mistral AI speech-to-text",
+                title="Mistral AI STT",
                 unique_id=None,
             ),
             ConfigSubentryData(
                 subentry_type=SUBENTRY_TYPE_TTS,
                 data={CONF_MODEL: TTS_MODEL, CONF_VOICE: VOICE_ID},
-                title="Mistral AI text-to-speech",
+                title="Mistral AI TTS",
                 unique_id=None,
             ),
         ],

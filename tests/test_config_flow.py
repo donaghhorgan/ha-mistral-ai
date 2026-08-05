@@ -29,6 +29,7 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
+from .conftest import NON_CHAT_MODEL
 from .helpers import make_sdk_error
 
 
@@ -194,6 +195,32 @@ async def test_subentry_offers_models_from_api(
     assert DEFAULT_MODEL in options
     assert "mistral-large-latest" in options
     mock_client.models.list_async.assert_awaited()
+
+
+@pytest.mark.parametrize(
+    "subentry_type", [SUBENTRY_TYPE_CONVERSATION, SUBENTRY_TYPE_AI_TASK_DATA]
+)
+async def test_chat_subentries_hide_models_that_cannot_chat(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+) -> None:
+    """A key reaches OCR, transcription and speech models. None belong here.
+
+    Filtered on the completion_chat capability the API reports, so the list
+    stays right as Mistral ships and retires models.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": SOURCE_USER},
+    )
+
+    options = result["data_schema"].schema[CONF_MODEL].config["options"]
+
+    assert options == ["mistral-large-latest", DEFAULT_MODEL]
+    for excluded in (NON_CHAT_MODEL, "voxtral-mini-latest", "voxtral-speech-latest"):
+        assert excluded not in options
 
 
 async def test_reconfigure_subentry(

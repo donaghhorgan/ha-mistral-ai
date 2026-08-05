@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -20,7 +19,6 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
-from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -34,12 +32,13 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
-from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
+from .client import async_create_client
 from .const import (
     CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
+    CAPABILITY_COMPLETION_CHAT,
     CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -68,6 +67,8 @@ from .helpers import async_list_voices
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from mistralai.client import Mistral
+
 _LOGGER = logging.getLogger(__name__)
 
 # Applied to conversation subentries when they are created, matching the
@@ -80,9 +81,13 @@ _LOGGER = logging.getLogger(__name__)
 # anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
 # Home Assistant will not offer it where control is required -- which reads as
 # the integration being broken rather than as a setting being off.
-# Which model capability each subentry type needs. Absent means no filter --
-# a conversation agent or AI task can use any model the key can reach.
+# Which model capability each subentry type needs. Asked of the API rather
+# than written down, so the lists stay right as Mistral ships and retires
+# models -- a key can reach transcription, OCR, embedding and coding models
+# that have no business in a conversation dropdown.
 SUBENTRY_CAPABILITIES = {
+    SUBENTRY_TYPE_AI_TASK_DATA: CAPABILITY_COMPLETION_CHAT,
+    SUBENTRY_TYPE_CONVERSATION: CAPABILITY_COMPLETION_CHAT,
     SUBENTRY_TYPE_STT: CAPABILITY_AUDIO_TRANSCRIPTION,
     SUBENTRY_TYPE_TTS: CAPABILITY_AUDIO_SPEECH,
 }
@@ -106,22 +111,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         ),
     }
 )
-
-
-async def async_create_client(hass: HomeAssistant, api_key: str) -> Mistral:
-    """Build a client for a key that has no loaded config entry behind it.
-
-    Only the two paths that validate a key the user has just typed need this.
-    Everywhere else the entry is loaded and `entry.runtime_data` already holds
-    a client, which is cheaper and avoids building one per form render.
-
-    See the note in `__init__.py` for why the client is both handed Home
-    Assistant's httpx client and built in the executor anyway.
-    """
-    async_client = get_async_client(hass)
-    return await hass.async_add_executor_job(
-        partial(Mistral, api_key=api_key, async_client=async_client)
-    )
 
 
 async def async_list_models(
@@ -347,14 +336,13 @@ def _subentry_schema(
         )
         schema[vol.Required(CONF_NAME, default=default_name)] = TextSelector()
 
-    # DEFAULT_MODEL is a chat model, so it is not a sensible starting point for
-    # a platform that filters on a capability. Fall back to the first model the
-    # API offered for this capability instead of naming one here, which would go
-    # stale the next time Mistral retires it.
-    if subentry_type in SUBENTRY_CAPABILITIES:
+    # Prefer the configured model, then DEFAULT_MODEL where the API still
+    # offers it, then whatever the API did offer. Naming a model per platform
+    # here would go stale the next time Mistral retires one; this only names
+    # the one general-purpose default and treats it as a preference rather
+    # than a guarantee.
+    if (fallback_model := DEFAULT_MODEL) not in models:
         fallback_model = models[0] if models else DEFAULT_MODEL
-    else:
-        fallback_model = DEFAULT_MODEL
     default_model = options.get(CONF_MODEL, fallback_model)
 
     # Keep the configured model selectable even if the API stops listing it,

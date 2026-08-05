@@ -11,6 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.httpx_client import get_async_client
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.mistral_ai.client import LAZY_RESOURCES
+
 from .helpers import make_sdk_error
 
 
@@ -108,9 +110,39 @@ async def test_setup_uses_home_assistants_http_client(
     time the user touched a setting.
     """
     with patch(
-        "custom_components.mistral_ai.Mistral", return_value=mock_client
+        "custom_components.mistral_ai.client.Mistral", return_value=mock_client
     ) as constructor:
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
     assert constructor.call_args.kwargs["async_client"] is get_async_client(hass)
+
+
+async def test_client_is_built_off_the_event_loop(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The client is constructed in an executor, with its lazy imports warmed.
+
+    Two blocking things happen on construction: httpx reads an SSL context
+    from disk, and the SDK imports 89 modules the first time its resources
+    are touched. Home Assistant warns about both in the event loop, and the
+    warming has to happen in the same executor job or it simply moves the
+    import back onto the loop at first use.
+    """
+    with patch(
+        "custom_components.mistral_ai.client._build", return_value=mock_client
+    ) as build:
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    build.assert_called_once()
+
+
+def test_lazy_resources_cover_what_the_integration_uses() -> None:
+    """Every resource the integration reaches for is warmed.
+
+    A resource left out of the list is not an error -- it is an
+    import_module on the event loop the first time it is used, which shows
+    up as a Home Assistant warning and nothing else.
+    """
+    assert set(LAZY_RESOURCES) == {"models", "chat", "audio", "files"}

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-ENTITY_ID = "stt.mistral_ai_speech_to_text"
+ENTITY_ID = "stt.mistral_ai_stt"
 
 # 16-bit 16kHz mono, which is what the assist pipeline delivers.
 PCM = b"\x01\x02" * 1600
