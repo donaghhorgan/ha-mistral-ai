@@ -141,17 +141,6 @@ ignore = [
   "N818" # exception naming (Home Assistant convention)
 ]
 
-[tool.ruff.lint.isort]
-known-first-party = ["custom_components.mistral_ai"]
-known-third-party = ["homeassistant"]
-section-order = [
-  "future",
-  "standard-library",
-  "third-party",
-  "first-party",
-  "local-folder"
-]
-
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"] # Allow unused imports in __init__.py files
 
