@@ -37,6 +37,7 @@ from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
 from .const import (
+    CAPABILITY_AUDIO_TRANSCRIPTION,
     CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -46,10 +47,12 @@ from .const import (
     DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
+    DEFAULT_STT_NAME,
     DEFAULT_TEMPERATURE,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
+    SUBENTRY_TYPE_STT,
     TIMEOUT,
 )
 
@@ -68,6 +71,18 @@ _LOGGER = logging.getLogger(__name__)
 # anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
 # Home Assistant will not offer it where control is required -- which reads as
 # the integration being broken rather than as a setting being off.
+# Which model capability each subentry type needs. Absent means no filter --
+# a conversation agent or AI task can use any model the key can reach.
+SUBENTRY_CAPABILITIES = {
+    SUBENTRY_TYPE_STT: CAPABILITY_AUDIO_TRANSCRIPTION,
+}
+
+DEFAULT_SUBENTRY_NAMES = {
+    SUBENTRY_TYPE_AI_TASK_DATA: DEFAULT_AI_TASK_NAME,
+    SUBENTRY_TYPE_CONVERSATION: DEFAULT_CONVERSATION_NAME,
+    SUBENTRY_TYPE_STT: DEFAULT_STT_NAME,
+}
+
 RECOMMENDED_CONVERSATION_OPTIONS = {
     CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
     CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,
@@ -82,8 +97,15 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
-async def async_list_models(hass: HomeAssistant, api_key: str) -> list[str]:
+async def async_list_models(
+    hass: HomeAssistant, api_key: str, *, capability: str | None = None
+) -> list[str]:
     """Return the models available to the given API key.
+
+    `capability` filters to models advertising it, e.g. audio_transcription.
+    Filtering on what the API reports rather than on model names keeps the
+    speech platforms working across a Mistral release: names come and go, the
+    capability flags do not.
 
     Raises InvalidAuth if the key is rejected and CannotConnect for any other
     failure, so callers can map both onto a form error.
@@ -99,9 +121,15 @@ async def async_list_models(hass: HomeAssistant, api_key: str) -> list[str]:
     except (TimeoutError, httpx.HTTPError) as err:
         raise CannotConnect(str(err)) from err
 
-    return sorted(
-        model.id for model in (response.data or []) if getattr(model, "id", None)
-    )
+    models = [model for model in (response.data or []) if getattr(model, "id", None)]
+    if capability is not None:
+        models = [
+            model
+            for model in models
+            if getattr(getattr(model, "capabilities", None), capability, False)
+        ]
+
+    return sorted(model.id for model in models)
 
 
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -183,6 +211,7 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
         return {
             SUBENTRY_TYPE_CONVERSATION: MistralSubentryFlowHandler,
             SUBENTRY_TYPE_AI_TASK_DATA: MistralSubentryFlowHandler,
+            SUBENTRY_TYPE_STT: MistralSubentryFlowHandler,
         }
 
 
@@ -211,7 +240,11 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             )
 
         try:
-            models = await async_list_models(self.hass, entry.data[CONF_API_KEY])
+            models = await async_list_models(
+                self.hass,
+                entry.data[CONF_API_KEY],
+                capability=SUBENTRY_CAPABILITIES.get(self._subentry_type),
+            )
         except InvalidAuth:
             return self.async_abort(reason="invalid_auth")
         except CannotConnect:
@@ -267,22 +300,28 @@ def _subentry_schema(
     schema: dict[vol.Marker, Any] = {}
 
     if is_new:
-        default_name = (
-            DEFAULT_AI_TASK_NAME
-            if subentry_type == SUBENTRY_TYPE_AI_TASK_DATA
-            else DEFAULT_CONVERSATION_NAME
+        default_name = DEFAULT_SUBENTRY_NAMES.get(
+            subentry_type, DEFAULT_CONVERSATION_NAME
         )
         schema[vol.Required(CONF_NAME, default=default_name)] = TextSelector()
 
+    # DEFAULT_MODEL is a chat model, so it is not a sensible starting point for
+    # a platform that filters on a capability. Fall back to the first model the
+    # API offered for this capability instead of naming one here, which would go
+    # stale the next time Mistral retires it.
+    if subentry_type in SUBENTRY_CAPABILITIES:
+        fallback_model = models[0] if models else DEFAULT_MODEL
+    else:
+        fallback_model = DEFAULT_MODEL
+    default_model = options.get(CONF_MODEL, fallback_model)
+
     # Keep the configured model selectable even if the API stops listing it,
     # so reconfiguring does not silently drop the user's choice.
-    model_options = sorted({*models, options.get(CONF_MODEL, DEFAULT_MODEL)})
+    model_options = sorted({*models, default_model})
 
     schema.update(
         {
-            vol.Required(
-                CONF_MODEL, default=options.get(CONF_MODEL, DEFAULT_MODEL)
-            ): SelectSelector(
+            vol.Required(CONF_MODEL, default=default_model): SelectSelector(
                 SelectSelectorConfig(
                     options=model_options,
                     mode=SelectSelectorMode.DROPDOWN,
@@ -297,16 +336,20 @@ def _subentry_schema(
                     min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
                 )
             ),
+        }
+    )
+
+    # A response length makes no sense for a transcription: the length is
+    # whatever was said.
+    if subentry_type != SUBENTRY_TYPE_STT:
+        schema[
             vol.Optional(
                 CONF_MAX_TOKENS,
                 default=options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-            ): NumberSelector(
-                NumberSelectorConfig(
-                    min=1, max=32000, step=1, mode=NumberSelectorMode.BOX
-                )
-            ),
-        }
-    )
+            )
+        ] = NumberSelector(
+            NumberSelectorConfig(min=1, max=32000, step=1, mode=NumberSelectorMode.BOX)
+        )
 
     # Prompts and Home Assistant control only apply to conversation agents.
     if subentry_type == SUBENTRY_TYPE_CONVERSATION:

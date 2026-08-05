@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -18,12 +19,15 @@ from custom_components.mistral_ai.const import (
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
+    SUBENTRY_TYPE_STT,
 )
 
 from .helpers import make_chunk, make_stream
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+
+STT_MODEL = "voxtral-mini-latest"
 
 
 @pytest.fixture(autouse=True)
@@ -44,16 +48,30 @@ async def setup_homeassistant(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "homeassistant", {})
 
 
+def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
+    """Build a models.list_async() entry with real boolean capabilities.
+
+    The flags have to be plain booleans rather than MagicMock attributes:
+    every attribute of a MagicMock is truthy, so a capability filter would
+    match everything and the test would pass without testing anything.
+    """
+    card = MagicMock()
+    card.id = model_id
+    card.capabilities = SimpleNamespace(
+        **{"audio_transcription": False, "audio_speech": False, **capabilities}
+    )
+    return card
+
+
 @pytest.fixture
 def mock_models_response() -> MagicMock:
-    """Return a models.list_async() response listing two models."""
-    first = MagicMock()
-    first.id = DEFAULT_MODEL
-    second = MagicMock()
-    second.id = "mistral-large-latest"
-
+    """Return a models.list_async() response covering each capability."""
     response = MagicMock()
-    response.data = [first, second]
+    response.data = [
+        _model_card(DEFAULT_MODEL),
+        _model_card("mistral-large-latest"),
+        _model_card(STT_MODEL, audio_transcription=True),
+    ]
     return response
 
 
@@ -65,6 +83,9 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     client.chat.stream_async = AsyncMock(
         return_value=make_stream([make_chunk(content="Hello there")])
     )
+    transcription = MagicMock()
+    transcription.text = "turn on the kitchen light"
+    client.audio.transcriptions.complete_async = AsyncMock(return_value=transcription)
 
     with (
         patch("custom_components.mistral_ai.Mistral", return_value=client),
@@ -94,6 +115,12 @@ def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
                 subentry_type=SUBENTRY_TYPE_AI_TASK_DATA,
                 data={CONF_MODEL: DEFAULT_MODEL},
                 title="Mistral AI task",
+                unique_id=None,
+            ),
+            ConfigSubentryData(
+                subentry_type=SUBENTRY_TYPE_STT,
+                data={CONF_MODEL: STT_MODEL},
+                title="Mistral AI speech-to-text",
                 unique_id=None,
             ),
         ],

@@ -17,9 +17,16 @@ DEFAULT_TEMPERATURE = 0.7
 # Subentry types, and the default title given to each new subentry
 SUBENTRY_TYPE_AI_TASK_DATA = "ai_task_data"
 SUBENTRY_TYPE_CONVERSATION = "conversation"
+SUBENTRY_TYPE_STT = "stt"
 
 DEFAULT_AI_TASK_NAME = "Mistral AI task"
 DEFAULT_CONVERSATION_NAME = "Mistral AI conversation"
+DEFAULT_STT_NAME = "Mistral AI speech-to-text"
+
+# Model capability flags, as reported by the models endpoint. The config flow
+# filters the model list by these rather than hard-coding model names, which
+# go stale every time Mistral ships or retires one.
+CAPABILITY_AUDIO_TRANSCRIPTION = "audio_transcription"
 
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10

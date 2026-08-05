@@ -122,6 +122,24 @@ To change an existing one, click "Configure" next to it.
   stops advertising the `CONTROL` feature, so Home Assistant will not offer it
   anywhere control is required — the agent is not broken, it is scoped.
 
+### Speech-to-text
+
+Add a speech-to-text entity with "Add speech-to-text" and select it as the
+speech-to-text engine of an assist pipeline under
+Settings → Voice assistants.
+
+The model dropdown lists only models that report the `audio_transcription`
+capability, which is asked of the API rather than hard-coded, so it stays
+correct as Mistral ships and retires models.
+
+Two things worth knowing:
+
+- Home Assistant streams raw 16-bit 16 kHz mono audio. The integration wraps
+  it in a WAV container before sending, because the transcription endpoint
+  infers the format from the file it is given.
+- The pipeline's language is passed to the API as a hint only — these models
+  detect the language themselves.
+
 ### AI tasks
 
 As well as conversation agents, this integration provides

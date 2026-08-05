@@ -245,8 +245,13 @@ async def _transform_stream(
         }
 
 
-class MistralBaseLLMEntity(Entity):
-    """Mistral AI base LLM entity."""
+class MistralBaseEntity(Entity):
+    """Everything a Mistral AI entity needs regardless of what it does.
+
+    Split out from MistralBaseLLMEntity so that the speech platforms, which
+    hold no chat log and call no tools, do not inherit machinery they never
+    use.
+    """
 
     _attr_has_entity_name = True
     _attr_name: str | None = None
@@ -270,6 +275,10 @@ class MistralBaseLLMEntity(Entity):
     def attribution(self) -> str:
         """Return the attribution."""
         return "Powered by Mistral AI"
+
+
+class MistralBaseLLMEntity(MistralBaseEntity):
+    """Mistral AI base LLM entity."""
 
     async def _async_handle_chat_log(
         self,
