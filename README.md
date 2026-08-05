@@ -177,6 +177,12 @@ conversation. Add one with "Add AI task", then call
 `ai_task.generate_data` with its entity ID. Passing a structure returns
 validated JSON, using Mistral's native structured output.
 
+The same entity also generates images via `ai_task.generate_image`. That
+runs on the model already configured on the subentry — Mistral generates
+images with a tool on an ordinary chat model rather than a separate
+endpoint, so there is no second model to pick. Home Assistant saves the
+result to the media source and returns a reference to it.
+
 ## Usage
 
 ### Voice Assistants
