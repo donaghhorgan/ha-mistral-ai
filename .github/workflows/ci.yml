@@ -4,9 +4,9 @@ permissions:
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
-    branches: [main, dev]
+    branches: [main]
 
 # A new push supersedes whatever is already running for the same ref. Never
 # cancel on main, where each run is the record for a distinct commit.

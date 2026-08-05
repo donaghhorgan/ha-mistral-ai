@@ -97,3 +97,62 @@ copy; see [`brands/README.md`](./brands/README.md).
 ### Source Code Management
 
 - Write concise but descriptive commit messages
+
+#### Branching
+
+This project is trunk-based. `main` is the only long-lived branch, and it is
+always releasable.
+
+- Branch off `main`, and only off `main`. There is no `dev` or `release`
+  branch to integrate through, and adding one would reintroduce exactly the
+  drift this avoids.
+- Keep branches short-lived — hours or days, not weeks. A branch that lives
+  long enough to need `main` merged into it twice was too big to begin with.
+- Prefer several small pull requests to one large one. Anything already
+  correct and reviewable should not wait behind the rest of the work.
+- Merge into `main` through a pull request with CI green. Nothing is pushed
+  to `main` directly.
+- Never build on a branch whose pull request is already merged. Start again
+  from `main`; a merged pull request cannot track new work.
+- Delete the branch once it is merged.
+
+CI runs on pull requests targeting `main` and on pushes to `main`. It does not
+run on pushes to a topic branch, so opening the pull request is what starts
+the checks — open it early, in draft if it is not ready.
+
+`main` is additionally protected by a branch ruleset in the repository
+settings, which is not version controlled and therefore not visible here. It
+requires a pull request and passing checks, and blocks force pushes and
+deletion. The required checks are the blocking jobs in
+[`ci.yml`](./.github/workflows/ci.yml): `lint`, `Test (ha-current)`,
+`Test (ha-minimum)`, `Validate with hassfest` and `Validate with HACS`.
+
+`Test against latest Home Assistant` is deliberately not among them. It is
+`continue-on-error` because it tracks a moving upstream target, so requiring
+it would let an unrelated Home Assistant release block every merge in the
+repository.
+
+The ruleset is also strict: a branch must be up to date with `main` before it
+can merge. With short-lived branches that is rarely more than a fast-forward.
+
+#### Merging
+
+Pull requests are merged with a merge commit. Not squashed, not rebased.
+
+- Commit messages here carry the reasoning, not just a label. Squashing
+  concatenates or discards them, and moves the record into the pull request
+  body, which is not in the repository.
+- Pull requests sometimes carry commits from more than one author. Squashing
+  collapses them to one, demoting the rest to a trailer at best.
+- Commit hashes stay stable, and the documentation cites one:
+  [`brands/README.md`](./brands/README.md) points at the artwork it was
+  generated from by hash. A squash would rewrite it and leave the citation
+  dangling in every clone.
+
+The cost, accepted knowingly: `main`'s history interleaves rather than reading
+as one commit per change, and `git bisect` can land on a commit that never
+passed CI on its own. Keeping pull requests small is what holds that in check,
+which the branching rules above already ask for.
+
+This means "Require linear history" must stay off in the ruleset — it forbids
+merge commits outright.
