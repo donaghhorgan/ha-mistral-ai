@@ -7,7 +7,7 @@ conversation services. The structure follows standard Home Assistant
 integration conventions:
 
 ```bash
-custom_components/mistral_conversation/
+custom_components/mistral_ai/
 ├── __init__.py     # Integration setup and entry point
 ├── ai_task.py      # AI Task platform
 ├── config_flow.py  # Config and subentry flow handlers

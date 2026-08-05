@@ -5,7 +5,7 @@ Generate the icon set that home-assistant/brands expects for this integration.
 Home Assistant and HACS do not read icons from the integration repository.
 They read them from home-assistant/brands, keyed by domain, which is why this
 integration currently shows a blank tile. Getting an icon means opening a pull
-request there adding `custom_integrations/mistral_conversation/`.
+request there adding `custom_integrations/mistral_ai/`.
 
 The mark is Mistral AI's, used to identify the service this integration talks
 to. See `brands/README.md` for the standing this repository claims to it --
@@ -49,10 +49,7 @@ SUPERSAMPLE = 8
 OUTPUTS = {"icon.png": 256, "icon@2x.png": 512}
 
 OUTPUT_DIR = (
-    Path(__file__).parent.parent
-    / "brands"
-    / "custom_integrations"
-    / "mistral_conversation"
+    Path(__file__).parent.parent / "brands" / "custom_integrations" / "mistral_ai"
 )
 
 

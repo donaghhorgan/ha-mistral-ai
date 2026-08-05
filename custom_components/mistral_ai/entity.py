@@ -1,4 +1,4 @@
-"""Base entity for the Mistral AI Conversation integration."""
+"""Base entity for the Mistral AI integration."""
 
 from __future__ import annotations
 

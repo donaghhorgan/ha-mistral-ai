@@ -1,6 +1,6 @@
 {
-    "domain": "mistral_conversation",
-    "name": "Mistral AI Conversation",
+    "domain": "mistral_ai",
+    "name": "Mistral AI",
     "after_dependencies": [
         "assist_pipeline",
         "intent"

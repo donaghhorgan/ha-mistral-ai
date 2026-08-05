@@ -1,1 +1,1 @@
-"""Tests for the Mistral AI Conversation integration."""
+"""Tests for the Mistral AI integration."""

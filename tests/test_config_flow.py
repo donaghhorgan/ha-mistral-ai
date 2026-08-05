@@ -1,4 +1,4 @@
-"""Tests for the Mistral AI Conversation config and subentry flows."""
+"""Tests for the Mistral AI config and subentry flows."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import llm
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mistral_conversation.const import (
+from custom_components.mistral_ai.const import (
     CONF_API_KEY,
     CONF_MODEL,
     CONF_PROMPT,

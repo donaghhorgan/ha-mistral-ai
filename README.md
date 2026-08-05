@@ -1,4 +1,4 @@
-# Mistral AI Conversation for Home Assistant
+# Mistral AI for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/donaghhorgan/ha-mistral-conversation.svg)](https://github.com/donaghhorgan/ha-mistral-conversation/releases)
@@ -38,7 +38,7 @@ interfaces in Home Assistant.
 4. Add this repository URL: `https://github.com/donaghhorgan/ha-mistral-conversation`
 5. Select "Integration" as the category
 6. Click "Add"
-7. Search for "Mistral AI Conversation" and install it
+7. Search for "Mistral AI" and install it
 8. Restart Home Assistant
 
 ### Manual Installation
@@ -49,7 +49,7 @@ interfaces in Home Assistant.
 
    ```text
    custom_components/
-   └── mistral_conversation/
+   └── mistral_ai/
        ├── __init__.py
        ├── ai_task.py
        ├── config_flow.py
@@ -69,7 +69,7 @@ interfaces in Home Assistant.
 
 1. Go to Settings → Devices & Services
 2. Click "Add Integration"
-3. Search for "Mistral AI Conversation"
+3. Search for "Mistral AI"
 4. Enter your Mistral AI API key
 5. Click "Submit"
 
@@ -88,7 +88,7 @@ models and prompts against the same key.
 
 ### Adding and configuring agents
 
-1. Go to Settings → Devices & Services → Mistral AI Conversation
+1. Go to Settings → Devices & Services → Mistral AI
 2. Click "Add conversation agent" or "Add AI task"
 3. Configure it, then click "Submit"
 
@@ -230,7 +230,7 @@ To enable debug logging for troubleshooting:
 logger:
   default: info
   logs:
-    custom_components.mistral_conversation: debug
+    custom_components.mistral_ai: debug
 ```
 
 ## Development

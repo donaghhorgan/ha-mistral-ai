@@ -1,4 +1,4 @@
-"""The Mistral AI Conversation integration."""
+"""The Mistral AI integration."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ type MistralConfigEntry = ConfigEntry[Mistral]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> bool:
-    """Set up Mistral AI Conversation from a config entry."""
+    """Set up Mistral AI from a config entry."""
     # Constructing the client builds an httpx client, which loads the SSL
     # context from disk, so it must not run in the event loop.
     client = await hass.async_add_executor_job(

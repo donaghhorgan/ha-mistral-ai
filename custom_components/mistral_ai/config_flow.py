@@ -1,4 +1,4 @@
-"""Config flow for the Mistral AI Conversation integration."""
+"""Config flow for the Mistral AI integration."""
 
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ async def async_list_models(hass: HomeAssistant, api_key: str) -> list[str]:
 
 
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Mistral AI Conversation."""
+    """Handle a config flow for Mistral AI."""
 
     VERSION = 1
 

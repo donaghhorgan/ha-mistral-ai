@@ -70,7 +70,7 @@ def main() -> int:
     workspace_root = Path(__file__).parent.parent
     pyproject_path = workspace_root / "pyproject.toml"
     manifest_path = (
-        workspace_root / "custom_components" / "mistral_conversation" / "manifest.json"
+        workspace_root / "custom_components" / "mistral_ai" / "manifest.json"
     )
 
     print("Checking manifest.json consistency with pyproject.toml...")
