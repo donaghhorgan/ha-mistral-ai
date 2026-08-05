@@ -265,14 +265,23 @@ class MistralBaseEntity(Entity):
     use.
     """
 
-    _attr_has_entity_name = True
-    _attr_name: str | None = None
-
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         self.entry = entry
         self.subentry = subentry
         self._attr_unique_id = subentry.subentry_id
+        # Named explicitly rather than inheriting the device name via
+        # _attr_has_entity_name. The two look identical in the UI, but the
+        # text-to-speech component rejects an entity whose name resolves to
+        # UNDEFINED, which is what the inherited form gives it:
+        #
+        #   if engine_instance.name is None or engine_instance.name is UNDEFINED:
+        #       raise HomeAssistantError("TTS engine name is not set.")
+        #
+        # It fails before any request is made, so nothing appears in this
+        # integration's log at all. google_generative_ai_conversation names
+        # its entities the same way, for what is presumably the same reason.
+        self._attr_name = subentry.title
 
         model = subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
         self._attr_device_info = dr.DeviceInfo(
