@@ -11,6 +11,48 @@ updates:
         patterns:
           - pytest-homeassistant-custom-component
           - homeassistant
+    # An allowlist, not a blocklist, because the blocklist below can never be
+    # complete. Home Assistant 2026.2.3 pins 46 packages exactly and its
+    # dependencies pin more beneath that, so the set of things that cannot
+    # move is most of the resolution -- and it changes with every Home
+    # Assistant release. Enumerating it means regenerating ~50 names each time
+    # pytest-homeassistant-custom-component moves. Naming what we own instead
+    # is a shorter list that does not change when Home Assistant does.
+    #
+    # This matters because the failure is silent. A package that cannot
+    # resolve does not open a pull request that fails CI -- it fails
+    # resolution, and every uv update stops until someone reads the Dependabot
+    # run page.
+    #
+    # Deliberately absent:
+    #
+    #   homeassistant  the floor in [project] dependencies. It is a claim
+    #                  about what we support, checked against hacs.json and
+    #                  README.md, and raising it is a decision rather than an
+    #                  upgrade.
+    #   pillow         we declare it for scripts/generate_brand_assets.py, but
+    #                  Home Assistant pins it exactly (11.3.0 on the floor), so
+    #                  allowing it reproduces exactly the failure this avoids.
+    #   hassil, home-assistant-intents, pycares, ha-ffmpeg, mutagen,
+    #   pymicro-vad, pyspeex-noise
+    #                  pinned per group to mirror what a given Home Assistant
+    #                  release needs. These resolve fine and then break at
+    #                  runtime, which is the other failure mode -- see the
+    #                  ignore list below.
+    allow:
+      - dependency-name: mistralai
+      - dependency-name: pytest-homeassistant-custom-component
+      - dependency-name: bandit
+      - dependency-name: pre-commit
+      - dependency-name: pymarkdownlnt
+      - dependency-name: pyturbojpeg
+      - dependency-name: ruff
+      - dependency-name: toml-sort
+      - dependency-name: ty
+      - dependency-name: validate-pyproject
+    # Kept as belt and braces while the allowlist proves itself, and because
+    # each entry records why that package cannot move -- knowledge worth
+    # keeping whichever mechanism enforces it.
     ignore:
       # These are not ours to choose. Each Home Assistant release pins them
       # exactly in the conversation component's manifest, and the pins differ
