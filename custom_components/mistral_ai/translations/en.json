@@ -40,14 +40,12 @@
                         "temperature": "Temperature",
                         "max_tokens": "Maximum tokens per response",
                         "prompt": "Instructions",
-                        "llm_hass_api": "Control Home Assistant",
-                        "web_search": "Web search"
+                        "llm_hass_api": "Control Home Assistant"
                     },
                     "data_description": {
                         "temperature": "Higher values make responses more creative, lower values more focused.",
                         "prompt": "Instructions given to the model to tell it how it should behave.",
-                        "llm_hass_api": "Allow the agent to control devices in your home.",
-                        "web_search": "Let the agent search the web for things it does not know. Billed per search by Mistral, and the premium tier costs more. Leave unset to turn it off."
+                        "llm_hass_api": "Allow the agent to control devices in your home."
                     }
                 }
             },
