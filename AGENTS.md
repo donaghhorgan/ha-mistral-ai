@@ -47,6 +47,49 @@ copy; see [`brands/README.md`](./brands/README.md).
   your search, e.g., if you are searching for info from project files rather
   than Python dependencies.
 
+#### Home Assistant pins almost everything
+
+`pytest-homeassistant-custom-component` pins Home Assistant to an exact
+version, and Home Assistant pins its own dependencies exactly — 46 of them
+directly in 2026.2.3, plus whatever those pin beneath. So most of the
+resolution is frozen, and a package under that subtree cannot be upgraded on
+its own. Attempting it does not fail a check, it fails resolution:
+
+```text
+Because homeassistant==2025.8.0 depends on voluptuous==0.15.2 and
+voluptuous==0.16.0, we can conclude that homeassistant==2025.8.0 cannot be
+used.
+```
+
+Before adding or raising any dependency, check whether Home Assistant already
+pins it. Do not assume from the name, and do not assume that declaring it in
+`pyproject.toml` makes it ours to choose — `voluptuous` is declared in
+`[project] dependencies` and is still governed entirely by Home Assistant's
+pin:
+
+```bash
+uv run --no-sync python -c "
+from importlib.metadata import requires
+print([r for r in requires('homeassistant') if 'PACKAGE' in r.lower()])"
+```
+
+If it comes back with `==`, the version is not yours to pick. Match it, or use
+a floor at or below it. This has bitten twice: `pillow>=12.0.0` made
+`ha-minimum` unresolvable because Home Assistant 2025.8.0 wants `11.3.0`.
+
+#### Dependabot works from an allowlist
+
+[`.github/dependabot.yml`](./.github/dependabot.yml) names the packages
+Dependabot may update, rather than listing the ones it may not — the blocklist
+could never be complete, for the reason above. **Add a new dev tool to that
+allowlist, or it will silently never be updated.**
+
+Do not add a package to the allowlist without checking it is not one Home
+Assistant pins. Allowing one puts back exactly the failure the allowlist
+exists to prevent, and that failure is invisible from GitHub: no pull request
+is opened, every uv update stops, and the only signal is the Dependabot run
+page.
+
 ### Code Style and Coding Conventions
 
 - Python code should be written for the version in [`.python-version`](.python-version)
