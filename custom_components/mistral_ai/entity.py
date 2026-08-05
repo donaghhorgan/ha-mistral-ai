@@ -25,14 +25,12 @@ from .const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
-    CONF_WEB_SEARCH,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DOMAIN,
     MAX_TOOL_ITERATIONS,
     TIMEOUT,
-    WEB_SEARCH_TOOLS,
 )
 
 if TYPE_CHECKING:
@@ -179,7 +177,6 @@ async def _async_convert_messages(
 
 async def _transform_stream(
     stream: AsyncIterable[Any],
-    local_tools: set[str] | None = None,
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
     """Transform a Mistral AI stream into Home Assistant chat log deltas.
 
@@ -187,11 +184,6 @@ async def _transform_stream(
     chunks, so they are buffered and only emitted once the stream completes.
     Home Assistant dispatches a tool call the moment it is yielded, so
     yielding a partial one would invoke the tool with broken arguments.
-
-    `local_tools` names the tools Home Assistant can actually run. Built-in
-    connectors such as web search are sent as tools but executed by Mistral,
-    so any call naming one is dropped rather than handed to Home Assistant,
-    which has no such tool and would fail the whole turn trying to run it.
     """
     started = False
     # Keyed by the index reported by the API so that parallel tool calls in
@@ -240,11 +232,7 @@ async def _transform_stream(
             elif arguments:
                 buffered["args"] = json.dumps(arguments)
 
-    complete = [call for call in tool_calls.values() if call["name"]]
-    if local_tools is not None:
-        complete = [call for call in complete if call["name"] in local_tools]
-
-    if complete:
+    if complete := [call for call in tool_calls.values() if call["name"]]:
         yield {
             "tool_calls": [
                 llm.ToolInput(
@@ -321,21 +309,13 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             chat_log.llm_api.custom_serializer if chat_log.llm_api else None
         )
 
-        local_tools: set[str] = set()
-        tools: list[dict[str, Any]] = []
-        if chat_log.llm_api:
-            for tool in chat_log.llm_api.tools:
-                tools.append(_format_tool(tool, custom_serializer))
-                local_tools.add(tool.name)
-
-        # Web search is independent of the Home Assistant LLM API: an agent
-        # that cannot touch the house can still be allowed to look things up.
-        if (web_search := options.get(CONF_WEB_SEARCH)) in WEB_SEARCH_TOOLS:
-            tools.append({"type": web_search})
-
-        if tools:
+        if chat_log.llm_api and (
+            tools := [
+                _format_tool(tool, custom_serializer) for tool in chat_log.llm_api.tools
+            ]
+        ):
             # An empty tools list is rejected by the API, so only send it when
-            # there is something to send.
+            # the selected LLM API actually exposes something.
             model_args["tools"] = tools
 
         if structure and structure_name:
@@ -365,7 +345,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 )
 
                 async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id, _transform_stream(stream, local_tools)
+                    self.entity_id, _transform_stream(stream)
                 ):
                     pass
             except SDKError as err:
