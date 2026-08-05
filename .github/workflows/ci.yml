@@ -22,8 +22,17 @@ concurrency:
 #
 # The two validator actions further down are deliberately left on a moving ref.
 # The reasoning is next to each of them.
+#
+# Job names are load-bearing. The branch ruleset on main requires five checks
+# by exact name: lint, Test (ha-current), Test (ha-minimum), Validate with
+# hassfest, Validate with HACS. A required check whose name no longer matches
+# does not go red -- it never reports at all, and pull requests sit waiting on
+# a status that will never arrive. So every job sets `name:` explicitly rather
+# than falling back to its id, which leaves the id free to be renamed. Changing
+# a `name:` means changing the ruleset too.
 jobs:
   lint:
+    name: lint
     runs-on: ubuntu-latest
 
     steps:
