@@ -53,7 +53,7 @@ ha-minimum = [
 ]
 
 [project]
-name = "ha-mistral-conversation"
+name = "ha-mistral-ai"
 version = "1.0.0"
 description = "A Home Assistant integration that provides a conversation agent powered by Mistral AI"
 readme = "README.md"

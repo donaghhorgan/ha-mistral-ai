@@ -1,8 +1,8 @@
 # Mistral AI for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/donaghhorgan/ha-mistral-conversation.svg)](https://github.com/donaghhorgan/ha-mistral-conversation/releases)
-[![License](https://img.shields.io/github/license/donaghhorgan/ha-mistral-conversation.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/donaghhorgan/ha-mistral-ai.svg)](https://github.com/donaghhorgan/ha-mistral-ai/releases)
+[![License](https://img.shields.io/github/license/donaghhorgan/ha-mistral-ai.svg)](LICENSE)
 
 A Home Assistant integration that provides a conversation agent powered by
 Mistral AI. This integration allows you to use Mistral AI's language models as
@@ -35,7 +35,7 @@ interfaces in Home Assistant.
 1. Ensure that [HACS](https://hacs.xyz/) is installed
 2. Go to HACS → Integrations
 3. Click the three dots in the top right corner and select "Custom repositories"
-4. Add this repository URL: `https://github.com/donaghhorgan/ha-mistral-conversation`
+4. Add this repository URL: `https://github.com/donaghhorgan/ha-mistral-ai`
 5. Select "Integration" as the category
 6. Click "Add"
 7. Search for "Mistral AI" and install it
@@ -43,7 +43,7 @@ interfaces in Home Assistant.
 
 ### Manual Installation
 
-1. Download the latest release from the [releases page](https://github.com/donaghhorgan/ha-mistral-conversation/releases)
+1. Download the latest release from the [releases page](https://github.com/donaghhorgan/ha-mistral-ai/releases)
 2. Extract the contents to your `custom_components` directory
 3. The folder structure should look like:
 
@@ -314,8 +314,8 @@ See [`AGENTS.md`](AGENTS.md) for conventions and
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/donaghhorgan/ha-mistral-conversation/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/donaghhorgan/ha-mistral-conversation/discussions)
+- **Issues**: [GitHub Issues](https://github.com/donaghhorgan/ha-mistral-ai/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/donaghhorgan/ha-mistral-ai/discussions)
 - **Home Assistant Community**: [Community Forum](https://community.home-assistant.io/)
 
 ## License

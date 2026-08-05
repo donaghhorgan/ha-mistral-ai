@@ -15,10 +15,10 @@
         "stt",
         "tts"
     ],
-    "documentation": "https://github.com/donaghhorgan/ha-mistral-conversation",
+    "documentation": "https://github.com/donaghhorgan/ha-mistral-ai",
     "integration_type": "service",
     "iot_class": "cloud_polling",
-    "issue_tracker": "https://github.com/donaghhorgan/ha-mistral-conversation/issues",
+    "issue_tracker": "https://github.com/donaghhorgan/ha-mistral-ai/issues",
     "requirements": [
         "mistralai>=2.1.0"
     ],
