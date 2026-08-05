@@ -39,6 +39,7 @@ from mistralai.client.errors import SDKError
 from .const import (
     CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
+    CAPABILITY_COMPLETION_CHAT,
     CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
@@ -77,9 +78,13 @@ _LOGGER = logging.getLogger(__name__)
 # anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
 # Home Assistant will not offer it where control is required -- which reads as
 # the integration being broken rather than as a setting being off.
-# Which model capability each subentry type needs. Absent means no filter --
-# a conversation agent or AI task can use any model the key can reach.
+# Which model capability each subentry type needs. Asked of the API rather
+# than written down, so the lists stay right as Mistral ships and retires
+# models -- a key can reach transcription, OCR, embedding and coding models
+# that have no business in a conversation dropdown.
 SUBENTRY_CAPABILITIES = {
+    SUBENTRY_TYPE_AI_TASK_DATA: CAPABILITY_COMPLETION_CHAT,
+    SUBENTRY_TYPE_CONVERSATION: CAPABILITY_COMPLETION_CHAT,
     SUBENTRY_TYPE_STT: CAPABILITY_AUDIO_TRANSCRIPTION,
     SUBENTRY_TYPE_TTS: CAPABILITY_AUDIO_SPEECH,
 }
@@ -350,14 +355,13 @@ def _subentry_schema(
         )
         schema[vol.Required(CONF_NAME, default=default_name)] = TextSelector()
 
-    # DEFAULT_MODEL is a chat model, so it is not a sensible starting point for
-    # a platform that filters on a capability. Fall back to the first model the
-    # API offered for this capability instead of naming one here, which would go
-    # stale the next time Mistral retires it.
-    if subentry_type in SUBENTRY_CAPABILITIES:
+    # Prefer the configured model, then DEFAULT_MODEL where the API still
+    # offers it, then whatever the API did offer. Naming a model per platform
+    # here would go stale the next time Mistral retires one; this only names
+    # the one general-purpose default and treats it as a preference rather
+    # than a guarantee.
+    if (fallback_model := DEFAULT_MODEL) not in models:
         fallback_model = models[0] if models else DEFAULT_MODEL
-    else:
-        fallback_model = DEFAULT_MODEL
     default_model = options.get(CONF_MODEL, fallback_model)
 
     # Keep the configured model selectable even if the API stops listing it,

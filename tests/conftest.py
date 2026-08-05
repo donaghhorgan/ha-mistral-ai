@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 STT_MODEL = "voxtral-mini-latest"
 TTS_MODEL = "voxtral-speech-latest"
 VOICE_ID = "voice-abc"
+NON_CHAT_MODEL = "mistral-ocr-latest"
 
 
 @pytest.fixture(autouse=True)
@@ -63,7 +64,12 @@ def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
     card = MagicMock()
     card.id = model_id
     card.capabilities = SimpleNamespace(
-        **{"audio_transcription": False, "audio_speech": False, **capabilities}
+        **{
+            "audio_transcription": False,
+            "audio_speech": False,
+            "completion_chat": False,
+            **capabilities,
+        }
     )
     return card
 
@@ -73,10 +79,13 @@ def mock_models_response() -> MagicMock:
     """Return a models.list_async() response covering each capability."""
     response = MagicMock()
     response.data = [
-        _model_card(DEFAULT_MODEL),
-        _model_card("mistral-large-latest"),
+        _model_card(DEFAULT_MODEL, completion_chat=True),
+        _model_card("mistral-large-latest", completion_chat=True),
         _model_card(STT_MODEL, audio_transcription=True),
         _model_card(TTS_MODEL, audio_speech=True),
+        # A key can reach plenty of models that have no business in any of
+        # these dropdowns -- OCR, embeddings, coding models.
+        _model_card(NON_CHAT_MODEL),
     ]
     return response
 

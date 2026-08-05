@@ -36,6 +36,7 @@ DEFAULT_TTS_NAME = "Mistral AI TTS"
 # filters the model list by these rather than hard-coding model names, which
 # go stale every time Mistral ships or retires one.
 CAPABILITY_AUDIO_TRANSCRIPTION = "audio_transcription"
+CAPABILITY_COMPLETION_CHAT = "completion_chat"
 CAPABILITY_AUDIO_SPEECH = "audio_speech"
 
 # Asked of the speech endpoint, and handed to Home Assistant as the file
