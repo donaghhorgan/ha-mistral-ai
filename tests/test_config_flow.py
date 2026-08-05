@@ -15,6 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.const import (
     CONF_API_KEY,
+    CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
     CONF_TEMPERATURE,
@@ -22,6 +23,7 @@ from custom_components.mistral_ai.const import (
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
+    SUBENTRY_TYPE_STT,
 )
 
 from .helpers import make_sdk_error
@@ -330,3 +332,26 @@ async def test_stale_llm_api_is_dropped_from_the_form(
     )
 
     assert _suggested(result, CONF_LLM_HASS_API) == [llm.LLM_API_ASSIST]
+
+
+async def test_stt_subentry_offers_only_transcription_models(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Speech-to-text lists only models that can actually transcribe.
+
+    Filtering on the capability the API reports, rather than on model names,
+    is what keeps this correct when Mistral ships or retires a model.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_STT),
+        context={"source": SOURCE_USER},
+    )
+
+    options = result["data_schema"].schema[CONF_MODEL].config["options"]
+    assert options == ["voxtral-mini-latest"]
+    assert DEFAULT_MODEL not in options
+
+    # A response length is meaningless for a transcription.
+    assert not any(
+        marker.schema == CONF_MAX_TOKENS for marker in result["data_schema"].schema
+    )

@@ -11,7 +11,8 @@
     "config_flow": true,
     "dependencies": [
         "ai_task",
-        "conversation"
+        "conversation",
+        "stt"
     ],
     "documentation": "https://github.com/donaghhorgan/ha-mistral-conversation",
     "integration_type": "service",

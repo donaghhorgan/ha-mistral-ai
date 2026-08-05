@@ -19,7 +19,11 @@ from .const import CONF_API_KEY, DOMAIN, TIMEOUT
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS: tuple[Platform, ...] = (Platform.AI_TASK, Platform.CONVERSATION)
+PLATFORMS: tuple[Platform, ...] = (
+    Platform.AI_TASK,
+    Platform.CONVERSATION,
+    Platform.STT,
+)
 
 type MistralConfigEntry = ConfigEntry[Mistral]
 
