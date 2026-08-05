@@ -131,3 +131,28 @@ deletion. The required checks are the blocking jobs in
 `continue-on-error` because it tracks a moving upstream target, so requiring
 it would let an unrelated Home Assistant release block every merge in the
 repository.
+
+The ruleset is also strict: a branch must be up to date with `main` before it
+can merge. With short-lived branches that is rarely more than a fast-forward.
+
+#### Merging
+
+Pull requests are merged with a merge commit. Not squashed, not rebased.
+
+- Commit messages here carry the reasoning, not just a label. Squashing
+  concatenates or discards them, and moves the record into the pull request
+  body, which is not in the repository.
+- Pull requests sometimes carry commits from more than one author. Squashing
+  collapses them to one, demoting the rest to a trailer at best.
+- Commit hashes stay stable, and the documentation cites one:
+  [`brands/README.md`](./brands/README.md) points at the artwork it was
+  generated from by hash. A squash would rewrite it and leave the citation
+  dangling in every clone.
+
+The cost, accepted knowingly: `main`'s history interleaves rather than reading
+as one commit per change, and `git bisect` can land on a commit that never
+passed CI on its own. Keeping pull requests small is what holds that in check,
+which the branching rules above already ask for.
+
+This means "Require linear history" must stay off in the ruleset — it forbids
+merge commits outright.
