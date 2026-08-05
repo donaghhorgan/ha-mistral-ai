@@ -45,6 +45,7 @@ from .const import (
     CONF_PROMPT,
     CONF_TEMPERATURE,
     CONF_VOICE,
+    CONF_WEB_SEARCH,
     DEFAULT_AI_TASK_NAME,
     DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
@@ -58,6 +59,7 @@ from .const import (
     SUBENTRY_TYPE_STT,
     SUBENTRY_TYPE_TTS,
     TIMEOUT,
+    WEB_SEARCH_TOOLS,
 )
 
 if TYPE_CHECKING:
@@ -427,6 +429,18 @@ def _subentry_schema(
                     CONF_LLM_HASS_API,
                     description={"suggested_value": options.get(CONF_LLM_HASS_API)},
                 ): SelectSelector(SelectSelectorConfig(options=apis, multiple=True)),
+                # Left unset means off. Naming the tier rather than offering a
+                # plain toggle because the two bill differently, and picking
+                # the expensive one should be a decision rather than a default.
+                vol.Optional(
+                    CONF_WEB_SEARCH,
+                    description={"suggested_value": options.get(CONF_WEB_SEARCH)},
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(WEB_SEARCH_TOOLS),
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         )
 

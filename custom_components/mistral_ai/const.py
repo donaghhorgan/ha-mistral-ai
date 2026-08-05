@@ -9,6 +9,7 @@ CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
 CONF_TEMPERATURE = "temperature"
 CONF_VOICE = "voice"
+CONF_WEB_SEARCH = "web_search"
 
 # Default values
 DEFAULT_MAX_TOKENS = 1000
@@ -80,6 +81,14 @@ SPEECH_LANGUAGES = (
     "vi",
     "zh",
 )
+
+# The built-in connectors the API can run for us. Sent as a tool alongside the
+# Home Assistant ones, but executed by Mistral rather than by us -- there is no
+# local handler for these names, which is why the stream filters them out.
+#
+# The premium tier bills differently, so which one is used is a choice the user
+# makes rather than something decided here.
+WEB_SEARCH_TOOLS = ("web_search", "web_search_premium")
 
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10
