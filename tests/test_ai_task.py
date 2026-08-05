@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import base64
+from typing import TYPE_CHECKING, Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
-from homeassistant.components import ai_task
+from homeassistant.components import ai_task, conversation
+from homeassistant.components.conversation.chat_log import ChatLog
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -14,6 +17,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.ai_task import SUPPORTED_FEATURES
 
 from .helpers import make_chunk, make_sdk_error, stream_of
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 ENTITY_ID = "ai_task.mistral_ai_task"
 
@@ -106,6 +112,14 @@ async def test_generate_data_api_error(
         )
 
 
+def _text_chunk(text: str) -> MagicMock:
+    """Return a content chunk carrying text rather than a file."""
+    chunk = MagicMock()
+    chunk.file_id = None
+    chunk.text = text
+    return chunk
+
+
 def _file_chunk(file_id: str = "file-123") -> MagicMock:
     """Return a content chunk referencing a generated file."""
     chunk = MagicMock()
@@ -143,10 +157,8 @@ requires_image_support = pytest.mark.skipif(
 @pytest.fixture
 def mock_image_client(mock_client: MagicMock) -> MagicMock:
     """Wire the client for a successful image generation."""
-    text = MagicMock()
-    text.file_id = None
     mock_client.chat.complete_async = AsyncMock(
-        return_value=_completion([text, _file_chunk()])
+        return_value=_completion([_text_chunk("Here is your bicycle."), _file_chunk()])
     )
     mock_client.files.download_async = AsyncMock(return_value=_download())
     return mock_client
@@ -168,7 +180,10 @@ async def test_generate_image(
 
     request = mock_image_client.chat.complete_async.await_args.kwargs
     assert request["tools"] == [{"type": "image_generation"}]
-    assert request["messages"] == [{"role": "user", "content": "a red bicycle"}]
+    # Built from the chat log, so Home Assistant's own system prompt leads and
+    # the instructions arrive as the user turn.
+    assert request["messages"][-1] == {"role": "user", "content": "a red bicycle"}
+    assert request["messages"][0]["role"] == "system"
 
     # The file is fetched by id: generation returns a reference, not bytes.
     assert mock_image_client.files.download_async.await_args.kwargs["file_id"] == (
@@ -235,3 +250,76 @@ async def test_generate_image_api_error(
         await ai_task.async_generate_image(
             hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
         )
+
+
+@requires_image_support
+async def test_generate_image_sends_attachments(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_image_client: MagicMock,
+    tmp_path: Path,
+) -> None:
+    """A reference image reaches the API.
+
+    The entity advertises SUPPORT_ATTACHMENTS, and Home Assistant puts the
+    attachments on the user turn of the chat log for us. Building the request
+    from task.instructions alone dropped them on the floor while the entity
+    went on claiming to support them.
+    """
+    image = tmp_path / "reference.png"
+    image.write_bytes(b"\x89PNG reference")
+
+    with patch(
+        "homeassistant.components.ai_task.task._resolve_attachments",
+        return_value=[
+            conversation.Attachment(
+                media_content_id="media-source://media_source/local/reference.png",
+                mime_type="image/png",
+                path=image,
+            )
+        ],
+    ):
+        await ai_task.async_generate_image(
+            hass,
+            task_name="poster",
+            entity_id=ENTITY_ID,
+            instructions="in this style",
+            attachments=[
+                {"media_content_id": "media-source://media_source/local/reference.png"}
+            ],
+        )
+
+    user_message = mock_image_client.chat.complete_async.await_args.kwargs["messages"][
+        -1
+    ]
+    encoded = base64.b64encode(b"\x89PNG reference").decode()
+    assert user_message["content"] == [
+        {"type": "text", "text": "in this style"},
+        {"type": "image_url", "image_url": f"data:image/png;base64,{encoded}"},
+    ]
+
+
+@requires_image_support
+async def test_generate_image_records_the_assistant_turn(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """What the model said is written back to the chat log.
+
+    Home Assistant adds the user side before calling us. Leaving the assistant
+    side out traced an image task as a question with no answer, and showed
+    nothing in the conversation debug view.
+    """
+    logs: list[Any] = []
+
+    original = ChatLog.async_add_assistant_content_without_tools
+
+    def _record(self: ChatLog, content: Any) -> None:
+        logs.append(content)
+        original(self, content)
+
+    with patch.object(ChatLog, "async_add_assistant_content_without_tools", _record):
+        await ai_task.async_generate_image(
+            hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+        )
+
+    assert [content.content for content in logs] == ["Here is your bicycle."]

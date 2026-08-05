@@ -301,6 +301,16 @@ class MistralBaseEntity(Entity):
 class MistralBaseLLMEntity(MistralBaseEntity):
     """Mistral AI base LLM entity."""
 
+    async def _async_chat_log_messages(
+        self, chat_log: conversation.ChatLog
+    ) -> list[dict[str, Any]]:
+        """Convert a chat log into Mistral messages.
+
+        Exists so the image path can build its request from the log too,
+        without reaching for a private module function.
+        """
+        return await _async_convert_messages(self.hass, chat_log.content)
+
     async def _async_handle_chat_log(
         self,
         chat_log: conversation.ChatLog,
