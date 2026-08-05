@@ -21,6 +21,7 @@ from custom_components.mistral_ai.const import (
     CONF_TEMPERATURE,
     CONF_VOICE,
     DEFAULT_MODEL,
+    DEFAULT_STT_TEMPERATURE,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
@@ -422,3 +423,45 @@ async def test_tts_subentry_without_voices_omits_the_field(
     assert not any(
         marker.schema == CONF_VOICE for marker in result["data_schema"].schema
     )
+
+
+def _default(result: dict, key: str) -> object:
+    """Return the default a form offers for a key, or None if absent."""
+    for marker in result["data_schema"].schema:
+        if marker.schema == key:
+            return marker.default()
+    return None
+
+
+async def test_tts_subentry_does_not_offer_temperature(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The speech endpoint takes no temperature, so the form must not offer one.
+
+    It did once, and the value was stored and never sent anywhere -- a setting
+    that looked like it worked and could not.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_TTS),
+        context={"source": SOURCE_USER},
+    )
+
+    assert not any(
+        marker.schema == CONF_TEMPERATURE for marker in result["data_schema"].schema
+    )
+
+
+async def test_stt_subentry_defaults_temperature_low(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Transcription still offers temperature, defaulting to faithful.
+
+    The conversational 0.7 is a licence to guess at unclear audio, which is how
+    a voice assistant ends up acting on something nobody said.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_STT),
+        context={"source": SOURCE_USER},
+    )
+
+    assert _default(result, CONF_TEMPERATURE) == DEFAULT_STT_TEMPERATURE

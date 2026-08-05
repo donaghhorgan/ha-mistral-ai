@@ -12,6 +12,12 @@ import pytest
 from homeassistant.components import stt
 from homeassistant.core import HomeAssistant
 
+from custom_components.mistral_ai.const import (
+    CONF_TEMPERATURE,
+    DEFAULT_STT_TEMPERATURE,
+    SUBENTRY_TYPE_STT,
+)
+
 from .helpers import make_sdk_error
 
 if TYPE_CHECKING:
@@ -168,3 +174,38 @@ async def test_declared_audio_contract(
     # Bare language codes, since that is what is matched against a pipeline.
     assert "en" in entity.supported_languages
     assert entity.supported_languages == sorted(entity.supported_languages)
+
+
+async def test_temperature_defaults_to_faithful(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An unconfigured subentry transcribes at the low default.
+
+    The setting used to be offered by the form and then dropped on the floor.
+    This asserts it reaches the API, and at a value that does not invite the
+    model to guess.
+    """
+    await _entity(hass).async_process_audio_stream(_metadata(), _stream(PCM))
+
+    kwargs = mock_client.audio.transcriptions.complete_async.await_args.kwargs
+    assert kwargs["temperature"] == DEFAULT_STT_TEMPERATURE
+
+
+async def test_configured_temperature_is_sent(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A temperature set on the subentry is the one used."""
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_STT
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, subentry, data={**subentry.data, CONF_TEMPERATURE: 0.4}
+    )
+    await hass.async_block_till_done()
+
+    await _entity(hass).async_process_audio_stream(_metadata(), _stream(PCM))
+
+    kwargs = mock_client.audio.transcriptions.complete_async.await_args.kwargs
+    assert kwargs["temperature"] == 0.4
