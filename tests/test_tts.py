@@ -148,6 +148,48 @@ async def test_declared_contract(
     assert entity.default_options == {tts.ATTR_VOICE: VOICE_ID}
 
 
+async def test_supported_voices_are_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """The account's voices reach Home Assistant's voice picker.
+
+    Without this the picker is empty and the configured voice is the only one
+    a user can reach, even though a per-request voice is supported.
+    """
+    assert _entity(hass).async_get_supported_voices("en") == [
+        tts.Voice("voice-abc", "Amelie (fr, en)")
+    ]
+
+
+async def test_voices_are_not_filtered_by_language(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """A voice is offered for a language it does not list.
+
+    Reading a language it was not built for is a worse result, not an error,
+    and hiding it would leave nobody able to pick a voice they can hear working.
+    """
+    assert _entity(hass).async_get_supported_voices("ja") == [
+        tts.Voice("voice-abc", "Amelie (fr, en)")
+    ]
+
+
+async def test_no_voices_reports_none(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A failed listing reports no voice list rather than an empty one.
+
+    None is what the base class returns to mean "no list". An empty list reads
+    as a fault, when the endpoint is happy to choose a voice itself.
+    """
+    mock_client.audio.voices.list_async.side_effect = make_sdk_error(500)
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _entity(hass).async_get_supported_voices("en") is None
+
+
 async def test_entity_has_a_resolvable_name(
     hass: HomeAssistant, init_integration: MockConfigEntry
 ) -> None:

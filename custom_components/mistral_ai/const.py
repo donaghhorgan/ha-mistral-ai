@@ -11,9 +11,20 @@ CONF_TEMPERATURE = "temperature"
 CONF_VOICE = "voice"
 
 # Default values
-DEFAULT_MAX_TOKENS = 1000
+#
+# DEFAULT_MAX_TOKENS matches openai_conversation and
+# google_generative_ai_conversation, which both use 3000. It is a ceiling
+# rather than a target, and the tool calling loop spends it a request at a
+# time, so a lower figure buys nothing and truncates mid-sentence.
+DEFAULT_MAX_TOKENS = 3000
 DEFAULT_MODEL = "mistral-small-latest"
 DEFAULT_TEMPERATURE = 0.7
+
+# Transcription is asked to report what was said, not to be interesting about
+# it, so it gets its own default rather than the conversational 0.7. The
+# parameter is a licence to guess at unclear audio, and guessing is the failure
+# mode that makes a voice assistant act on something nobody said.
+DEFAULT_STT_TEMPERATURE = 0.0
 
 # Subentry types, and the default title given to each new subentry
 SUBENTRY_TYPE_AI_TASK_DATA = "ai_task_data"
