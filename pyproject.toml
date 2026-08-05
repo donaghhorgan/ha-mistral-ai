@@ -1,6 +1,12 @@
 [dependency-groups]
 dev = [
   "bandit>=1.8.6",
+  # homeassistant.components.tts imports mutagen, and reaches ffmpeg, at module
+  # level -- so the TTS platform cannot even be imported without both. The
+  # ha-minimum group already carries them; ha-current does not, because that
+  # release of pytest-homeassistant-custom-component does not pull them in.
+  "ha-ffmpeg>=3.2.2",
+  "mutagen>=1.47.0",
   # Only used by scripts/generate_brand_assets.py. Home Assistant pins pillow
   # exactly and the pin differs per release, so this floor has to sit at or
   # below the oldest one we test against -- 2025.8.0 wants 11.3.0. Raising it

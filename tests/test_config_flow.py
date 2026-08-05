@@ -19,11 +19,13 @@ from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_PROMPT,
     CONF_TEMPERATURE,
+    CONF_VOICE,
     DEFAULT_MODEL,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
+    SUBENTRY_TYPE_TTS,
 )
 
 from .helpers import make_sdk_error
@@ -354,4 +356,42 @@ async def test_stt_subentry_offers_only_transcription_models(
     # A response length is meaningless for a transcription.
     assert not any(
         marker.schema == CONF_MAX_TOKENS for marker in result["data_schema"].schema
+    )
+
+
+async def test_tts_subentry_offers_speech_models_and_voices(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Text-to-speech lists speech-capable models and the account's voices."""
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_TTS),
+        context={"source": SOURCE_USER},
+    )
+
+    models = result["data_schema"].schema[CONF_MODEL].config["options"]
+    assert models == ["voxtral-speech-latest"]
+
+    voices = result["data_schema"].schema[CONF_VOICE].config["options"]
+    # Languages are in the label, since a bare name distinguishes nothing.
+    assert voices == [{"label": "Amelie (fr, en)", "value": "voice-abc"}]
+
+
+async def test_tts_subentry_without_voices_omits_the_field(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """No voices means no dropdown, rather than an empty one.
+
+    An empty dropdown reads as a fault, when in fact the endpoint is happy to
+    choose a voice itself.
+    """
+    mock_client.audio.voices.list_async.side_effect = make_sdk_error(500)
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_TTS),
+        context={"source": SOURCE_USER},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert not any(
+        marker.schema == CONF_VOICE for marker in result["data_schema"].schema
     )

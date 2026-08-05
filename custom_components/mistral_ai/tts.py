@@ -1,0 +1,123 @@
+"""Text-to-speech platform for the Mistral AI integration."""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import logging
+from typing import TYPE_CHECKING, Any
+
+import httpx
+from homeassistant.components import tts
+from homeassistant.config_entries import ConfigSubentry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from mistralai.client.errors import SDKError
+
+from .const import (
+    CONF_MODEL,
+    CONF_VOICE,
+    SPEECH_LANGUAGES,
+    SUBENTRY_TYPE_TTS,
+    TIMEOUT,
+    TTS_AUDIO_FORMAT,
+)
+from .entity import MistralBaseEntity
+
+if TYPE_CHECKING:
+    from . import MistralConfigEntry
+
+_LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: MistralConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up text-to-speech entities."""
+    for subentry in config_entry.subentries.values():
+        if subentry.subentry_type != SUBENTRY_TYPE_TTS:
+            continue
+
+        async_add_entities(
+            [MistralTTSEntity(config_entry, subentry)],
+            config_subentry_id=subentry.subentry_id,
+        )
+
+
+class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
+    """Mistral AI text-to-speech entity."""
+
+    def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
+        """Initialize the entity."""
+        super().__init__(entry, subentry)
+
+    @property
+    def supported_languages(self) -> list[str]:
+        """Return the languages this entity accepts."""
+        return sorted(SPEECH_LANGUAGES)
+
+    @property
+    def default_language(self) -> str:
+        """Return the default language."""
+        return "en"
+
+    @property
+    def supported_options(self) -> list[str]:
+        """Return the options callers may pass per request."""
+        return [tts.ATTR_VOICE]
+
+    @property
+    def default_options(self) -> dict[str, Any]:
+        """Return the options used when a caller passes none.
+
+        The configured voice is the default rather than a hard-coded one:
+        which voices exist depends on the account, since custom voices are
+        created against it.
+        """
+        voice = self.subentry.data.get(CONF_VOICE)
+        return {tts.ATTR_VOICE: voice} if voice else {}
+
+    async def async_get_tts_audio(
+        self, message: str, language: str, options: dict[str, Any]
+    ) -> tts.TtsAudioType:
+        """Synthesise speech for a message."""
+        client = self.entry.runtime_data
+
+        # The language is not sent. The speech endpoint takes a voice, and the
+        # voice carries its language; passing a conflicting code would be a way
+        # to get a French voice reading English badly.
+        request: dict[str, Any] = {
+            "input": message,
+            "model": self.subentry.data[CONF_MODEL],
+            "response_format": TTS_AUDIO_FORMAT,
+            "timeout_ms": TIMEOUT * 1000,
+        }
+        if voice := options.get(tts.ATTR_VOICE) or self.subentry.data.get(CONF_VOICE):
+            request["voice_id"] = voice
+
+        try:
+            response = await client.audio.speech.complete_async(**request)
+        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+            _LOGGER.error("Error generating speech with Mistral AI: %s", err)
+            return None, None
+        except Exception:
+            _LOGGER.exception("Unexpected error generating speech with Mistral AI")
+            return None, None
+
+        # audio_data is documented as base64, and is typed as str. Decoding
+        # strictly rather than trusting it: handing Home Assistant a string, or
+        # the wrong bytes, produces silence at playback time rather than an
+        # error here, which is a miserable thing to debug.
+        try:
+            audio = base64.b64decode(response.audio_data, validate=True)
+        except (AttributeError, TypeError, binascii.Error):
+            _LOGGER.error("Mistral AI returned audio that is not valid base64")
+            return None, None
+
+        if not audio:
+            _LOGGER.error("Mistral AI returned no audio")
+            return None, None
+
+        return TTS_AUDIO_FORMAT, audio

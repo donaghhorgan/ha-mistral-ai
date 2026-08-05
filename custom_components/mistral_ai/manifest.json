@@ -12,7 +12,8 @@
     "dependencies": [
         "ai_task",
         "conversation",
-        "stt"
+        "stt",
+        "tts"
     ],
     "documentation": "https://github.com/donaghhorgan/ha-mistral-conversation",
     "integration_type": "service",

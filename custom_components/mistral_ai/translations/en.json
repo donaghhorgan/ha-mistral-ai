@@ -106,6 +106,33 @@
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
             }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Add text-to-speech",
+                "reconfigure": "Reconfigure text-to-speech"
+            },
+            "entry_type": "Text-to-speech",
+            "step": {
+                "set_options": {
+                    "description": "Configure Mistral AI text-to-speech.",
+                    "data": {
+                        "name": "Name",
+                        "model": "Model",
+                        "temperature": "Temperature",
+                        "voice": "Voice"
+                    },
+                    "data_description": {
+                        "model": "Only models that can generate speech are listed.",
+                        "voice": "The voice used when a caller does not ask for a specific one."
+                    }
+                }
+            },
+            "abort": {
+                "entry_not_loaded": "Cannot add text-to-speech while the integration is not loaded.",
+                "cannot_connect": "Failed to connect to the Mistral AI API.",
+                "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
+            }
         }
     }
 }

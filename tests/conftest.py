@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,11 +16,13 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.const import (
     CONF_API_KEY,
     CONF_MODEL,
+    CONF_VOICE,
     DEFAULT_MODEL,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
+    SUBENTRY_TYPE_TTS,
 )
 
 from .helpers import make_chunk, make_stream
@@ -28,6 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 STT_MODEL = "voxtral-mini-latest"
+TTS_MODEL = "voxtral-speech-latest"
+VOICE_ID = "voice-abc"
 
 
 @pytest.fixture(autouse=True)
@@ -71,6 +76,7 @@ def mock_models_response() -> MagicMock:
         _model_card(DEFAULT_MODEL),
         _model_card("mistral-large-latest"),
         _model_card(STT_MODEL, audio_transcription=True),
+        _model_card(TTS_MODEL, audio_speech=True),
     ]
     return response
 
@@ -86,6 +92,18 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     transcription = MagicMock()
     transcription.text = "turn on the kitchen light"
     client.audio.transcriptions.complete_async = AsyncMock(return_value=transcription)
+
+    speech = MagicMock()
+    speech.audio_data = base64.b64encode(b"ID3 fake mp3 bytes").decode()
+    client.audio.speech.complete_async = AsyncMock(return_value=speech)
+
+    voice = MagicMock()
+    voice.id = VOICE_ID
+    voice.name = "Amelie"
+    voice.languages = ["fr", "en"]
+    voices = MagicMock()
+    voices.items = [voice]
+    client.audio.voices.list_async = AsyncMock(return_value=voices)
 
     with (
         patch("custom_components.mistral_ai.Mistral", return_value=client),
@@ -121,6 +139,12 @@ def mock_config_entry(hass: HomeAssistant) -> MockConfigEntry:
                 subentry_type=SUBENTRY_TYPE_STT,
                 data={CONF_MODEL: STT_MODEL},
                 title="Mistral AI speech-to-text",
+                unique_id=None,
+            ),
+            ConfigSubentryData(
+                subentry_type=SUBENTRY_TYPE_TTS,
+                data={CONF_MODEL: TTS_MODEL, CONF_VOICE: VOICE_ID},
+                title="Mistral AI text-to-speech",
                 unique_id=None,
             ),
         ],

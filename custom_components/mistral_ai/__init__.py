@@ -23,6 +23,7 @@ PLATFORMS: tuple[Platform, ...] = (
     Platform.AI_TASK,
     Platform.CONVERSATION,
     Platform.STT,
+    Platform.TTS,
 )
 
 type MistralConfigEntry = ConfigEntry[Mistral]
