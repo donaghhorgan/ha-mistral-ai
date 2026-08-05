@@ -393,3 +393,33 @@ async def test_transform_stream_thinking_content() -> None:
         {"thinking_content": "hmm"},
         {"content": "answer"},
     ]
+
+
+async def test_server_side_tool_calls_are_not_run_locally() -> None:
+    """A call naming a built-in connector is dropped, not handed to HA.
+
+    Mistral executes web search itself. If such a call ever appears in the
+    stream, forwarding it would have Home Assistant look for a tool it does
+    not have and fail the whole turn.
+    """
+    stream = make_stream(
+        [
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(
+                        index=0, call_id="1", name="web_search", arguments="{}"
+                    ),
+                    make_tool_call(
+                        index=1, call_id="2", name="HassTurnOn", arguments="{}"
+                    ),
+                ]
+            )
+        ]
+    )
+
+    deltas = [
+        delta async for delta in _transform_stream(stream, local_tools={"HassTurnOn"})
+    ]
+
+    calls = [c for delta in deltas for c in delta.get("tool_calls", [])]
+    assert [call.tool_name for call in calls] == ["HassTurnOn"]
