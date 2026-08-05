@@ -16,6 +16,7 @@ from homeassistant.util.json import json_loads
 from mistralai.client.errors import SDKError
 
 from .const import (
+    CAPABILITY_FUNCTION_CALLING,
     CONF_MODEL,
     DEFAULT_MODEL,
     IMAGE_GENERATION_TOOL,
@@ -38,12 +39,14 @@ _LOGGER = logging.getLogger(__name__)
 # does not. The annotations on _async_generate_image are safe regardless:
 # `from __future__ import annotations` keeps them unevaluated, and the method
 # is never called by a Home Assistant that does not know the feature.
+GENERATE_IMAGE_FEATURE = getattr(ai_task.AITaskEntityFeature, "GENERATE_IMAGE", None)
+
 SUPPORTED_FEATURES = (
     ai_task.AITaskEntityFeature.GENERATE_DATA
     | ai_task.AITaskEntityFeature.SUPPORT_ATTACHMENTS
 )
-if hasattr(ai_task.AITaskEntityFeature, "GENERATE_IMAGE"):
-    SUPPORTED_FEATURES |= ai_task.AITaskEntityFeature.GENERATE_IMAGE
+if GENERATE_IMAGE_FEATURE is not None:
+    SUPPORTED_FEATURES |= GENERATE_IMAGE_FEATURE
 
 
 async def async_setup_entry(
@@ -70,6 +73,45 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         super().__init__(entry, subentry)
+
+    async def async_added_to_hass(self) -> None:
+        """Withdraw image generation if the model cannot run the connector.
+
+        Image generation is not a separate endpoint here, it is a built-in
+        connector passed as a tool, so a model that cannot call tools cannot
+        produce an image no matter what is asked of it. Advertising the
+        feature anyway meant the failure landed at automation run time as
+        "Mistral AI returned no image".
+        """
+        await super().async_added_to_hass()
+
+        if GENERATE_IMAGE_FEATURE is None:
+            return
+
+        if await self._async_model_calls_tools() is False:
+            self._attr_supported_features = SUPPORTED_FEATURES & ~GENERATE_IMAGE_FEATURE
+
+    async def _async_model_calls_tools(self) -> bool | None:
+        """Return whether the configured model can call tools.
+
+        None means the question could not be answered -- the lookup failed, or
+        the API reported no capabilities at all. Callers treat that as "leave
+        the feature alone": withdrawing a feature that works, because a
+        listing call did not, is worse than the error it would prevent.
+        """
+        model = self.subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
+        try:
+            card = await self.entry.runtime_data.models.retrieve_async(
+                model_id=model, timeout_ms=TIMEOUT * 1000
+            )
+        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+            _LOGGER.debug("Could not read the capabilities of %s: %s", model, err)
+            return None
+
+        if (capabilities := getattr(card, "capabilities", None)) is None:
+            return None
+
+        return bool(getattr(capabilities, CAPABILITY_FUNCTION_CALLING, False))
 
     async def _async_generate_image(
         self,
@@ -120,7 +162,13 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
 
         chunk = _find_generated_file(content)
         if chunk is None:
-            raise HomeAssistantError("Mistral AI returned no image")
+            # Naming the model because this is the shape the remaining failures
+            # take: function_calling is a precondition for the connector, not a
+            # guarantee, so a model can pass the check and still not generate.
+            raise HomeAssistantError(
+                f"Mistral AI returned no image. {model} may not support image "
+                "generation"
+            )
 
         try:
             downloaded = await client.files.download_async(

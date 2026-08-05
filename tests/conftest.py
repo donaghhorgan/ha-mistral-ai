@@ -25,7 +25,7 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
-from .helpers import make_chunk, make_stream
+from .helpers import make_chunk, make_sdk_error, make_stream
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -68,6 +68,7 @@ def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
             "audio_transcription": False,
             "audio_speech": False,
             "completion_chat": False,
+            "function_calling": False,
             **capabilities,
         }
     )
@@ -79,8 +80,10 @@ def mock_models_response() -> MagicMock:
     """Return a models.list_async() response covering each capability."""
     response = MagicMock()
     response.data = [
-        _model_card(DEFAULT_MODEL, completion_chat=True),
-        _model_card("mistral-large-latest", completion_chat=True),
+        _model_card(DEFAULT_MODEL, completion_chat=True, function_calling=True),
+        _model_card(
+            "mistral-large-latest", completion_chat=True, function_calling=True
+        ),
         _model_card(STT_MODEL, audio_transcription=True),
         _model_card(TTS_MODEL, audio_speech=True),
         # A key can reach plenty of models that have no business in any of
@@ -95,6 +98,17 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     """Patch the Mistral client everywhere it is constructed."""
     client = MagicMock()
     client.models.list_async = AsyncMock(return_value=mock_models_response)
+
+    # retrieve_async answers for one model. The AI task entity uses it to ask
+    # whether the configured model can call tools, which is a precondition for
+    # image generation.
+    async def _retrieve(model_id: str, **_kwargs: object) -> MagicMock:
+        for card in mock_models_response.data:
+            if card.id == model_id:
+                return card
+        raise make_sdk_error(404)
+
+    client.models.retrieve_async = AsyncMock(side_effect=_retrieve)
     client.chat.stream_async = AsyncMock(
         return_value=make_stream([make_chunk(content="Hello there")])
     )
