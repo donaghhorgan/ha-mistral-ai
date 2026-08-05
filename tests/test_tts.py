@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-ENTITY_ID = "tts.mistral_ai_text_to_speech"
+ENTITY_ID = "tts.mistral_ai_tts"
 AUDIO = b"ID3 fake mp3 bytes"
 
 

@@ -22,10 +22,15 @@ SUBENTRY_TYPE_CONVERSATION = "conversation"
 SUBENTRY_TYPE_STT = "stt"
 SUBENTRY_TYPE_TTS = "tts"
 
-DEFAULT_AI_TASK_NAME = "Mistral AI task"
-DEFAULT_CONVERSATION_NAME = "Mistral AI conversation"
-DEFAULT_STT_NAME = "Mistral AI speech-to-text"
-DEFAULT_TTS_NAME = "Mistral AI text-to-speech"
+# These become the subentry title, which becomes the device name, which --
+# because the entities set _attr_name to None -- becomes the entity name and
+# the entity id. Matching how Home Assistant's own LLM integrations name
+# theirs: "<Brand> Conversation", "<Brand> AI Task", and STT/TTS abbreviated
+# as google_generative_ai_conversation does.
+DEFAULT_AI_TASK_NAME = "Mistral AI Task"
+DEFAULT_CONVERSATION_NAME = "Mistral AI Conversation"
+DEFAULT_STT_NAME = "Mistral AI STT"
+DEFAULT_TTS_NAME = "Mistral AI TTS"
 
 # Model capability flags, as reported by the models endpoint. The config flow
 # filters the model list by these rather than hard-coding model names, which
