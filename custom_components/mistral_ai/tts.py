@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from homeassistant.components import tts
 from homeassistant.config_entries import ConfigSubentry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from mistralai.client.errors import SDKError
 
@@ -23,6 +23,7 @@ from .const import (
     TTS_AUDIO_FORMAT,
 )
 from .entity import MistralBaseEntity
+from .helpers import async_list_voices
 
 if TYPE_CHECKING:
     from . import MistralConfigEntry
@@ -52,6 +53,36 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         super().__init__(entry, subentry)
+        self._voices: list[tts.Voice] = []
+
+    async def async_added_to_hass(self) -> None:
+        """Fetch the account's voices once the entity is running.
+
+        `async_get_supported_voices` is a synchronous callback, so the list has
+        to be in hand before Home Assistant asks for it. Fetching it here means
+        one call per entity per reload, rather than one per request.
+
+        This is why the list cannot be hard-coded the way
+        google_generative_ai_conversation hard-codes its own: custom voices are
+        created against an account, so what exists depends on the API key.
+        """
+        await super().async_added_to_hass()
+        self._voices = await async_list_voices(self.entry.runtime_data)
+
+    @callback
+    def async_get_supported_voices(self, language: str) -> list[tts.Voice] | None:
+        """Return the voices this entity can offer.
+
+        Deliberately not filtered by `language`. Voices report the languages
+        they were built for, but a voice reading a language it does not list is
+        a worse result rather than an error, and hiding it would leave the user
+        unable to pick a voice they can hear working.
+
+        None rather than an empty list when there are none, which is what the
+        base class returns to mean "no voice list": an empty dropdown reads as
+        a fault, when in fact the endpoint is happy to choose a voice itself.
+        """
+        return self._voices or None
 
     @property
     def supported_languages(self) -> list[str]:

@@ -8,6 +8,7 @@ import httpx
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.httpx_client import get_async_client
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.client import LAZY_RESOURCES
@@ -97,6 +98,24 @@ async def test_setup_timeout_retries(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_setup_uses_home_assistants_http_client(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The SDK is handed Home Assistant's shared httpx client.
+
+    Nothing closes the client, and an options change reloads the entry, so a
+    client of our own would leave an abandoned connection pool behind every
+    time the user touched a setting.
+    """
+    with patch(
+        "custom_components.mistral_ai.client.Mistral", return_value=mock_client
+    ) as constructor:
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert constructor.call_args.kwargs["async_client"] is get_async_client(hass)
 
 
 async def test_client_is_built_off_the_event_loop(

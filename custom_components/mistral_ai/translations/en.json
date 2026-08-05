@@ -121,7 +121,6 @@
                     "data": {
                         "name": "Name",
                         "model": "Model",
-                        "temperature": "Temperature",
                         "voice": "Voice"
                     },
                     "data_description": {
