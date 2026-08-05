@@ -20,7 +20,7 @@
             "unknown": "An unexpected error occurred. Please try again."
         },
         "abort": {
-            "already_configured": "Mistral AI Conversation is already configured.",
+            "already_configured": "Mistral AI is already configured.",
             "reauth_successful": "Re-authentication was successful."
         }
     },

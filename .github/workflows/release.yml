@@ -24,7 +24,7 @@ jobs:
           import sys
 
           version = sys.argv[1]
-          path = pathlib.Path("custom_components/mistral_conversation/manifest.json")
+          path = pathlib.Path("custom_components/mistral_ai/manifest.json")
           manifest = json.loads(path.read_text())
           manifest["version"] = version
           path.write_text(json.dumps(manifest, indent=4) + "\n")
@@ -32,10 +32,10 @@ jobs:
 
       - name: Build the release archive
         run: |
-          cd custom_components/mistral_conversation
-          zip -r ../../mistral_conversation.zip .
+          cd custom_components/mistral_ai
+          zip -r ../../mistral_ai.zip .
 
       - name: Attach the archive to the release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          files: mistral_conversation.zip
+          files: mistral_ai.zip

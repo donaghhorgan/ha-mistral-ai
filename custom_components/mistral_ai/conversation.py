@@ -1,4 +1,4 @@
-"""Conversation platform for the Mistral AI Conversation integration."""
+"""Conversation platform for the Mistral AI integration."""
 
 from __future__ import annotations
 

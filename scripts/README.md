@@ -74,7 +74,7 @@ Example failure:
 
 ## `check_manifest_consistency.py`
 
-Checks that `custom_components/mistral_conversation/manifest.json` agrees with
+Checks that `custom_components/mistral_ai/manifest.json` agrees with
 `pyproject.toml` — principally the integration version against the project
 version, so a release cannot ship a manifest that disagrees with the package
 metadata.
@@ -106,7 +106,7 @@ uv run pre-commit run python-version-consistency --all-files
 
 Draws the icon set that
 [home-assistant/brands](https://github.com/home-assistant/brands) expects, into
-[`brands/custom_integrations/mistral_conversation/`](../brands). Home Assistant
+[`brands/custom_integrations/mistral_ai/`](../brands). Home Assistant
 and HACS take an integration's icon from that repository rather than from this
 one, so without an entry there the integration shows a blank tile.
 

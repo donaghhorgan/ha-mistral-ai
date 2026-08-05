@@ -15,7 +15,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import intent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mistral_conversation.const import (
+from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
     SUBENTRY_TYPE_CONVERSATION,

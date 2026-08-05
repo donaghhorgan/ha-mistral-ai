@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 
-from custom_components.mistral_conversation.entity import (
+from custom_components.mistral_ai.entity import (
     _async_convert_messages,
     _convert_content,
     _format_tool,

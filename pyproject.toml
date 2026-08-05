@@ -70,7 +70,7 @@ conflicts = [
 default-groups = ["dev", "ha-current"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=custom_components.mistral_conversation --cov-report=term-missing"
+addopts = "--cov=custom_components.mistral_ai --cov-report=term-missing"
 asyncio_mode = "auto"
 # Put the repository root on sys.path so `custom_components...` imports
 # resolve without a sys.path hack in conftest.
@@ -81,7 +81,7 @@ testpaths = ["tests"]
 exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
 
 [tool.coverage.run]
-source = ["custom_components/mistral_conversation"]
+source = ["custom_components/mistral_ai"]
 
 [tool.bandit]
 exclude_dirs = [".venv", "tests"]
@@ -136,7 +136,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["custom_components.mistral_conversation"]
+known-first-party = ["custom_components.mistral_ai"]
 known-third-party = ["homeassistant"]
 section-order = [
   "future",

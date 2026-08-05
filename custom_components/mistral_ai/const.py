@@ -1,6 +1,6 @@
-"""Constants for the Mistral AI Conversation integration."""
+"""Constants for the Mistral AI integration."""
 
-DOMAIN = "mistral_conversation"
+DOMAIN = "mistral_ai"
 
 # Configuration keys
 CONF_API_KEY = "api_key"

@@ -1,4 +1,4 @@
-"""Fixtures for the Mistral AI Conversation tests."""
+"""Fixtures for the Mistral AI tests."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.mistral_conversation.const import (
+from custom_components.mistral_ai.const import (
     CONF_API_KEY,
     CONF_MODEL,
     DEFAULT_MODEL,
@@ -67,9 +67,9 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     )
 
     with (
-        patch("custom_components.mistral_conversation.Mistral", return_value=client),
+        patch("custom_components.mistral_ai.Mistral", return_value=client),
         patch(
-            "custom_components.mistral_conversation.config_flow.Mistral",
+            "custom_components.mistral_ai.config_flow.Mistral",
             return_value=client,
         ),
     ):

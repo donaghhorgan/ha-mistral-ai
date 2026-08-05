@@ -12,7 +12,7 @@ submitting it is a copy rather than a reshuffle:
 ```text
 brands/
 └── custom_integrations/
-    └── mistral_conversation/
+    └── mistral_ai/
         ├── icon.png      # 256x256
         └── icon@2x.png   # 512x512
 ```
@@ -54,7 +54,7 @@ The `brands` repository is not in this project's remit, so this has to be done
 by hand:
 
 1. Fork [home-assistant/brands](https://github.com/home-assistant/brands).
-2. Copy `custom_integrations/mistral_conversation/` from this directory into
+2. Copy `custom_integrations/mistral_ai/` from this directory into
    the fork, keeping the path.
 3. Open a pull request against `home-assistant/brands`.
 
