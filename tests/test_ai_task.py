@@ -12,6 +12,7 @@ from homeassistant.components import ai_task, conversation
 from homeassistant.components.conversation.chat_log import ChatLog
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import selector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.ai_task import SUPPORTED_FEATURES
@@ -323,3 +324,43 @@ async def test_generate_image_records_the_assistant_turn(
         )
 
     assert [content.content for content in logs] == ["Here is your bicycle."]
+
+
+async def test_structure_with_selectors_converts(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A structure built from Home Assistant selectors reaches the API.
+
+    An AI task has no LLM API, so there is no custom_serializer from one.
+    Passing None leaves voluptuous_openapi unable to convert a selector and
+    every structured generation dies with:
+
+        cannot use 'TextSelector' as a dict key (unhashable type)
+
+    llm.selector_serializer is the fallback core uses for exactly this.
+    """
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content='{"verdict": "warm", "degrees": 21}'))
+    )
+
+    structure = vol.Schema(
+        {
+            vol.Required("verdict"): selector.TextSelector(),
+            vol.Optional("degrees"): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=50)
+            ),
+        }
+    )
+
+    await ai_task.async_generate_data(
+        hass,
+        task_name="verdict",
+        entity_id=ENTITY_ID,
+        instructions="Is 21 degrees warm?",
+        structure=structure,
+    )
+
+    schema = mock_client.chat.stream_async.await_args.kwargs["response_format"]
+    properties = schema["json_schema"]["schema"]["properties"]
+    assert properties["verdict"]["type"] == "string"
+    assert properties["degrees"]["type"] == "number"

@@ -315,8 +315,15 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
         }
 
+        # llm.selector_serializer rather than None when there is no LLM API.
+        # An AI task never has one, and voluptuous_openapi cannot convert a
+        # Home Assistant selector without it -- every structured generation
+        # died on `cannot use 'TextSelector' as a dict key`. This is what
+        # openai_conversation does for the same reason.
         custom_serializer = (
-            chat_log.llm_api.custom_serializer if chat_log.llm_api else None
+            chat_log.llm_api.custom_serializer
+            if chat_log.llm_api
+            else llm.selector_serializer
         )
 
         if chat_log.llm_api and (
