@@ -90,6 +90,12 @@ SPEECH_LANGUAGES = (
 # makes rather than something decided here.
 WEB_SEARCH_TOOLS = ("web_search", "web_search_premium")
 
+# Image generation is a built-in connector too, so it runs on the ordinary
+# chat models rather than needing a separate endpoint or a model option --
+# unlike openai_conversation, which carries a RECOMMENDED_IMAGE_MODEL because
+# its image generation is a different endpoint entirely.
+IMAGE_GENERATION_TOOL = "image_generation"
+
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10
 
