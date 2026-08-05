@@ -46,6 +46,12 @@ updates:
       #
       # It moves when Home Assistant moves.
       - dependency-name: pyjwt
+      # voluptuous is the same as pyjwt -- Home Assistant pins it exactly,
+      # voluptuous==0.15.2 -- with one difference: we also declare it in
+      # [project] dependencies, because the integration imports it. That floor
+      # is decorative. Home Assistant's exact pin always wins, and everything
+      # else in the tree asks only for >=0.15, so no bump can ever resolve.
+      - dependency-name: voluptuous
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
