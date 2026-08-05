@@ -32,6 +32,20 @@ updates:
       # ha-current resolves 5.0.1 quite happily, so this constrains only the
       # floor, and it lifts when the floor does.
       - dependency-name: pycares
+      # pyjwt is pinned exactly by Home Assistant itself -- PyJWT==2.10.1, in
+      # both 2025.8.0 and 2026.2.3 -- rather than by a component manifest, and
+      # nothing else in the tree constrains it harder than >=2.8.0. So it
+      # cannot move while Home Assistant is in the resolution, and attempting
+      # it does not produce a failed check, it produces a "Dependabot can't
+      # resolve your Python dependency files" error with no pull request at
+      # all:
+      #
+      #   Because homeassistant==2025.8.0 depends on pyjwt==2.10.1 and
+      #   pyjwt==2.13.0, we can conclude that homeassistant==2025.8.0 cannot
+      #   be used.
+      #
+      # It moves when Home Assistant moves.
+      - dependency-name: pyjwt
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
