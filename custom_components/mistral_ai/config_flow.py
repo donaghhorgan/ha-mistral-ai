@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -33,9 +32,9 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
-from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
+from .client import async_create_client
 from .const import (
     CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
@@ -123,7 +122,7 @@ async def async_list_models(
     Raises InvalidAuth if the key is rejected and CannotConnect for any other
     failure, so callers can map both onto a form error.
     """
-    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
+    client = await async_create_client(hass, api_key)
     try:
         async with asyncio.timeout(TIMEOUT):
             response = await client.models.list_async()
@@ -155,7 +154,7 @@ async def async_list_voices(
     not fatal: the rest of the form is still usable, and the endpoint chooses
     a voice when none is given.
     """
-    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
+    client = await async_create_client(hass, api_key)
     try:
         async with asyncio.timeout(TIMEOUT):
             response = await client.audio.voices.list_async()
