@@ -140,6 +140,22 @@ Two things worth knowing:
 - The pipeline's language is passed to the API as a hint only — these models
   detect the language themselves.
 
+### Text-to-speech
+
+Add a text-to-speech entity with "Add text-to-speech" and select it as the
+text-to-speech engine of an assist pipeline, or call `tts.speak` with its
+entity ID.
+
+The model dropdown lists only models reporting the `audio_speech` capability.
+The voice dropdown is populated from your account, because custom voices are
+created against it — if the account has none, the field is omitted and the
+API picks a voice itself. Callers can override the configured voice per
+request with the `voice` option.
+
+The language is not sent to the API: the voice carries its own language.
+Selecting a French voice and an English pipeline gets you a French voice
+reading English, which is a voice problem rather than a language one.
+
 ### AI tasks
 
 As well as conversation agents, this integration provides

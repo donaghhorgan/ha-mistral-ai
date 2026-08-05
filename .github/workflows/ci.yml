@@ -133,9 +133,13 @@ jobs:
           enable-cache: true
 
       - name: Run tests against the latest Home Assistant version
-        # hassil and home-assistant-intents are needed to set up the
-        # `conversation` component. The project gets them from its dev group,
-        # which an isolated run does not have, so they are named here too.
+        # These are all needed to import or set up Home Assistant components
+        # this integration builds on: hassil and home-assistant-intents for
+        # `conversation`, mutagen and ha-ffmpeg for `tts`, which imports both
+        # at module level. The project gets them from its dev group, which an
+        # isolated run does not have, so they are named here too. Adding a
+        # platform means checking whether this list needs another entry --
+        # nothing else will tell you until this job goes red.
         run: |
           uv run --isolated --no-project --python 3.14 \
             --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
@@ -143,6 +147,8 @@ jobs:
             --with PyTurboJPEG \
             --with hassil \
             --with home-assistant-intents \
+            --with mutagen \
+            --with ha-ffmpeg \
             pytest tests/ -q --no-cov
 
   hassfest:

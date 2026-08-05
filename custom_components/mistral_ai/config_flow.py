@@ -37,22 +37,26 @@ from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
 from .const import (
+    CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
     CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
     CONF_TEMPERATURE,
+    CONF_VOICE,
     DEFAULT_AI_TASK_NAME,
     DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_STT_NAME,
     DEFAULT_TEMPERATURE,
+    DEFAULT_TTS_NAME,
     DOMAIN,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
+    SUBENTRY_TYPE_TTS,
     TIMEOUT,
 )
 
@@ -75,12 +79,14 @@ _LOGGER = logging.getLogger(__name__)
 # a conversation agent or AI task can use any model the key can reach.
 SUBENTRY_CAPABILITIES = {
     SUBENTRY_TYPE_STT: CAPABILITY_AUDIO_TRANSCRIPTION,
+    SUBENTRY_TYPE_TTS: CAPABILITY_AUDIO_SPEECH,
 }
 
 DEFAULT_SUBENTRY_NAMES = {
     SUBENTRY_TYPE_AI_TASK_DATA: DEFAULT_AI_TASK_NAME,
     SUBENTRY_TYPE_CONVERSATION: DEFAULT_CONVERSATION_NAME,
     SUBENTRY_TYPE_STT: DEFAULT_STT_NAME,
+    SUBENTRY_TYPE_TTS: DEFAULT_TTS_NAME,
 }
 
 RECOMMENDED_CONVERSATION_OPTIONS = {
@@ -130,6 +136,36 @@ async def async_list_models(
         ]
 
     return sorted(model.id for model in models)
+
+
+async def async_list_voices(
+    hass: HomeAssistant, api_key: str
+) -> list[SelectOptionDict]:
+    """Return the voices available to the given API key.
+
+    Voices are per account -- custom ones are created against it -- so the
+    list has to come from the API rather than from a table here. A failure is
+    not fatal: the rest of the form is still usable, and the endpoint chooses
+    a voice when none is given.
+    """
+    client = await hass.async_add_executor_job(partial(Mistral, api_key=api_key))
+    try:
+        async with asyncio.timeout(TIMEOUT):
+            response = await client.audio.voices.list_async()
+    except (SDKError, TimeoutError, httpx.HTTPError) as err:
+        _LOGGER.debug("Could not list Mistral AI voices: %s", err)
+        return []
+
+    voices = []
+    for voice in getattr(response, "items", None) or []:
+        # Languages and description are what make one voice distinguishable
+        # from twenty others in a dropdown.
+        label = voice.name
+        if languages := getattr(voice, "languages", None):
+            label = f"{label} ({', '.join(languages)})"
+        voices.append(SelectOptionDict(label=label, value=voice.id))
+
+    return sorted(voices, key=lambda option: option["label"])
 
 
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -212,6 +248,7 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
             SUBENTRY_TYPE_CONVERSATION: MistralSubentryFlowHandler,
             SUBENTRY_TYPE_AI_TASK_DATA: MistralSubentryFlowHandler,
             SUBENTRY_TYPE_STT: MistralSubentryFlowHandler,
+            SUBENTRY_TYPE_TTS: MistralSubentryFlowHandler,
         }
 
 
@@ -271,6 +308,10 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             valid = {api.id for api in llm.async_get_apis(self.hass)}
             options[CONF_LLM_HASS_API] = [api for api in selected if api in valid]
 
+        voices: list[SelectOptionDict] = []
+        if self._subentry_type == SUBENTRY_TYPE_TTS:
+            voices = await async_list_voices(self.hass, entry.data[CONF_API_KEY])
+
         return self.async_show_form(
             step_id="set_options",
             data_schema=vol.Schema(
@@ -280,6 +321,7 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                     subentry_type=self._subentry_type,
                     options=options,
                     models=models,
+                    voices=voices,
                 )
             ),
         )
@@ -295,6 +337,7 @@ def _subentry_schema(
     subentry_type: str,
     options: Mapping[str, Any],
     models: list[str],
+    voices: list[SelectOptionDict] | None = None,
 ) -> dict[vol.Marker, Any]:
     """Build the schema for a subentry options form."""
     schema: dict[vol.Marker, Any] = {}
@@ -339,9 +382,22 @@ def _subentry_schema(
         }
     )
 
-    # A response length makes no sense for a transcription: the length is
-    # whatever was said.
-    if subentry_type != SUBENTRY_TYPE_STT:
+    # Only offered when the account has voices to choose between. Left out
+    # rather than shown empty, because an empty dropdown reads as a fault when
+    # the endpoint is perfectly happy to pick a voice itself.
+    if subentry_type == SUBENTRY_TYPE_TTS and voices:
+        schema[
+            vol.Optional(
+                CONF_VOICE,
+                description={"suggested_value": options.get(CONF_VOICE)},
+            )
+        ] = SelectSelector(
+            SelectSelectorConfig(options=voices, mode=SelectSelectorMode.DROPDOWN)
+        )
+
+    # A response length makes no sense for speech: the length is whatever was
+    # said, or whatever was asked to be read out.
+    if subentry_type not in (SUBENTRY_TYPE_STT, SUBENTRY_TYPE_TTS):
         schema[
             vol.Optional(
                 CONF_MAX_TOKENS,

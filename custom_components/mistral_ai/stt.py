@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from mistralai.client.errors import SDKError
 
-from .const import CONF_MODEL, SUBENTRY_TYPE_STT, TIMEOUT
+from .const import CONF_MODEL, SPEECH_LANGUAGES, SUBENTRY_TYPE_STT, TIMEOUT
 from .entity import MistralBaseEntity
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
         only as a hint, so this list governs what the pipeline will offer
         rather than what the model can do.
         """
-        return sorted(STT_LANGUAGES)
+        return sorted(SPEECH_LANGUAGES)
 
     @property
     def supported_formats(self) -> list[stt.AudioFormats]:
@@ -148,48 +148,3 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
             return stt.SpeechResult(None, stt.SpeechResultState.ERROR)
 
         return stt.SpeechResult(text, stt.SpeechResultState.SUCCESS)
-
-
-# Offered to the assist pipeline as the languages this entity accepts. Home
-# Assistant matches a pipeline's language against this list before it will
-# use the entity, so a missing entry means the entity simply is not offered.
-#
-# Kept deliberately broad rather than exhaustive: the model detects the
-# language itself and the code below is only a hint, so the cost of listing
-# one the model handles poorly is a bad transcription, while the cost of
-# omitting one it handles well is that nobody can select it.
-STT_LANGUAGES = {
-    "ar",
-    "bn",
-    "cs",
-    "da",
-    "de",
-    "el",
-    "en",
-    "es",
-    "fa",
-    "fi",
-    "fr",
-    "he",
-    "hi",
-    "hu",
-    "id",
-    "it",
-    "ja",
-    "ko",
-    "ms",
-    "nl",
-    "no",
-    "pl",
-    "pt",
-    "ro",
-    "ru",
-    "sv",
-    "ta",
-    "th",
-    "tr",
-    "uk",
-    "ur",
-    "vi",
-    "zh",
-}
