@@ -113,18 +113,6 @@ To change an existing one, click "Configure" next to it.
   assistant. You can use Home Assistant template variables like
   `{{ ha_name }}`.
 
-- **Web search** (conversation agents only): lets the agent look things up
-  rather than answering from training data, which is what "what's the forecast
-  tomorrow?" needs. Off unless set.
-
-  Two tiers are offered, `web_search` and `web_search_premium`, because they
-  bill differently — Mistral charges per search, so an agent that searches on
-  every turn is a bill. The tier is named rather than hidden behind a toggle so
-  the expensive one is never chosen for you.
-
-  Independent of **Control Home Assistant**: an agent that cannot touch your
-  house can still be allowed to look things up.
-
 - **Control Home Assistant** (conversation agents only): Selects a Home
   Assistant LLM API, which is what lets the agent control your devices. New
   conversation agents get the Assist API by default, matching Home

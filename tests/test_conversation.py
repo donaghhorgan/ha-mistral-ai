@@ -18,7 +18,6 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
-    CONF_WEB_SEARCH,
     SUBENTRY_TYPE_CONVERSATION,
 )
 
@@ -403,64 +402,3 @@ async def test_home_assistant_error_is_not_rewrapped(
     assert result.response.response_type == intent.IntentResponseType.ERROR
     assert "something specific went wrong" in speech(result)
     assert "Unexpected error" not in speech(result)
-
-
-async def _set_conversation_options(
-    hass: HomeAssistant, entry: MockConfigEntry, **options: str | None
-) -> None:
-    """Replace options on the conversation subentry and reload."""
-    subentry = next(
-        s
-        for s in entry.subentries.values()
-        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
-    )
-    data = {**subentry.data, **options}
-    hass.config_entries.async_update_subentry(
-        entry, subentry, data={k: v for k, v in data.items() if v is not None}
-    )
-    await hass.async_block_till_done()
-
-
-async def test_web_search_is_sent_as_a_tool(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
-) -> None:
-    """Enabling web search adds the built-in connector to the request."""
-    await _set_conversation_options(
-        hass, init_integration, **{CONF_WEB_SEARCH: "web_search"}
-    )
-
-    await converse(hass, "what is the news")
-
-    tools = mock_client.chat.stream_async.await_args.kwargs["tools"]
-    assert {"type": "web_search"} in tools
-
-
-async def test_web_search_works_without_the_llm_api(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
-) -> None:
-    """An agent with no Home Assistant control can still search the web.
-
-    Tools were previously sent only when an LLM API was selected, so web
-    search on its own would have been built and then silently dropped.
-    """
-    await _set_conversation_options(
-        hass,
-        init_integration,
-        **{CONF_LLM_HASS_API: None, CONF_WEB_SEARCH: "web_search"},
-    )
-
-    await converse(hass, "what is the news")
-
-    assert mock_client.chat.stream_async.await_args.kwargs["tools"] == [
-        {"type": "web_search"}
-    ]
-
-
-async def test_web_search_off_by_default(
-    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
-) -> None:
-    """Nothing is searched, and nothing is billed, unless it is turned on."""
-    await converse(hass, "what is the news")
-
-    tools = mock_client.chat.stream_async.await_args.kwargs.get("tools", [])
-    assert not any("type" in tool for tool in tools)
