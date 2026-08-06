@@ -10,12 +10,15 @@ integration conventions:
 custom_components/mistral_ai/
 ├── __init__.py     # Integration setup and entry point
 ├── ai_task.py      # AI Task platform
+├── client.py       # Mistral client construction
 ├── config_flow.py  # Config and subentry flow handlers
 ├── const.py        # Application constants
 ├── conversation.py # Conversation platform
 ├── entity.py       # Shared LLM entity and Mistral API handling
 ├── helpers.py      # Shared API helpers used by more than one platform
 ├── manifest.json   # Integration metadata
+├── stt.py          # Speech-to-text platform
+├── tts.py          # Text-to-speech platform
 └── translations/   # Language files
 brands/             # Icon set staged for home-assistant/brands
 hacs.json           # Home Assistant Community Store (HACS) configuration
