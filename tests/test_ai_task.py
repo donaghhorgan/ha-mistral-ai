@@ -122,10 +122,16 @@ def _text_chunk(text: str) -> MagicMock:
     return chunk
 
 
-def _file_chunk(file_id: str = "file-123") -> MagicMock:
-    """Return a content chunk referencing a generated file."""
+def _file_chunk(file_id: str = "file-123", file_type: str = "png") -> MagicMock:
+    """Return a content chunk referencing a generated file.
+
+    file_type is a real string: left as a MagicMock attribute it is truthy but
+    not a str, so the fallback that reads it would be skipped and a test could
+    pass on the final default without ever exercising it.
+    """
     chunk = MagicMock()
     chunk.file_id = file_id
+    chunk.file_type = file_type
     return chunk
 
 
@@ -153,13 +159,19 @@ def _conversation(content: object, *, tool_execution: bool = True) -> MagicMock:
     return response
 
 
-def _download(
-    data: bytes = b"\x89PNG fake", content_type: str = "image/png"
-) -> MagicMock:
-    """Return a files.download_async response."""
+PNG = b"\x89PNG\r\n\x1a\n" + b"fake png body"
+JPEG = b"\xff\xd8\xff" + b"fake jpeg body"
+
+
+def _download(data: bytes = PNG) -> MagicMock:
+    """Return a files.download_async response.
+
+    Deliberately carrying the octet-stream the live API actually responds
+    with, so nothing here can quietly start depending on the header again.
+    """
     response = MagicMock()
     response.content = data
-    response.headers = {"content-type": content_type}
+    response.headers = {"content-type": "application/octet-stream"}
     return response
 
 
@@ -215,23 +227,43 @@ async def test_generate_image(
 
 
 @requires_image_support
-async def test_generate_image_uses_the_downloads_mime_type(
+async def test_generate_image_reads_the_mime_type_from_the_bytes(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
 ) -> None:
-    """The mime type comes from the download, and parameters are stripped.
+    """The image itself decides the mime type, not what claims to describe it.
 
-    Guessing from the chunk instead would mean assuming a format for whatever
-    the model chose to produce.
+    Checked against the live API: the download responds
+    application/octet-stream, and the chunk said file_type png for a file the
+    connector reported at a URL ending .jpg. Here the chunk claims png and the
+    bytes are JPEG, and the bytes win.
     """
-    mock_image_client.files.download_async.return_value = _download(
-        content_type="image/webp; charset=binary"
-    )
+    mock_image_client.files.download_async.return_value = _download(JPEG)
 
     result = await ai_task.async_generate_image(
         hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
     )
 
-    assert result["mime_type"] == "image/webp"
+    assert result["mime_type"] == "image/jpeg"
+
+
+@requires_image_support
+async def test_generate_image_falls_back_to_the_reported_file_type(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """An unrecognised format falls back to what the chunk reported.
+
+    tiff rather than png, so this cannot pass on the final default.
+    """
+    mock_image_client.beta.conversations.start_async.return_value = _conversation(
+        [_text_chunk("Here you go."), _file_chunk(file_type="tiff")]
+    )
+    mock_image_client.files.download_async.return_value = _download(b"not an image")
+
+    result = await ai_task.async_generate_image(
+        hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+    )
+
+    assert result["mime_type"] == "image/tiff"
 
 
 @requires_image_support

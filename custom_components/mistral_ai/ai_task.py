@@ -219,15 +219,10 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         if not image:
             raise HomeAssistantError("Mistral AI returned an empty image")
 
-        # The download reports what it actually sent. Trusting file_type from
-        # the chunk instead would mean guessing at a mime type for whatever
-        # the model chose to produce.
-        mime_type = downloaded.headers.get("content-type") or "image/png"
-
         return ai_task.GenImageTaskResult(
             conversation_id=chat_log.conversation_id,
             image_data=image,
-            mime_type=mime_type.split(";")[0].strip(),
+            mime_type=_image_mime_type(image, getattr(chunk, "file_type", None)),
             model=model,
         )
 
@@ -264,6 +259,44 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             conversation_id=chat_log.conversation_id,
             data=data,
         )
+
+
+# Enough of each header to identify it. Home Assistant serves the image with
+# whatever mime type we report, so getting it wrong is a picture that will not
+# display rather than an error anyone can trace.
+_IMAGE_SIGNATURES = (
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+)
+
+
+def _image_mime_type(image: bytes, file_type: Any) -> str:
+    """Return the mime type of downloaded image bytes.
+
+    Read from the bytes rather than from either thing that claims to describe
+    them, because both were checked against the live API and neither survived:
+
+    - the download responds `application/octet-stream`, so its content-type
+      header says nothing at all
+    - the chunk's `file_type` said `png` for a file the connector itself
+      reported at a URL ending `.jpg`
+
+    So `file_type` is a fallback for a format not listed here, not the answer.
+    """
+    for signature, mime_type in _IMAGE_SIGNATURES:
+        if image.startswith(signature):
+            return mime_type
+
+    # WebP carries its marker after the RIFF length, not at the start.
+    if image[:4] == b"RIFF" and image[8:12] == b"WEBP":
+        return "image/webp"
+
+    if isinstance(file_type, str) and file_type:
+        return f"image/{file_type.lower()}"
+
+    return "image/png"
 
 
 def _entry_chunks(outputs: Any) -> Any:
