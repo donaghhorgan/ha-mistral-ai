@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 STT_MODEL = "voxtral-mini-latest"
 TTS_MODEL = "voxtral-speech-latest"
 VOICE_ID = "voice-abc"
+DEPRECATED_MODEL = "mistral-medium-2508"
 NON_CHAT_MODEL = "mistral-ocr-latest"
 
 
@@ -55,7 +57,13 @@ async def setup_homeassistant(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "homeassistant", {})
 
 
-def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
+def _model_card(
+    model_id: str,
+    *,
+    deprecation: datetime | None = None,
+    replacement: str | None = None,
+    **capabilities: bool,
+) -> MagicMock:
     """Build a models.list_async() entry with real boolean capabilities.
 
     The flags have to be plain booleans rather than MagicMock attributes:
@@ -64,6 +72,11 @@ def _model_card(model_id: str, **capabilities: bool) -> MagicMock:
     """
     card = MagicMock()
     card.id = model_id
+    # Real values rather than invented MagicMock attributes, for the same
+    # reason as the capabilities below: every attribute of a MagicMock is
+    # truthy, so a card built without these would look deprecated.
+    card.deprecation = deprecation
+    card.deprecation_replacement_model = replacement
     card.capabilities = SimpleNamespace(
         **{
             "audio_transcription": False,
@@ -90,6 +103,15 @@ def mock_models_response() -> MagicMock:
         # A key can reach plenty of models that have no business in any of
         # these dropdowns -- OCR, embeddings, coding models.
         _model_card(NON_CHAT_MODEL),
+        # Retiring, with a named successor. Six of the models the live API
+        # lists are in this state today.
+        _model_card(
+            DEPRECATED_MODEL,
+            completion_chat=True,
+            function_calling=True,
+            deprecation=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
+            replacement="mistral-medium-3-5",
+        ),
     ]
     return response
 
