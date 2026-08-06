@@ -4,13 +4,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    groups:
-      # pytest-homeassistant-custom-component pins Home Assistant and the
-      # whole pytest stack to exact versions, so these have to move together.
-      test-stack:
-        patterns:
-          - pytest-homeassistant-custom-component
-          - homeassistant
     # An allowlist, not a blocklist, because the blocklist below can never be
     # complete. Home Assistant 2026.2.3 pins 46 packages exactly and its
     # dependencies pin more beneath that, so the set of things that cannot
@@ -30,6 +23,24 @@ updates:
     #                  about what we support, checked against hacs.json and
     #                  README.md, and raising it is a decision rather than an
     #                  upgrade.
+    #   pytest-homeassistant-custom-component
+    #                  the same, twice over. It is pinned once per Home
+    #                  Assistant group, and the ha-minimum pin is the
+    #                  supported floor rather than a version to keep current.
+    #                  Dependabot cannot tell the two apart -- allowing it, it
+    #                  raised the ha-minimum pin to the ha-current one, which
+    #                  deletes the thing that group exists to test:
+    #
+    #                    Because aiodns==4.0.0 depends on pycares>=5.0.0 and
+    #                    homeassistant==2026.2.3 depends on aiodns==4.0.0 [...]
+    #                    ha-mistral-conversation:ha-minimum and
+    #                    pytest-homeassistant-custom-component==0.13.316 are
+    #                    incompatible.
+    #
+    #                  The pycares pin below made that fail loudly instead of
+    #                  landing quietly, which was luck rather than design.
+    #                  New releases are noticed by the test-latest job in
+    #                  ci.yml, which resolves the newest one on every run.
     #   pillow         we declare it for scripts/generate_brand_assets.py, but
     #                  Home Assistant pins it exactly (11.3.0 on the floor), so
     #                  allowing it reproduces exactly the failure this avoids.
@@ -41,7 +52,6 @@ updates:
     #                  ignore list below.
     allow:
       - dependency-name: mistralai
-      - dependency-name: pytest-homeassistant-custom-component
       - dependency-name: bandit
       - dependency-name: pre-commit
       - dependency-name: pymarkdownlnt
