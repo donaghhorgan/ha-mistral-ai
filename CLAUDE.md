@@ -36,3 +36,8 @@ The integration was previously written against Mistral and Home Assistant
 methods that never existed, which is why so much of it was rewritten. If you
 are unsure whether something exists, import it and check. `AGENTS.md` says the
 same thing at greater length, and it is the rule most worth following here.
+
+And existing is not working: two features shipped against types the SDK
+accepts and the endpoint does not honour, so for anything that changes what is
+sent to the API, the check is a real request rather than a signature. See "A
+type signature is not a behaviour" in `AGENTS.md`.
