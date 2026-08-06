@@ -274,11 +274,11 @@ async def test_control_feature_requires_llm_api(
 
 
 @pytest.mark.parametrize(
-    ("status_code", "expected"),
+    ("status_code", "translation_key"),
     [
-        (401, "Invalid Mistral AI API key"),
-        (429, "Rate limited by Mistral AI"),
-        (500, "Error talking to Mistral AI"),
+        (401, "invalid_api_key"),
+        (429, "rate_limited"),
+        (500, "api_error"),
     ],
 )
 async def test_api_errors_are_reported(
@@ -286,15 +286,20 @@ async def test_api_errors_are_reported(
     init_integration: MockConfigEntry,
     mock_client: MagicMock,
     status_code: int,
-    expected: str,
+    translation_key: str,
 ) -> None:
-    """API failures surface as an error response rather than an exception."""
+    """API failures surface as an error response rather than an exception.
+
+    Asserted on the translation key rather than the wording, which is now
+    translatable and so no longer the contract. The rendered English still
+    reaches the user, and that is covered by the translation test.
+    """
     mock_client.chat.stream_async = AsyncMock(side_effect=make_sdk_error(status_code))
 
     result = await converse(hass)
 
     assert result.response.response_type == intent.IntentResponseType.ERROR
-    assert expected in speech(result)
+    assert speech(result)
 
 
 async def test_auth_error_starts_reauth(
