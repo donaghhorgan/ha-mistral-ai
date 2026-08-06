@@ -39,12 +39,14 @@
                         "temperature": "Temperature",
                         "max_tokens": "Maximum tokens per response",
                         "prompt": "Instructions",
-                        "llm_hass_api": "Control Home Assistant"
+                        "llm_hass_api": "Control Home Assistant",
+                        "web_search": "Web search (beta)"
                     },
                     "data_description": {
                         "temperature": "Higher values make responses more creative, lower values more focused.",
                         "prompt": "Instructions given to the model to tell it how it should behave.",
-                        "llm_hass_api": "Allow the agent to control devices in your home."
+                        "llm_hass_api": "Allow the agent to control devices in your home.",
+                        "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change. Replies from this agent are not streamed while it is on, so they appear all at once after a longer pause."
                     }
                 }
             },
@@ -130,6 +132,14 @@
                 "entry_not_loaded": "Cannot add text-to-speech while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standard",
+                "web_search_premium": "Premium (costs more per search)"
             }
         }
     }
