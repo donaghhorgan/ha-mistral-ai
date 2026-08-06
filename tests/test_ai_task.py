@@ -122,31 +122,56 @@ def _text_chunk(text: str) -> MagicMock:
     return chunk
 
 
-def _file_chunk(file_id: str = "file-123") -> MagicMock:
-    """Return a content chunk referencing a generated file."""
+def _file_chunk(file_id: str = "file-123", file_type: str = "png") -> MagicMock:
+    """Return a content chunk referencing a generated file.
+
+    file_type is a real string: left as a MagicMock attribute it is truthy but
+    not a str, so the fallback that reads it would be skipped and a test could
+    pass on the final default without ever exercising it.
+    """
     chunk = MagicMock()
     chunk.file_id = file_id
+    chunk.file_type = file_type
     return chunk
 
 
-def _completion(content: object) -> MagicMock:
-    """Return a non-streaming chat completion carrying `content`."""
+def _tool_execution_entry() -> MagicMock:
+    """Return a tool.execution entry, which carries no content at all.
+
+    The real endpoint emits one of these alongside the message describing the
+    connector's own work. It has no `content`, so anything walking the outputs
+    has to tolerate that rather than assume every entry is a message.
+    """
+    entry = MagicMock(spec=["name", "type", "info"])
+    entry.name = "image_generation"
+    entry.type = "tool.execution"
+    return entry
+
+
+def _conversation(content: object, *, tool_execution: bool = True) -> MagicMock:
+    """Return a conversation response whose message entry carries `content`."""
     message = MagicMock()
     message.content = content
-    choice = MagicMock()
-    choice.message = message
     response = MagicMock()
-    response.choices = [choice]
+    response.outputs = (
+        [_tool_execution_entry(), message] if tool_execution else [message]
+    )
     return response
 
 
-def _download(
-    data: bytes = b"\x89PNG fake", content_type: str = "image/png"
-) -> MagicMock:
-    """Return a files.download_async response."""
+PNG = b"\x89PNG\r\n\x1a\n" + b"fake png body"
+JPEG = b"\xff\xd8\xff" + b"fake jpeg body"
+
+
+def _download(data: bytes = PNG) -> MagicMock:
+    """Return a files.download_async response.
+
+    Deliberately carrying the octet-stream the live API actually responds
+    with, so nothing here can quietly start depending on the header again.
+    """
     response = MagicMock()
     response.content = data
-    response.headers = {"content-type": content_type}
+    response.headers = {"content-type": "application/octet-stream"}
     return response
 
 
@@ -159,8 +184,10 @@ requires_image_support = pytest.mark.skipif(
 @pytest.fixture
 def mock_image_client(mock_client: MagicMock) -> MagicMock:
     """Wire the client for a successful image generation."""
-    mock_client.chat.complete_async = AsyncMock(
-        return_value=_completion([_text_chunk("Here is your bicycle."), _file_chunk()])
+    mock_client.beta.conversations.start_async = AsyncMock(
+        return_value=_conversation(
+            [_text_chunk("Here is your bicycle."), _file_chunk()]
+        )
     )
     mock_client.files.download_async = AsyncMock(return_value=_download())
     return mock_client
@@ -180,12 +207,18 @@ async def test_generate_image(
     assert result["mime_type"] == "image/png"
     assert result["media_source_id"]
 
-    request = mock_image_client.chat.complete_async.await_args.kwargs
+    request = mock_image_client.beta.conversations.start_async.await_args.kwargs
     assert request["tools"] == [{"type": "image_generation"}]
-    # Built from the chat log, so Home Assistant's own system prompt leads and
-    # the instructions arrive as the user turn.
-    assert request["messages"][-1] == {"role": "user", "content": "a red bicycle"}
-    assert request["messages"][0]["role"] == "system"
+
+    # The system prompt goes to instructions: the conversations endpoint has no
+    # system role, only user and assistant.
+    assert request["instructions"]
+    assert request["inputs"] == [{"role": "user", "content": "a red bicycle"}]
+    assert not any(entry["role"] == "system" for entry in request["inputs"])
+
+    # Explicit, because this endpoint retains conversations by default where
+    # chat completions stores nothing.
+    assert request["store"] is False
 
     # The file is fetched by id: generation returns a reference, not bytes.
     assert mock_image_client.files.download_async.await_args.kwargs["file_id"] == (
@@ -194,23 +227,43 @@ async def test_generate_image(
 
 
 @requires_image_support
-async def test_generate_image_uses_the_downloads_mime_type(
+async def test_generate_image_reads_the_mime_type_from_the_bytes(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
 ) -> None:
-    """The mime type comes from the download, and parameters are stripped.
+    """The image itself decides the mime type, not what claims to describe it.
 
-    Guessing from the chunk instead would mean assuming a format for whatever
-    the model chose to produce.
+    Checked against the live API: the download responds
+    application/octet-stream, and the chunk said file_type png for a file the
+    connector reported at a URL ending .jpg. Here the chunk claims png and the
+    bytes are JPEG, and the bytes win.
     """
-    mock_image_client.files.download_async.return_value = _download(
-        content_type="image/webp; charset=binary"
-    )
+    mock_image_client.files.download_async.return_value = _download(JPEG)
 
     result = await ai_task.async_generate_image(
         hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
     )
 
-    assert result["mime_type"] == "image/webp"
+    assert result["mime_type"] == "image/jpeg"
+
+
+@requires_image_support
+async def test_generate_image_falls_back_to_the_reported_file_type(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """An unrecognised format falls back to what the chunk reported.
+
+    tiff rather than png, so this cannot pass on the final default.
+    """
+    mock_image_client.beta.conversations.start_async.return_value = _conversation(
+        [_text_chunk("Here you go."), _file_chunk(file_type="tiff")]
+    )
+    mock_image_client.files.download_async.return_value = _download(b"not an image")
+
+    result = await ai_task.async_generate_image(
+        hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+    )
+
+    assert result["mime_type"] == "image/tiff"
 
 
 @requires_image_support
@@ -218,7 +271,9 @@ async def test_generate_image_without_a_file_fails(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
 ) -> None:
     """A reply with no file reference is an error, not an empty image."""
-    mock_image_client.chat.complete_async.return_value = _completion("just some text")
+    mock_image_client.beta.conversations.start_async.return_value = _conversation(
+        "just some text"
+    )
 
     with pytest.raises(HomeAssistantError, match="no image"):
         await ai_task.async_generate_image(
@@ -246,7 +301,7 @@ async def test_generate_image_api_error(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
 ) -> None:
     """API failures surface as Home Assistant errors."""
-    mock_image_client.chat.complete_async.side_effect = make_sdk_error(500)
+    mock_image_client.beta.conversations.start_async.side_effect = make_sdk_error(500)
 
     with pytest.raises(HomeAssistantError):
         await ai_task.async_generate_image(
@@ -291,9 +346,8 @@ async def test_generate_image_sends_attachments(
             ],
         )
 
-    user_message = mock_image_client.chat.complete_async.await_args.kwargs["messages"][
-        -1
-    ]
+    request = mock_image_client.beta.conversations.start_async.await_args.kwargs
+    user_message = request["inputs"][-1]
     encoded = base64.b64encode(b"\x89PNG reference").decode()
     assert user_message["content"] == [
         {"type": "text", "text": "in this style"},
@@ -380,8 +434,8 @@ async def test_missing_image_names_the_model(
     function_calling is a precondition for the connector, not a guarantee, so
     this failure survives the capability gate and has to be diagnosable.
     """
-    mock_image_client.chat.complete_async = AsyncMock(
-        return_value=_completion("I cannot do that")
+    mock_image_client.beta.conversations.start_async = AsyncMock(
+        return_value=_conversation("I cannot do that")
     )
 
     with pytest.raises(HomeAssistantError, match=DEFAULT_MODEL):
@@ -428,3 +482,22 @@ async def test_structure_with_selectors_converts(
     properties = schema["json_schema"]["schema"]["properties"]
     assert properties["verdict"]["type"] == "string"
     assert properties["degrees"]["type"] == "number"
+
+
+@requires_image_support
+async def test_generate_image_tolerates_entries_without_content(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """A tool.execution entry alongside the message does not derail the walk.
+
+    The live endpoint returns one of these describing the connector's own work,
+    and it has no content at all. Assuming every entry is a message is an
+    AttributeError on a response that is perfectly well formed.
+    """
+    result = await ai_task.async_generate_image(
+        hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+    )
+
+    assert result["mime_type"] == "image/png"
+    outputs = mock_image_client.beta.conversations.start_async.return_value.outputs
+    assert any(getattr(entry, "type", None) == "tool.execution" for entry in outputs)
