@@ -142,5 +142,37 @@
                 "web_search_premium": "Premium (costs more per search)"
             }
         }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Error talking to Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "The attachment {path} does not exist."
+        },
+        "empty_image": {
+            "message": "Mistral AI returned an empty image. Please try again."
+        },
+        "image_download_error": {
+            "message": "Error downloading the generated image: {error}"
+        },
+        "invalid_api_key": {
+            "message": "The Mistral AI API key was rejected. Please reconfigure the integration."
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI did not return valid structured data. Try simplifying the structure, or asking again."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI returned no image. {model} may not be able to generate images."
+        },
+        "rate_limited": {
+            "message": "Rate limited by Mistral AI. Please try again in a moment."
+        },
+        "unexpected_error": {
+            "message": "Unexpected error from Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Only images can be sent to Mistral AI, and {path} is not an image."
+        }
     }
 }

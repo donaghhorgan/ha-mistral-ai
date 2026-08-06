@@ -19,6 +19,7 @@ from .const import (
     CAPABILITY_FUNCTION_CALLING,
     CONF_MODEL,
     DEFAULT_MODEL,
+    DOMAIN,
     IMAGE_GENERATION_TOOL,
     SUBENTRY_TYPE_AI_TASK_DATA,
     TIMEOUT,
@@ -185,7 +186,11 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         except SDKError as err:
             raise self._convert_error(err) from err
         except (TimeoutError, httpx.HTTPError) as err:
-            raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="api_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         outputs = getattr(response, "outputs", None) or []
 
@@ -203,8 +208,9 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         chunk = _find_generated_file(outputs)
         if chunk is None:
             raise HomeAssistantError(
-                f"Mistral AI returned no image. {model} may not support image "
-                "generation"
+                translation_domain=DOMAIN,
+                translation_key="no_image_returned",
+                translation_placeholders={"model": model},
             )
 
         try:
@@ -214,11 +220,18 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         except SDKError as err:
             raise self._convert_error(err) from err
         except (TimeoutError, httpx.HTTPError) as err:
-            raise HomeAssistantError(f"Error downloading image: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="image_download_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         image = downloaded.content
         if not image:
-            raise HomeAssistantError("Mistral AI returned an empty image")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="empty_image",
+            )
 
         return ai_task.GenImageTaskResult(
             conversation_id=chat_log.conversation_id,
@@ -253,7 +266,8 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         except JSONDecodeError as err:
             _LOGGER.error("Failed to parse JSON response: %s. Response: %s", err, text)
             raise HomeAssistantError(
-                "Error with Mistral AI structured response"
+                translation_domain=DOMAIN,
+                translation_key="invalid_structured_response",
             ) from err
 
         return ai_task.GenDataTaskResult(

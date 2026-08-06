@@ -89,7 +89,7 @@ async def test_generate_structured_data_invalid_json(
         side_effect=stream_of(make_chunk(content="not json at all"))
     )
 
-    with pytest.raises(HomeAssistantError, match="structured response"):
+    with pytest.raises(HomeAssistantError) as raised:
         await ai_task.async_generate_data(
             hass,
             task_name="test task",
@@ -97,6 +97,8 @@ async def test_generate_structured_data_invalid_json(
             instructions="Describe the room",
             structure=vol.Schema({vol.Required("name"): str}),
         )
+
+    assert raised.value.translation_key == "invalid_structured_response"
 
 
 async def test_generate_data_api_error(

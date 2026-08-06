@@ -134,13 +134,18 @@ async def _async_attachment_chunks(
         for attachment in attachments:
             path: Path = attachment.path
             if not path.exists():
-                raise HomeAssistantError(f"`{path}` does not exist")
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="attachment_not_found",
+                    translation_placeholders={"path": str(path)},
+                )
 
             mime_type = attachment.mime_type or guess_file_type(path)[0]
             if not mime_type or not mime_type.startswith("image/"):
                 raise HomeAssistantError(
-                    "Only images are supported by the Mistral AI API, "
-                    f"`{path}` is not an image"
+                    translation_domain=DOMAIN,
+                    translation_key="unsupported_attachment_type",
+                    translation_placeholders={"path": str(path)},
                 )
 
             encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
@@ -351,13 +356,19 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 raise self._convert_error(err) from err
             except (TimeoutError, httpx.HTTPError) as err:
                 _LOGGER.error("Error talking to Mistral AI: %s", err)
-                raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="api_error",
+                    translation_placeholders={"error": str(err)},
+                ) from err
             except HomeAssistantError:
                 raise
             except Exception as err:
                 _LOGGER.exception("Unexpected error from Mistral AI")
                 raise HomeAssistantError(
-                    f"Unexpected error from Mistral AI: {err}"
+                    translation_domain=DOMAIN,
+                    translation_key="unexpected_error",
+                    translation_placeholders={"error": str(err)},
                 ) from err
 
             outputs = getattr(response, "outputs", None) or []
@@ -518,7 +529,11 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 raise self._convert_error(err) from err
             except (TimeoutError, httpx.HTTPError) as err:
                 _LOGGER.error("Error talking to Mistral AI: %s", err)
-                raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="api_error",
+                    translation_placeholders={"error": str(err)},
+                ) from err
             except HomeAssistantError:
                 # Raised by tool execution, or by our own conversion above.
                 # Already meaningful, so let it through untouched.
@@ -533,7 +548,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 # the user's face.
                 _LOGGER.exception("Unexpected error from Mistral AI")
                 raise HomeAssistantError(
-                    f"Unexpected error from Mistral AI: {err}"
+                    translation_domain=DOMAIN,
+                    translation_key="unexpected_error",
+                    translation_placeholders={"error": str(err)},
                 ) from err
 
             if not chat_log.unresponded_tool_results:
@@ -546,9 +563,17 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # sentence.
             self.entry.async_start_reauth(self.hass)
             return HomeAssistantError(
-                "Invalid Mistral AI API key, please reconfigure the integration"
+                translation_domain=DOMAIN,
+                translation_key="invalid_api_key",
             )
         if err.status_code == 429:
-            return HomeAssistantError("Rate limited by Mistral AI, please try again")
+            return HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="rate_limited",
+            )
         _LOGGER.error("Mistral AI API error: %s", err)
-        return HomeAssistantError(f"Error talking to Mistral AI: {err}")
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="api_error",
+            translation_placeholders={"error": str(err)},
+        )

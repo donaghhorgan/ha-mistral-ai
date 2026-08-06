@@ -338,8 +338,11 @@ async def test_convert_messages_rejects_non_image(
         ],
     )
 
-    with pytest.raises(HomeAssistantError, match="Only images are supported"):
+    with pytest.raises(HomeAssistantError) as raised:
         await _async_convert_messages(hass, [content])
+
+    assert raised.value.translation_key == "unsupported_attachment_type"
+    assert raised.value.translation_placeholders == {"path": str(doc)}
 
 
 async def test_convert_messages_missing_file(
@@ -357,8 +360,10 @@ async def test_convert_messages_missing_file(
         ],
     )
 
-    with pytest.raises(HomeAssistantError, match="does not exist"):
+    with pytest.raises(HomeAssistantError) as raised:
         await _async_convert_messages(hass, [content])
+
+    assert raised.value.translation_key == "attachment_not_found"
 
 
 async def test_transform_stream_thinking_content() -> None:
