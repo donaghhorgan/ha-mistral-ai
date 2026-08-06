@@ -411,18 +411,40 @@ async def test_home_assistant_error_is_not_rewrapped(
 
 
 def _entry(**fields: object) -> MagicMock:
-    """Return a conversation response entry with exactly these attributes."""
+    """Return an object with exactly these attributes and no others.
+
+    spec matters: every attribute of a bare MagicMock exists and is truthy, so
+    a reader that decides what to do by probing for attributes would take
+    every branch at once.
+    """
     entry = MagicMock(spec=list(fields))
     for name, value in fields.items():
         setattr(entry, name, value)
     return entry
 
 
-def _conversation_response(*entries: MagicMock) -> MagicMock:
-    """Return a conversations endpoint response carrying `entries`."""
-    response = MagicMock()
-    response.outputs = list(entries)
-    return response
+def _event(**fields: object) -> MagicMock:
+    """Return one conversation stream event wrapping a data payload."""
+    event = MagicMock(spec=["data"])
+    event.data = _entry(**fields)
+    return event
+
+
+def _conversation_stream(*events: MagicMock):
+    """Return a side effect producing a fresh event stream on each call.
+
+    One per tool-calling iteration, since an async generator cannot be
+    consumed twice.
+    """
+
+    async def _side_effect(*args: object, **kwargs: object):
+        async def _stream():
+            for event in events:
+                yield event
+
+        return _stream()
+
+    return _side_effect
 
 
 def _enable_web_search(
@@ -453,9 +475,9 @@ async def test_web_search_goes_to_the_conversations_endpoint(
     runs it, because its responses have nowhere to carry what a connector
     returns.
     """
-    mock_client.beta.conversations.start_async = AsyncMock(
-        return_value=_conversation_response(
-            _entry(type="message.output", content="It is raining.")
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="It is raining.")
         )
     )
     _enable_web_search(hass, init_integration)
@@ -465,7 +487,7 @@ async def test_web_search_goes_to_the_conversations_endpoint(
 
     mock_client.chat.stream_async.assert_not_awaited()
 
-    request = mock_client.beta.conversations.start_async.await_args.kwargs
+    request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
     assert {"type": "web_search"} in request["tools"]
 
     # The endpoint retains conversations by default, where chat completions
@@ -490,14 +512,14 @@ async def test_web_search_is_off_by_default(
     assert "tools" not in mock_client.chat.stream_async.await_args.kwargs
 
 
-async def test_web_search_agent_does_not_advertise_streaming(
+async def test_web_search_agent_still_streams(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """Streaming is withdrawn while web search is on.
+    """Enabling web search does not cost the agent its streaming.
 
-    The conversations endpoint is not streamed here, so claiming otherwise
-    would have Home Assistant present a reply as arriving word by word when it
-    lands all at once.
+    It did in the first cut, because the conversations endpoint reports a
+    different event shape. An agent that silently stopped streaming while
+    every other one continued was a surprise worth removing.
     """
     component = hass.data["conversation"]
     assert component.get_entity(ENTITY_ID).supports_streaming is True
@@ -505,7 +527,57 @@ async def test_web_search_agent_does_not_advertise_streaming(
     _enable_web_search(hass, init_integration)
     await hass.async_block_till_done()
 
-    assert component.get_entity(ENTITY_ID).supports_streaming is False
+    assert component.get_entity(ENTITY_ID).supports_streaming is True
+
+
+async def test_web_search_streams_the_reply_in_pieces(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Text deltas are concatenated rather than one of them winning."""
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="conversation.response.started"),
+            _event(type="message.output.delta", content="It is "),
+            _event(type="message.output.delta", content="raining in Dublin."),
+            _event(type="conversation.response.done"),
+        )
+    )
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    assert speech(await converse(hass, "weather")) == "It is raining in Dublin."
+
+
+async def test_web_search_error_event_becomes_an_error(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A failure arriving as an event is raised rather than ignored.
+
+    Chat completions raises; here the failure is just another item in the
+    stream, so a reader that only looked for content would report success
+    having said nothing.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="conversation.response.started"),
+            _event(
+                type="conversation.response.error",
+                message="connector unavailable",
+                code=1800,
+            ),
+        )
+    )
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    result = await converse(hass, "weather")
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    # Named specifically, because an ignored error event produces an empty
+    # stream, and an empty stream is also an error response -- asserting only
+    # on the type would pass without the event being read at all.
+    assert "connector unavailable" in speech(result)
+    assert "1800" in speech(result)
 
 
 async def test_web_search_runs_home_assistant_tools(
@@ -517,21 +589,33 @@ async def test_web_search_runs_home_assistant_tools(
     anything Home Assistant owns, so the loop has to run that and send the
     result on. This is the composition question #65 opened with.
     """
-    mock_client.beta.conversations.start_async = AsyncMock(
-        side_effect=[
-            _conversation_response(
-                _entry(type="tool.execution", name="web_search"),
-                _entry(
-                    type="function.call",
-                    tool_call_id="call-1",
-                    name="test_tool",
-                    arguments='{"param": "value"}',
-                ),
+    streams = [
+        _conversation_stream(
+            _event(type="tool.execution.started", name="web_search", arguments="{}"),
+            # Arguments arrive in fragments, as they do on chat completions.
+            _event(
+                type="function.call.delta",
+                tool_call_id="call-1",
+                name="test_tool",
+                arguments='{"param": ',
             ),
-            _conversation_response(
-                _entry(type="message.output", content="Done, and it is raining.")
+            _event(
+                type="function.call.delta",
+                tool_call_id="call-1",
+                name="test_tool",
+                arguments='"value"}',
             ),
-        ]
+        ),
+        _conversation_stream(
+            _event(type="message.output.delta", content="Done, and it is raining.")
+        ),
+    ]
+
+    async def _next_stream(*args: object, **kwargs: object):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_next_stream
     )
     _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
     await hass.async_block_till_done()
@@ -553,7 +637,7 @@ async def test_web_search_runs_home_assistant_tools(
 
     # The second pass carries the tool result back as its own entry, because
     # store is off and the endpoint is holding no history for us.
-    second = mock_client.beta.conversations.start_async.await_args_list[1].kwargs
+    second = mock_client.beta.conversations.start_stream_async.await_args_list[1].kwargs
     results = [e for e in second["inputs"] if e.get("type") == "function.result"]
     assert results and results[0]["tool_call_id"] == "call-1"
 
@@ -578,7 +662,9 @@ async def test_web_search_api_errors_are_reported(
     The same shapes the chat completions path handles, since this endpoint
     raises through the same SDK.
     """
-    mock_client.beta.conversations.start_async = AsyncMock(side_effect=side_effect)
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=side_effect
+    )
     _enable_web_search(hass, init_integration)
     await hass.async_block_till_done()
 
@@ -601,22 +687,23 @@ async def test_web_search_citations_do_not_break_the_reply(
     They are dropped rather than rendered because this reply is also spoken by
     a voice assistant, where reading out URLs would be worse than useless.
     """
-    mock_client.beta.conversations.start_async = AsyncMock(
-        return_value=_conversation_response(
-            _entry(type="tool.execution", name="web_search"),
-            _entry(
-                type="message.output",
-                content=[
-                    _entry(type="text", text="It is 21 degrees in Dublin"),
-                    _entry(
-                        type="tool_reference",
-                        tool="web_search",
-                        title="Hour-by-Hour Forecast",
-                        url="https://example.invalid/dublin",
-                    ),
-                    _entry(type="text", text="."),
-                ],
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="tool.execution.started", name="web_search", arguments="{}"),
+            _event(
+                type="message.output.delta",
+                content=_entry(type="text", text="It is 21 degrees in Dublin"),
             ),
+            _event(
+                type="message.output.delta",
+                content=_entry(
+                    type="tool_reference",
+                    tool="web_search",
+                    title="Hour-by-Hour Forecast",
+                    url="https://example.invalid/dublin",
+                ),
+            ),
+            _event(type="message.output.delta", content=_entry(type="text", text=".")),
         )
     )
     _enable_web_search(hass, init_integration)

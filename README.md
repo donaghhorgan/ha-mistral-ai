@@ -134,13 +134,10 @@ It works alongside device control: Mistral runs the search itself and hands
 back any Home Assistant tool calls for the integration to run, so one turn can
 both check the forecast and turn on a light.
 
-Marked beta for two reasons, both worth knowing before turning it on:
+Marked beta for one reason, worth knowing before turning it on:
 
 - Web search is a built-in connector, and connectors only run on Mistral's
   conversations API, which is in public preview. Its shapes can change.
-- That endpoint is not streamed here, so an agent with web search on returns
-  its reply all at once after a longer pause, rather than word by word. Every
-  agent without it keeps streaming exactly as before.
 
 As with image generation, the request sets `store: false`, so Mistral does not
 retain the conversation.
