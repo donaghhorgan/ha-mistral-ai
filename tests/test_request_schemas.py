@@ -12,8 +12,6 @@ which is the failure the weekly spec refresh exists to surface.
 
 from __future__ import annotations
 
-import pytest
-
 from custom_components.mistral_ai.const import (
     MAX_TEMPERATURE,
     SUBENTRY_TYPE_AI_TASK_DATA,
@@ -95,7 +93,7 @@ def test_voice_page_size_is_the_documented_maximum() -> None:
     parameters = spec()["paths"]["/v1/audio/voices"]["get"]["parameters"]
     limit = next(p for p in parameters if p["name"] == "limit")
 
-    assert VOICE_PAGE_SIZE == limit["schema"]["maximum"]
+    assert limit["schema"]["maximum"] == VOICE_PAGE_SIZE
 
 
 def test_every_endpoint_we_call_is_in_the_fixture() -> None:
