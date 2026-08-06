@@ -25,6 +25,7 @@ from .const import (
     TIMEOUT,
 )
 from .entity import MistralBaseLLMEntity
+from .helpers import entry_chunks, outputs_text
 
 if TYPE_CHECKING:
     from . import MistralConfigEntry
@@ -200,7 +201,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         # what the model said is the only clue as to why there is no image.
         chat_log.async_add_assistant_content_without_tools(
             conversation.AssistantContent(
-                agent_id=self.entity_id, content=_outputs_text(outputs)
+                agent_id=self.entity_id, content=outputs_text(outputs)
             )
         )
 
@@ -313,39 +314,6 @@ def _image_mime_type(image: bytes, file_type: Any) -> str:
     return "image/png"
 
 
-def _entry_chunks(outputs: Any) -> Any:
-    """Yield the content chunks of every message entry in a response.
-
-    A conversation returns a list of entries rather than one message. Only
-    message.output entries carry content; tool.execution entries describe the
-    connector's own work and have none, so they are skipped rather than
-    special-cased.
-    """
-    for entry in outputs:
-        content = getattr(entry, "content", None)
-        if content is None or isinstance(content, str):
-            continue
-        yield from content
-
-
-def _outputs_text(outputs: Any) -> str | None:
-    """Return the text a response carries, ignoring any file chunks."""
-    parts = [
-        content
-        for entry in outputs
-        if isinstance(content := getattr(entry, "content", None), str)
-    ]
-    # isinstance rather than a truth test: a chunk carrying a non-string in
-    # `text` would otherwise fail the join with a TypeError, which is a poor
-    # way to report that a response came back in an unexpected shape.
-    parts.extend(
-        text
-        for chunk in _entry_chunks(outputs)
-        if isinstance(text := getattr(chunk, "text", None), str)
-    )
-    return "".join(parts) or None
-
-
 def _find_generated_file(outputs: Any) -> Any | None:
     """Return the tool file chunk in a response, if there is one.
 
@@ -353,7 +321,7 @@ def _find_generated_file(outputs: Any) -> Any | None:
     file the API is holding, as a chunk carrying a file_id, alongside whatever
     text the model produced. The bytes need a second call.
     """
-    for chunk in _entry_chunks(outputs):
+    for chunk in entry_chunks(outputs):
         if getattr(chunk, "file_id", None):
             return chunk
 

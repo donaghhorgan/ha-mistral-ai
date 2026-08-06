@@ -9,6 +9,7 @@ CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
 CONF_TEMPERATURE = "temperature"
 CONF_VOICE = "voice"
+CONF_WEB_SEARCH = "web_search"
 
 # Default values
 #
@@ -113,6 +114,14 @@ SPEECH_LANGUAGES = (
 # which carries a RECOMMENDED_IMAGE_MODEL because its image generation is a
 # different endpoint entirely.
 IMAGE_GENERATION_TOOL = "image_generation"
+
+# The built-in connectors Mistral runs for us. Sent as tools and executed on
+# their side, so nothing local answers to these names.
+#
+# The two tiers bill differently and Mistral charges per search, so which one
+# is used is named rather than toggled -- the expensive one should never be
+# picked on someone's behalf.
+WEB_SEARCH_TOOLS = ("web_search", "web_search_premium")
 
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10

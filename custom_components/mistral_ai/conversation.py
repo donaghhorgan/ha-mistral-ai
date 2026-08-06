@@ -10,7 +10,13 @@ from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import CONF_PROMPT, DOMAIN, SUBENTRY_TYPE_CONVERSATION
+from .const import (
+    CONF_PROMPT,
+    CONF_WEB_SEARCH,
+    DOMAIN,
+    SUBENTRY_TYPE_CONVERSATION,
+    WEB_SEARCH_TOOLS,
+)
 from .entity import MistralBaseLLMEntity
 
 if TYPE_CHECKING:
@@ -45,6 +51,14 @@ class MistralConversationEntity(
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the agent."""
         super().__init__(entry, subentry)
+
+        # Web search runs on the conversations endpoint, which this
+        # integration does not stream, so an agent with it enabled must not
+        # advertise streaming. Claiming it would have Home Assistant present a
+        # reply as arriving word by word when it in fact lands all at once.
+        if subentry.data.get(CONF_WEB_SEARCH) in WEB_SEARCH_TOOLS:
+            self._attr_supports_streaming = False
+
         if subentry.data.get(CONF_LLM_HASS_API):
             self._attr_supported_features = (
                 conversation.ConversationEntityFeature.CONTROL
