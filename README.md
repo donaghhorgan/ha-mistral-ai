@@ -108,9 +108,14 @@ To change an existing one, click "Configure" next to it.
   stays in the list while it is the one configured, so reconfiguring an entity
   that needs moving does not lose track of where it was.
 
-- **Temperature**: Controls randomness in responses (0.0 - 2.0)
+- **Temperature**: Controls randomness in responses
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
+  - The slider stops where the API does, which is not the same everywhere:
+    1.0 for conversation agents, 1.5 for AI tasks and speech-to-text. A
+    conversation agent gets the lower limit because web search moves its
+    requests to an endpoint that caps at 1.0, and that is a setting on the
+    same page.
 
 - **Maximum tokens**: Maximum length of responses. The default is 1000. A
   structured AI task that needs more than this comes back as truncated JSON,

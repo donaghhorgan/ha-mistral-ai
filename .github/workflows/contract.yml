@@ -1,0 +1,64 @@
+name: Contract
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, because the failure this catches is not only "we wrote it wrong"
+    # but "it changed underneath us", and three features depend on an endpoint
+    # in public preview.
+    - cron: "30 7 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  contract:
+    # Load-bearing, exactly as in ci.yml: a required check whose name no longer
+    # matches the branch ruleset does not go red, it never reports at all, and
+    # pull requests wait forever on a status that will not arrive. Adding this
+    # to the ruleset means keeping this string in step with it.
+    name: Contract
+    runs-on: ubuntu-latest
+
+    # Never pull_request_target. That trigger runs with secrets available to
+    # code from the fork, which is how a workflow like this leaks its key.
+    #
+    # On pull_request, GitHub withholds secrets from forks, so this job would
+    # fail on authentication for a contributor who can do nothing about it.
+    # Skipped instead: a check that is red for everyone outside the repository
+    # is one people learn to scroll past, and the maintainer's own runs still
+    # gate the merge.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # --no-cov because these exercise the API rather than the integration,
+      # and a coverage number from them would be meaningless and misleading
+      # next to the real one.
+      - name: Run the contract tests
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        run: uv run pytest tests/contract --no-cov -v
