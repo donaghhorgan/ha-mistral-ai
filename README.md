@@ -105,9 +105,10 @@ To change an existing one, click "Configure" next to it.
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
 
-- **Maximum tokens**: Maximum length of responses. The default is 1000. A
-  structured AI task that needs more than this comes back as truncated JSON,
-  which surfaces as `Error with Mistral AI structured response` — a parse
+- **Maximum tokens**: Maximum length of responses. The default is 3000,
+  matching Home Assistant's own OpenAI and Google integrations. A structured
+  AI task that needs more than this comes back as truncated JSON, which
+  surfaces as `Mistral AI did not return valid structured data` — a parse
   failure that reads like a model problem but is a length one.
 
 - **Instructions** (conversation agents only): Custom instructions for the
