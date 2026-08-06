@@ -76,7 +76,10 @@ conflicts = [
 default-groups = ["dev", "ha-current"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=custom_components.mistral_ai --cov-report=term-missing"
+# The contract tests are excluded by default: they make real, billed requests
+# to Mistral and need a key. `uv run pytest` stays offline and free. Run them
+# with `uv run pytest tests/contract --no-cov`, or in CI.
+addopts = "--cov=custom_components.mistral_ai --cov-report=term-missing --ignore=tests/contract"
 asyncio_mode = "auto"
 # Put the repository root on sys.path so `custom_components...` imports
 # resolve without a sys.path hack in conftest.
