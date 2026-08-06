@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
+    from collections.abc import AsyncGenerator, Callable, Generator
 
 BASE_URL = "https://api.mistral.ai/v1"
 
@@ -45,9 +45,44 @@ def api_key() -> str:
 
 
 @pytest.fixture
+def unrestricted_network() -> Generator[None]:
+    """Lift pytest-socket's restrictions for the duration of a test.
+
+    The Home Assistant test plugin blocks outbound connections and allows
+    127.0.0.1 only. That is the right default everywhere else in this suite,
+    and has to be lifted in the one place that means to reach the network.
+
+    `socket_enabled` alone is not enough, and how it fails is worth recording.
+    It restores `socket.socket`, while the host allowlist is a separate patch
+    over `socket.socket.connect` -- so sockets work and every connection to
+    anything but 127.0.0.1 is still refused. That went unnoticed while these
+    tests were written because the machine routed through a proxy on
+    127.0.0.1: the requests were real and the assertions were real, and the
+    allowlist was satisfied by accident. It failed the first time it ran
+    somewhere without one.
+
+    `socket_allow_hosts(["api.mistral.ai"])` is the public alternative and is
+    worse here. It resolves the hostname to addresses once, and the API is
+    behind a CDN that answers with different ones over time, so a connection
+    to an address resolved later would be blocked. That is a flaky test rather
+    than a safe one.
+    """
+    import pytest_socket
+
+    pytest_socket._remove_restrictions()  # noqa: SLF001
+    try:
+        yield
+    finally:
+        # Put back, so nothing after these tests inherits an open network by
+        # accident. They run in their own pytest invocation today, which makes
+        # this belt and braces rather than load-bearing.
+        pytest_socket.socket_allow_hosts(["127.0.0.1"], allow_unix_socket=True)
+
+
+@pytest.fixture
 async def client(
     api_key: str,
-    socket_enabled: None,  # noqa: ARG001
+    unrestricted_network: None,  # noqa: ARG001
 ) -> AsyncGenerator[httpx.AsyncClient]:
     """Return an HTTP client aimed at the API.
 
@@ -56,10 +91,8 @@ async def client(
     refuses -- so a suite whose job is to check what the endpoint accepts
     should not ask the SDK what that is.
 
-    socket_enabled is required because the Home Assistant test plugin blocks
-    network access in tests, which is the right default for every other test
-    here and has to be opted out of exactly once, in the one place that means
-    to reach the network.
+    The network restrictions the rest of the suite runs under are lifted by
+    the fixture above, in one place rather than per test.
     """
     async with httpx.AsyncClient(
         base_url=BASE_URL,
