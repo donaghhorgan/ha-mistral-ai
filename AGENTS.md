@@ -186,6 +186,34 @@ listing offers nothing to check.
   script should have a section with a description and some usage examples.
 - For the overall project, use [`README.md`](./README.md)
 
+### Reporting Bugs and Suspected Problems
+
+**Open a GitHub issue for anything found along the way, without asking
+first.** This is standing permission, not a decision to bring back each time.
+
+The reason is that most findings turn up while looking at something else, and
+the choice at that moment is between derailing the current work, stopping to
+ask, or saying nothing. The first two are expensive and the third loses the
+finding — and this repository has already shipped bugs that somebody noticed
+and did not write down.
+
+- File it, say so in passing, and carry on with what you were doing.
+- Fix it there and then only if it blocks the work in hand, or if it is
+  actively harming users and the fix is small. Otherwise the issue is the
+  deliverable and the work continues.
+- Suspicion is enough. An issue that turns out to be wrong costs a comment
+  explaining why and is closed; a finding nobody recorded costs however long
+  it takes to rediscover. Say plainly which parts were verified and which
+  were inferred, so the next reader knows what still needs checking.
+- Record the evidence, not just the conclusion — the request and the
+  response, the version, the file and line. A finding written from memory a
+  week later is worth much less than one written while the terminal output is
+  still on screen.
+
+Ask before acting only where an issue is not the right vehicle: a change in
+direction, a feature to drop, anything that needs a product decision rather
+than a bug report.
+
 ### Source Code Management
 
 - Write concise but descriptive commit messages
