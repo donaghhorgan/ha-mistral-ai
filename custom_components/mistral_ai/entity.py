@@ -34,7 +34,6 @@ from .const import (
     TIMEOUT,
     WEB_SEARCH_TOOLS,
 )
-from .helpers import outputs_text
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable
@@ -253,6 +252,109 @@ async def _transform_stream(
         }
 
 
+async def _transform_conversation_stream(
+    stream: AsyncIterable[Any],
+) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
+    """Transform a conversations event stream into chat log deltas.
+
+    A parallel to _transform_stream rather than a branch in it, because the
+    conversations endpoint reports a different vocabulary of events. Four
+    differences matter:
+
+    - A failure arrives as an event carrying a message and a code, where chat
+      completions raises. It is turned back into an exception here so callers
+      see one shape of failure.
+    - tool.execution events describe the connector's own work. Home Assistant
+      has no concept for "the server is searching right now", so they are
+      skipped -- but they arrive interleaved and must not be read as content.
+    - A delta carries either a string or a single chunk, and a chunk may be
+      text, thinking, or a citation. Citations are dropped for the same reason
+      as in the non-streamed path: this reply is also spoken aloud.
+    - Tool call arguments are fragmented, as in chat completions, but keyed by
+      tool_call_id rather than by index. They are buffered and emitted at the
+      end, because Home Assistant dispatches a tool call the moment it is
+      yielded and a partial one would run with broken arguments.
+    """
+    started = False
+    tool_calls: dict[str, dict[str, Any]] = {}
+
+    async for event in stream:
+        data = getattr(event, "data", None)
+        if data is None:
+            continue
+
+        event_type = getattr(data, "type", None)
+
+        if event_type == "conversation.response.error":
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="api_error",
+                translation_placeholders={
+                    "error": f"{getattr(data, 'message', 'unknown')} "
+                    f"({getattr(data, 'code', 'no code')})"
+                },
+            )
+
+        if event_type not in ("message.output.delta", "function.call.delta"):
+            # Lifecycle, connector progress, and agent handoff. Nothing in the
+            # chat log corresponds to any of them.
+            continue
+
+        if not started:
+            yield {"role": "assistant"}
+            started = True
+
+        if event_type == "message.output.delta":
+            for delta in _content_deltas(getattr(data, "content", None)):
+                yield delta
+            continue
+
+        if not (tool_call_id := getattr(data, "tool_call_id", None)):
+            continue
+        buffered = tool_calls.setdefault(
+            tool_call_id, {"id": tool_call_id, "name": None, "args": ""}
+        )
+        if name := getattr(data, "name", None):
+            buffered["name"] = name
+        if arguments := getattr(data, "arguments", None):
+            buffered["args"] += arguments
+
+    if complete := [call for call in tool_calls.values() if call["name"]]:
+        yield {
+            "tool_calls": [
+                llm.ToolInput(
+                    id=call["id"],
+                    tool_name=call["name"],
+                    tool_args=_parse_arguments(call["args"]),
+                )
+                for call in complete
+            ]
+        }
+
+
+def _content_deltas(content: Any) -> list[conversation.AssistantContentDeltaDict]:
+    """Return the deltas a message delta's content is worth."""
+    if content is None:
+        return []
+
+    if isinstance(content, str):
+        return [{"content": content}] if content else []
+
+    if getattr(content, "type", None) == "thinking":
+        return [
+            {"thinking_content": text}
+            for thought in getattr(content, "thinking", None) or []
+            if isinstance(text := getattr(thought, "text", None), str)
+        ]
+
+    # Anything else carrying text is text. A citation or a file reference
+    # carries none, and is dropped.
+    if isinstance(text := getattr(content, "text", None), str) and text:
+        return [{"content": text}]
+
+    return []
+
+
 class MistralBaseEntity(Entity):
     """Everything a Mistral AI entity needs regardless of what it does.
 
@@ -333,7 +435,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             instructions, inputs = await self._async_conversation_inputs(chat_log)
 
             try:
-                response = await client.beta.conversations.start_async(
+                stream = await client.beta.conversations.start_stream_async(
                     model=options.get(CONF_MODEL, DEFAULT_MODEL),
                     instructions=instructions,
                     inputs=inputs,
@@ -352,6 +454,11 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     },
                     timeout_ms=TIMEOUT * 1000,
                 )
+
+                async for _content in chat_log.async_add_delta_content_stream(
+                    self.entity_id, _transform_conversation_stream(stream)
+                ):
+                    pass
             except SDKError as err:
                 raise self._convert_error(err) from err
             except (TimeoutError, httpx.HTTPError) as err:
@@ -371,29 +478,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     translation_placeholders={"error": str(err)},
                 ) from err
 
-            outputs = getattr(response, "outputs", None) or []
-            tool_calls = [
-                llm.ToolInput(
-                    id=entry.tool_call_id,
-                    tool_name=entry.name,
-                    tool_args=_parse_arguments(entry.arguments),
-                )
-                for entry in outputs
-                if getattr(entry, "type", None) == "function.call"
-            ]
-
-            # Executes the tool calls and appends their results to the log, so
-            # the next pass picks them up.
-            async for _result in chat_log.async_add_assistant_content(
-                conversation.AssistantContent(
-                    agent_id=self.entity_id,
-                    content=outputs_text(outputs),
-                    tool_calls=tool_calls or None,
-                )
-            ):
-                pass
-
-            if not tool_calls:
+            if not chat_log.unresponded_tool_results:
                 break
 
     async def _async_conversation_inputs(

@@ -46,7 +46,7 @@
                         "temperature": "Higher values make responses more creative, lower values more focused.",
                         "prompt": "Instructions given to the model to tell it how it should behave.",
                         "llm_hass_api": "Allow the agent to control devices in your home.",
-                        "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change. Replies from this agent are not streamed while it is on, so they appear all at once after a longer pause."
+                        "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change."
                     }
                 }
             },
