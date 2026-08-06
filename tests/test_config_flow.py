@@ -465,3 +465,30 @@ async def test_stt_subentry_defaults_temperature_low(
     )
 
     assert _default(result, CONF_TEMPERATURE) == DEFAULT_STT_TEMPERATURE
+
+
+async def test_a_second_entry_can_be_added_with_the_same_key(
+    hass: HomeAssistant, mock_client: MagicMock
+) -> None:
+    """Two entries for one key are allowed, deliberately.
+
+    Nothing sets a unique id, so nothing can abort as already_configured, and
+    the translation for that reason was removed rather than the check added.
+    Two keys -- work and personal -- is a legitimate setup, and running several
+    agents off one key is what subentries are already for.
+
+    If a unique id is ever introduced, this fails and the abort string has to
+    come back with it.
+    """
+    for _ in range(2):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_API_KEY: "test-api-key"}
+        )
+        await hass.async_block_till_done()
+
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 2
