@@ -186,6 +186,34 @@ listing offers nothing to check.
   script should have a section with a description and some usage examples.
 - For the overall project, use [`README.md`](./README.md)
 
+### Reporting Bugs and Suspected Problems
+
+**Open a GitHub issue for anything found along the way, without asking
+first.** This is standing permission, not a decision to bring back each time.
+
+The reason is that most findings turn up while looking at something else, and
+the choice at that moment is between derailing the current work, stopping to
+ask, or saying nothing. The first two are expensive and the third loses the
+finding — and this repository has already shipped bugs that somebody noticed
+and did not write down.
+
+- File it, say so in passing, and carry on with what you were doing.
+- Fix it there and then only if it blocks the work in hand, or if it is
+  actively harming users and the fix is small. Otherwise the issue is the
+  deliverable and the work continues.
+- Suspicion is enough. An issue that turns out to be wrong costs a comment
+  explaining why and is closed; a finding nobody recorded costs however long
+  it takes to rediscover. Say plainly which parts were verified and which
+  were inferred, so the next reader knows what still needs checking.
+- Record the evidence, not just the conclusion — the request and the
+  response, the version, the file and line. A finding written from memory a
+  week later is worth much less than one written while the terminal output is
+  still on screen.
+
+Ask before acting only where an issue is not the right vehicle: a change in
+direction, a feature to drop, anything that needs a product decision rather
+than a bug report.
+
 ### Source Code Management
 
 - Write concise but descriptive commit messages
@@ -217,7 +245,15 @@ settings, which is not version controlled and therefore not visible here. It
 requires a pull request and passing checks, and blocks force pushes and
 deletion. The required checks are the blocking jobs in
 [`ci.yml`](./.github/workflows/ci.yml): `lint`, `Test (ha-current)`,
-`Test (ha-minimum)`, `Validate with hassfest` and `Validate with HACS`.
+`Test (ha-minimum)`, `Validate with hassfest` and `Validate with HACS`, plus
+`Contract` from [`contract.yml`](./.github/workflows/contract.yml).
+
+A new required check has to be added to the ruleset by hand, and the order
+matters. Adding the name before the workflow exists on `main` blocks every
+pull request in the repository on a check that will never report — the same
+failure the job names above warn about, arrived at from the other direction.
+So merge the workflow first, let it run once on `main`, and add it to the
+ruleset after.
 
 `Test against latest Home Assistant` is deliberately not among them. It is
 `continue-on-error` because it tracks a moving upstream target, so requiring
