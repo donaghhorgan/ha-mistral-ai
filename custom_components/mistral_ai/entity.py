@@ -440,9 +440,26 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     instructions=instructions,
                     inputs=inputs,
                     tools=tools,
-                    # Home Assistant's own tools come back for us to run;
-                    # connectors are executed by Mistral either way.
-                    handoff_execution="client",
+                    # No handoff_execution. The SDK accepts it and this used to
+                    # send "client", which the endpoint rejects outright when
+                    # the request carries a model rather than an agent_id:
+                    #
+                    #   422 Conversation with a 'model' can't contain the
+                    #       following fields handoff_execution
+                    #
+                    # Every web search request failed on it. The field belongs
+                    # to agent-based conversations, and the OpenAPI schema does
+                    # not show that -- it is declared on the shared request
+                    # base that both variants inherit, and the restriction is a
+                    # cross-field validator rather than anything in the schema.
+                    #
+                    # Nothing is lost by dropping it: a model-based
+                    # conversation hands function tools back to the caller
+                    # anyway. Checked with a real request -- a turn carrying
+                    # both a web_search connector and a Home Assistant function
+                    # returns a function.call entry for us to run, exactly as
+                    # the explicit "client" was meant to ask for.
+                    #
                     # Explicit: this endpoint retains conversations and lists
                     # them afterwards, where chat completions stores nothing.
                     store=False,
