@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import base64
 import json
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from .conftest import MAX_TOKENS, MODEL, TTS_MODEL
 
@@ -445,9 +447,5 @@ async def test_model_listing_reports_the_capabilities_we_filter_on(
     models = response.json()["data"]
     assert models
 
-    flags = {
-        flag
-        for model in models
-        for flag in (model.get("capabilities") or {})
-    }
+    flags = {flag for model in models for flag in (model.get("capabilities") or {})}
     assert {"completion_chat", "audio_transcription", "audio_speech"} <= flags

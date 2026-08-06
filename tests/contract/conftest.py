@@ -7,10 +7,13 @@ run by --ignore in pyproject.toml, so `uv run pytest` stays offline and free.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncGenerator, Callable
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable
 
 BASE_URL = "https://api.mistral.ai/v1"
 
