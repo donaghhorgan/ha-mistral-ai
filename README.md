@@ -4,10 +4,9 @@
 [![GitHub Release](https://img.shields.io/github/release/donaghhorgan/ha-mistral-ai.svg)](https://github.com/donaghhorgan/ha-mistral-ai/releases)
 [![License](https://img.shields.io/github/license/donaghhorgan/ha-mistral-ai.svg)](LICENSE)
 
-A Home Assistant integration that provides a conversation agent powered by
-Mistral AI. This integration allows you to use Mistral AI's language models as
-a conversation agent for voice assistants, chatbots, and other conversational
-interfaces in Home Assistant.
+A Home Assistant integration for Mistral AI, providing four platforms: a
+conversation agent for voice assistants and chatbots, AI tasks for automations
+and dashboards, and speech-to-text and text-to-speech for the assist pipeline.
 
 ## Features
 
@@ -17,7 +16,11 @@ interfaces in Home Assistant.
   can control your devices via tool calling
 - ⚡ **Streaming responses**: Replies are streamed back as they are generated
 - 📋 **AI tasks**: Generate data for automations and dashboards, with native
-  structured output
+  structured output, and generate images
+- 🎤 **Speech-to-text**: Transcribe assist pipeline audio, with the model list
+  filtered to those that report the capability
+- 🔊 **Text-to-speech**: Speak replies using the voices on your account,
+  including custom ones
 - 🎛️ **Multiple agents**: Run several agents and tasks off one API key, each
   with its own model, prompt and parameters
 - 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models
@@ -44,24 +47,22 @@ interfaces in Home Assistant.
 ### Manual Installation
 
 1. Download the latest release from the [releases page](https://github.com/donaghhorgan/ha-mistral-ai/releases)
-2. Extract the contents to your `custom_components` directory
-3. The folder structure should look like:
+2. Copy the whole `custom_components/mistral_ai` directory into the
+   `custom_components` directory of your Home Assistant configuration, so that
+   it ends up here:
 
    ```text
-   custom_components/
-   └── mistral_ai/
-       ├── __init__.py
-       ├── ai_task.py
-       ├── config_flow.py
-       ├── const.py
-       ├── conversation.py
-       ├── entity.py
-       ├── manifest.json
-       └── translations/
-           └── en.json
+   config/
+   └── custom_components/
+       └── mistral_ai/
    ```
 
-4. Restart Home Assistant
+   Copy the directory rather than picking files out of it. This step used to
+   list every module, and the list went stale twice as platforms were added —
+   following it left out `stt.py` and `tts.py` and produced an integration
+   that would not load.
+
+3. Restart Home Assistant
 
 ## Configuration
 
@@ -165,11 +166,21 @@ conversation. Add one with "Add AI task", then call
 `ai_task.generate_data` with its entity ID. Passing a structure returns
 validated JSON, using Mistral's native structured output.
 
-The same entity also generates images via `ai_task.generate_image`. That
-runs on the model already configured on the subentry — Mistral generates
-images with a tool on an ordinary chat model rather than a separate
-endpoint, so there is no second model to pick. Home Assistant saves the
-result to the media source and returns a reference to it.
+The same entity also generates images via `ai_task.generate_image`, on the
+model already configured on the subentry — there is no second model to pick.
+Home Assistant saves the result to the media source and returns a reference
+to it.
+
+Image generation is the one thing here that does not go through the chat
+completions endpoint. It is a built-in connector, and connectors only run on
+Mistral's conversations API, so those requests go there instead. Two
+consequences worth knowing:
+
+- The request sets `store: false`, so the conversation is not retained by
+  Mistral. That endpoint would otherwise keep it and list it afterwards,
+  where chat completions stores nothing.
+- The conversations API is in public preview, so image generation rests on a
+  less stable footing than the rest of the integration.
 
 ## Usage
 
