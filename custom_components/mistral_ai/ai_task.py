@@ -115,10 +115,17 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
 
         return bool(getattr(capabilities, CAPABILITY_FUNCTION_CALLING, False))
 
-    async def _async_conversation_inputs(
+    async def _async_image_inputs(
         self, chat_log: conversation.ChatLog
     ) -> tuple[str | None, list[dict[str, Any]]]:
-        """Split a chat log into conversation instructions and input entries.
+        """Split a chat log into instructions and inputs for an image request.
+
+        Deliberately not sharing the base class's name for its own version of
+        this. That one also emits function.call and function.result entries,
+        for the tool loop web search runs; this keeps messages only, because
+        generating an image involves no tool round trip. Sharing the name
+        would override it silently, and the failure -- tool results vanishing
+        from a request with no error anywhere -- is a poor one to debug.
 
         The conversations endpoint has no system role -- MessageInputEntry is
         user or assistant only -- and takes the system prompt as `instructions`
@@ -157,7 +164,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         # is what makes reference images reach the API -- naming the
         # instructions directly dropped them, while the entity went on
         # advertising SUPPORT_ATTACHMENTS.
-        instructions, inputs = await self._async_conversation_inputs(chat_log)
+        instructions, inputs = await self._async_image_inputs(chat_log)
 
         # The conversations endpoint rather than chat completions, because
         # connectors only run there. A chat completion response has nowhere to
@@ -169,7 +176,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         # Still not streamed. There is nothing to stream for an image, and this
         # way the conversation event shape stays out of _transform_stream,
         # which is built around chat completion deltas.
-        try:
+        async with self._translating_errors():
             response = await client.beta.conversations.start_async(
                 model=model,
                 instructions=instructions,
@@ -183,14 +190,6 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
                 store=False,
                 timeout_ms=TIMEOUT * 1000,
             )
-        except SDKError as err:
-            raise self._convert_error(err) from err
-        except (TimeoutError, httpx.HTTPError) as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="api_error",
-                translation_placeholders={"error": str(err)},
-            ) from err
 
         outputs = getattr(response, "outputs", None) or []
 
@@ -213,18 +212,10 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
                 translation_placeholders={"model": model},
             )
 
-        try:
+        async with self._translating_errors(transport_key="image_download_error"):
             downloaded = await client.files.download_async(
                 file_id=chunk.file_id, timeout_ms=TIMEOUT * 1000
             )
-        except SDKError as err:
-            raise self._convert_error(err) from err
-        except (TimeoutError, httpx.HTTPError) as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="image_download_error",
-                translation_placeholders={"error": str(err)},
-            ) from err
 
         image = downloaded.content
         if not image:
