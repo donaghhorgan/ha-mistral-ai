@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from homeassistant.components.tts import Voice
@@ -52,3 +52,36 @@ async def async_list_voices(client: Mistral) -> list[Voice]:
         voices.append(Voice(voice_id=voice.id, name=name))
 
     return sorted(voices, key=lambda voice: voice.name)
+
+
+def entry_chunks(outputs: Any) -> Any:
+    """Yield the content chunks of every message entry in a response.
+
+    A conversation returns a list of entries rather than one message. Only
+    message entries carry content; tool.execution and function.call entries
+    describe work rather than saying anything, so they are skipped rather than
+    special-cased.
+    """
+    for entry in outputs:
+        content = getattr(entry, "content", None)
+        if content is None or isinstance(content, str):
+            continue
+        yield from content
+
+
+def outputs_text(outputs: Any) -> str | None:
+    """Return the text a response carries, ignoring any non-text chunks."""
+    parts = [
+        content
+        for entry in outputs
+        if isinstance(content := getattr(entry, "content", None), str)
+    ]
+    # isinstance rather than a truth test: a chunk carrying a non-string in
+    # `text` would otherwise fail the join with a TypeError, which is a poor
+    # way to report that a response came back in an unexpected shape.
+    parts.extend(
+        text
+        for chunk in entry_chunks(outputs)
+        if isinstance(text := getattr(chunk, "text", None), str)
+    )
+    return "".join(parts) or None

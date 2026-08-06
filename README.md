@@ -123,6 +123,28 @@ To change an existing one, click "Configure" next to it.
   stops advertising the `CONTROL` feature, so Home Assistant will not offer it
   anywhere control is required — the agent is not broken, it is scoped.
 
+### Web search (beta)
+
+Conversation agents answer from training data, so anything time-sensitive comes
+back stale or invented. Turning on "Web search" lets the agent look things up.
+It is off unless a tier is chosen, because Mistral bills per search and the
+premium tier costs more — the expensive one is never picked for you.
+
+It works alongside device control: Mistral runs the search itself and hands
+back any Home Assistant tool calls for the integration to run, so one turn can
+both check the forecast and turn on a light.
+
+Marked beta for two reasons, both worth knowing before turning it on:
+
+- Web search is a built-in connector, and connectors only run on Mistral's
+  conversations API, which is in public preview. Its shapes can change.
+- That endpoint is not streamed here, so an agent with web search on returns
+  its reply all at once after a longer pause, rather than word by word. Every
+  agent without it keeps streaming exactly as before.
+
+As with image generation, the request sets `store: false`, so Mistral does not
+retain the conversation.
+
 ### Speech-to-text
 
 Add a speech-to-text entity with "Add speech-to-text" and select it as the

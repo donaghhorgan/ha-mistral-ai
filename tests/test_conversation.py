@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
+    CONF_WEB_SEARCH,
     SUBENTRY_TYPE_CONVERSATION,
 )
 
@@ -402,3 +403,180 @@ async def test_home_assistant_error_is_not_rewrapped(
     assert result.response.response_type == intent.IntentResponseType.ERROR
     assert "something specific went wrong" in speech(result)
     assert "Unexpected error" not in speech(result)
+
+
+def _entry(**fields: object) -> MagicMock:
+    """Return a conversation response entry with exactly these attributes."""
+    entry = MagicMock(spec=list(fields))
+    for name, value in fields.items():
+        setattr(entry, name, value)
+    return entry
+
+
+def _conversation_response(*entries: MagicMock) -> MagicMock:
+    """Return a conversations endpoint response carrying `entries`."""
+    response = MagicMock()
+    response.outputs = list(entries)
+    return response
+
+
+def _enable_web_search(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    tier: str = "web_search",
+    **extra: object,
+) -> None:
+    """Turn web search on for the conversation subentry."""
+    subentry = next(
+        s
+        for s in entry.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        entry,
+        subentry,
+        data={CONF_MODEL: "mistral-small-latest", CONF_WEB_SEARCH: tier, **extra},
+    )
+
+
+async def test_web_search_goes_to_the_conversations_endpoint(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An agent with web search on does not use chat completions at all.
+
+    Connectors do not run there: the endpoint accepts the tool and then never
+    runs it, because its responses have nowhere to carry what a connector
+    returns.
+    """
+    mock_client.beta.conversations.start_async = AsyncMock(
+        return_value=_conversation_response(
+            _entry(type="message.output", content="It is raining.")
+        )
+    )
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    assert speech(await converse(hass, "what is the weather")) == "It is raining."
+
+    mock_client.chat.stream_async.assert_not_awaited()
+
+    request = mock_client.beta.conversations.start_async.await_args.kwargs
+    assert {"type": "web_search"} in request["tools"]
+
+    # The endpoint retains conversations by default, where chat completions
+    # stores nothing, so this is set rather than inherited.
+    assert request["store"] is False
+
+    # No system role exists on this endpoint; the prompt goes to instructions.
+    assert request["instructions"]
+    assert all(entry.get("role") != "system" for entry in request["inputs"])
+
+
+async def test_web_search_is_off_by_default(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Nothing is sent, and nothing changes path, unless the tier is chosen.
+
+    Mistral bills per search, so this must never be on by accident.
+    """
+    await converse(hass)
+
+    mock_client.chat.stream_async.assert_awaited()
+    assert "tools" not in mock_client.chat.stream_async.await_args.kwargs
+
+
+async def test_web_search_agent_does_not_advertise_streaming(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Streaming is withdrawn while web search is on.
+
+    The conversations endpoint is not streamed here, so claiming otherwise
+    would have Home Assistant present a reply as arriving word by word when it
+    lands all at once.
+    """
+    component = hass.data["conversation"]
+    assert component.get_entity(ENTITY_ID).supports_streaming is True
+
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    assert component.get_entity(ENTITY_ID).supports_streaming is False
+
+
+async def test_web_search_runs_home_assistant_tools(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A connector and a Home Assistant tool coexist in one turn.
+
+    Mistral executes the connector itself and hands back a function call for
+    anything Home Assistant owns, so the loop has to run that and send the
+    result on. This is the composition question #65 opened with.
+    """
+    mock_client.beta.conversations.start_async = AsyncMock(
+        side_effect=[
+            _conversation_response(
+                _entry(type="tool.execution", name="web_search"),
+                _entry(
+                    type="function.call",
+                    tool_call_id="call-1",
+                    name="test_tool",
+                    arguments='{"param": "value"}',
+                ),
+            ),
+            _conversation_response(
+                _entry(type="message.output", content="Done, and it is raining.")
+            ),
+        ]
+    )
+    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    await hass.async_block_till_done()
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "turn on the light and check the weather")
+
+    assert speech(result) == "Done, and it is raining."
+    assert mock_tool.async_call.await_args.args[1].tool_name == "test_tool"
+
+    # The second pass carries the tool result back as its own entry, because
+    # store is off and the endpoint is holding no history for us.
+    second = mock_client.beta.conversations.start_async.await_args_list[1].kwargs
+    results = [e for e in second["inputs"] if e.get("type") == "function.result"]
+    assert results and results[0]["tool_call_id"] == "call-1"
+
+
+@pytest.mark.parametrize(
+    "side_effect",
+    [
+        make_sdk_error(500),
+        httpx.ConnectError("no route to host"),
+        TimeoutError(),
+        ValueError("something unexpected"),
+    ],
+)
+async def test_web_search_api_errors_are_reported(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    side_effect: Exception,
+) -> None:
+    """A failure on the conversations endpoint reaches the user as an error.
+
+    The same shapes the chat completions path handles, since this endpoint
+    raises through the same SDK.
+    """
+    mock_client.beta.conversations.start_async = AsyncMock(side_effect=side_effect)
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    result = await converse(hass, "what is the weather")
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR

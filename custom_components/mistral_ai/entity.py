@@ -25,13 +25,16 @@ from .const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
+    CONF_WEB_SEARCH,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DOMAIN,
     MAX_TOOL_ITERATIONS,
     TIMEOUT,
+    WEB_SEARCH_TOOLS,
 )
+from .helpers import outputs_text
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable
@@ -289,6 +292,145 @@ class MistralBaseEntity(Entity):
 class MistralBaseLLMEntity(MistralBaseEntity):
     """Mistral AI base LLM entity."""
 
+    async def _async_handle_chat_log_with_search(
+        self, chat_log: conversation.ChatLog
+    ) -> None:
+        """Generate an answer through the conversations endpoint.
+
+        Web search is a built-in connector, and connectors do not run on chat
+        completions: that endpoint accepts the tool and then either rejects it
+        outright or never runs it, because its responses have nowhere to carry
+        the references a connector returns.
+
+        Not streamed. The conversations endpoint does stream, but as a
+        different event shape that _transform_stream cannot read, and a
+        parallel implementation of it is a larger piece of work than this. The
+        cost is a longer pause before a reply begins, on an agent that is
+        already waiting on a web search. Every agent without web search keeps
+        the streaming path untouched.
+        """
+        options = self.subentry.data
+        client = self.entry.runtime_data
+
+        tools: list[dict[str, Any]] = []
+        if chat_log.llm_api:
+            tools = [
+                _format_tool(tool, chat_log.llm_api.custom_serializer)
+                for tool in chat_log.llm_api.tools
+            ]
+        tools.append({"type": options[CONF_WEB_SEARCH]})
+
+        for _iteration in range(MAX_TOOL_ITERATIONS):
+            # Rebuilt each pass so tool results from the previous one are
+            # included. The endpoint would keep the conversation itself, but
+            # store is off, so the history is re-sent instead -- exactly as
+            # the chat completions path re-sends its messages.
+            instructions, inputs = await self._async_conversation_inputs(chat_log)
+
+            try:
+                response = await client.beta.conversations.start_async(
+                    model=options.get(CONF_MODEL, DEFAULT_MODEL),
+                    instructions=instructions,
+                    inputs=inputs,
+                    tools=tools,
+                    # Home Assistant's own tools come back for us to run;
+                    # connectors are executed by Mistral either way.
+                    handoff_execution="client",
+                    # Explicit: this endpoint retains conversations and lists
+                    # them afterwards, where chat completions stores nothing.
+                    store=False,
+                    completion_args={
+                        "temperature": options.get(
+                            CONF_TEMPERATURE, DEFAULT_TEMPERATURE
+                        ),
+                        "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                    },
+                    timeout_ms=TIMEOUT * 1000,
+                )
+            except SDKError as err:
+                raise self._convert_error(err) from err
+            except (TimeoutError, httpx.HTTPError) as err:
+                _LOGGER.error("Error talking to Mistral AI: %s", err)
+                raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
+            except HomeAssistantError:
+                raise
+            except Exception as err:
+                _LOGGER.exception("Unexpected error from Mistral AI")
+                raise HomeAssistantError(
+                    f"Unexpected error from Mistral AI: {err}"
+                ) from err
+
+            outputs = getattr(response, "outputs", None) or []
+            tool_calls = [
+                llm.ToolInput(
+                    id=entry.tool_call_id,
+                    tool_name=entry.name,
+                    tool_args=_parse_arguments(entry.arguments),
+                )
+                for entry in outputs
+                if getattr(entry, "type", None) == "function.call"
+            ]
+
+            # Executes the tool calls and appends their results to the log, so
+            # the next pass picks them up.
+            async for _result in chat_log.async_add_assistant_content(
+                conversation.AssistantContent(
+                    agent_id=self.entity_id,
+                    content=outputs_text(outputs),
+                    tool_calls=tool_calls or None,
+                )
+            ):
+                pass
+
+            if not tool_calls:
+                break
+
+    async def _async_conversation_inputs(
+        self, chat_log: conversation.ChatLog
+    ) -> tuple[str | None, list[dict[str, Any]]]:
+        """Split a chat log into conversation instructions and input entries.
+
+        The endpoint has no system role -- a message entry is user or
+        assistant only -- and takes the system prompt as `instructions`
+        instead. Tool calls and their results are entries of their own rather
+        than fields on a message, which is the other shape difference from
+        chat completions.
+        """
+        messages = await self._async_chat_log_messages(chat_log)
+
+        instructions: list[str] = []
+        inputs: list[dict[str, Any]] = []
+
+        for message in messages:
+            role = message["role"]
+            content = message["content"]
+
+            if role == "system":
+                if isinstance(content, str):
+                    instructions.append(content)
+            elif role == "tool":
+                inputs.append(
+                    {
+                        "type": "function.result",
+                        "tool_call_id": message["tool_call_id"],
+                        "result": content,
+                    }
+                )
+            else:
+                if content or not message.get("tool_calls"):
+                    inputs.append({"role": role, "content": content})
+                inputs.extend(
+                    {
+                        "type": "function.call",
+                        "tool_call_id": tool_call["id"],
+                        "name": tool_call["function"]["name"],
+                        "arguments": tool_call["function"]["arguments"],
+                    }
+                    for tool_call in message.get("tool_calls") or []
+                )
+
+        return "\n\n".join(instructions) or None, inputs
+
     async def _async_chat_log_messages(
         self, chat_log: conversation.ChatLog
     ) -> list[dict[str, Any]]:
@@ -308,6 +450,13 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         """Generate an answer for the chat log."""
         options = self.subentry.data
         client = self.entry.runtime_data
+
+        # Connectors only run on the conversations endpoint, so an agent with
+        # web search on takes an entirely different path -- see
+        # _async_handle_chat_log_with_search for what that costs.
+        if options.get(CONF_WEB_SEARCH) in WEB_SEARCH_TOOLS:
+            await self._async_handle_chat_log_with_search(chat_log)
+            return
 
         model_args: dict[str, Any] = {
             "model": options.get(CONF_MODEL, DEFAULT_MODEL),
