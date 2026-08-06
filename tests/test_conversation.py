@@ -580,3 +580,41 @@ async def test_web_search_api_errors_are_reported(
     result = await converse(hass, "what is the weather")
 
     assert result.response.response_type == intent.IntentResponseType.ERROR
+
+
+async def test_web_search_citations_do_not_break_the_reply(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Search references are dropped and the sentence still reads.
+
+    A searched reply interleaves text with tool_reference chunks carrying the
+    sources, and the split can fall mid-sentence -- the live API returned the
+    body, then two references, then a lone full stop. Those chunks have no
+    text of their own, so they are skipped and the remaining pieces join back
+    into the sentence the model wrote.
+
+    They are dropped rather than rendered because this reply is also spoken by
+    a voice assistant, where reading out URLs would be worse than useless.
+    """
+    mock_client.beta.conversations.start_async = AsyncMock(
+        return_value=_conversation_response(
+            _entry(type="tool.execution", name="web_search"),
+            _entry(
+                type="message.output",
+                content=[
+                    _entry(type="text", text="It is 21 degrees in Dublin"),
+                    _entry(
+                        type="tool_reference",
+                        tool="web_search",
+                        title="Hour-by-Hour Forecast",
+                        url="https://example.invalid/dublin",
+                    ),
+                    _entry(type="text", text="."),
+                ],
+            ),
+        )
+    )
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    assert speech(await converse(hass, "weather")) == "It is 21 degrees in Dublin."
