@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
@@ -404,13 +405,19 @@ async def test_tts_subentry_offers_speech_models_and_voices(
     assert voices == [{"label": "Amelie (fr, en)", "value": "voice-abc"}]
 
 
-async def test_tts_subentry_without_voices_omits_the_field(
+async def test_tts_subentry_aborts_when_voices_cannot_be_listed(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """No voices means no dropdown, rather than an empty one.
+    """No voice list means no entity, rather than an entity that cannot speak.
 
-    An empty dropdown reads as a fault, when in fact the endpoint is happy to
-    choose a voice itself.
+    This asserted the opposite until the endpoint was asked: the form was
+    shown without the voice field, on the belief that the API would choose a
+    voice. It does not -- a request without one is a 400, which
+    async_get_tts_audio turns into silence with nothing in the log.
+
+    An empty list is a failure rather than an empty account, because preset
+    voices exist on every workspace and async_list_voices returns an empty
+    list for any error rather than raising.
     """
     mock_client.audio.voices.list_async.side_effect = make_sdk_error(500)
 
@@ -419,10 +426,24 @@ async def test_tts_subentry_without_voices_omits_the_field(
         context={"source": SOURCE_USER},
     )
 
-    assert result["type"] is FlowResultType.FORM
-    assert not any(
-        marker.schema == CONF_VOICE for marker in result["data_schema"].schema
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_voices"
+
+
+async def test_tts_subentry_requires_a_voice(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The voice field is required, because the endpoint requires one."""
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_TTS),
+        context={"source": SOURCE_USER},
     )
+
+    markers = [
+        marker for marker in result["data_schema"].schema if marker.schema == CONF_VOICE
+    ]
+    assert markers, "the text-to-speech form offers no voice field"
+    assert isinstance(markers[0], vol.Required)
 
 
 def _default(result: dict, key: str) -> object:
