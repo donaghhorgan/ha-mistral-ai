@@ -55,6 +55,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TTS_NAME,
     DOMAIN,
+    MAX_TEMPERATURE,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
@@ -378,7 +379,10 @@ def _subentry_schema(
             )
         ] = NumberSelector(
             NumberSelectorConfig(
-                min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
+                min=0.0,
+                max=MAX_TEMPERATURE[subentry_type],
+                step=0.1,
+                mode=NumberSelectorMode.SLIDER,
             )
         )
 

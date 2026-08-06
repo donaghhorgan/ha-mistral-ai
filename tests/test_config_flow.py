@@ -244,7 +244,7 @@ async def test_reconfigure_subentry(
 
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
-        {CONF_MODEL: "mistral-large-latest", CONF_TEMPERATURE: 1.5},
+        {CONF_MODEL: "mistral-large-latest", CONF_TEMPERATURE: 0.9},
     )
     await hass.async_block_till_done()
 
@@ -253,7 +253,7 @@ async def test_reconfigure_subentry(
 
     updated = init_integration.subentries[subentry.subentry_id]
     assert updated.data[CONF_MODEL] == "mistral-large-latest"
-    assert updated.data[CONF_TEMPERATURE] == 1.5
+    assert updated.data[CONF_TEMPERATURE] == 0.9
 
 
 async def test_subentry_aborts_when_entry_not_loaded(
@@ -492,3 +492,42 @@ async def test_a_second_entry_can_be_added_with_the_same_key(
         assert result["type"] is FlowResultType.CREATE_ENTRY
 
     assert len(hass.config_entries.async_entries(DOMAIN)) == 2
+
+
+@pytest.mark.parametrize(
+    ("subentry_type", "maximum"),
+    [
+        (SUBENTRY_TYPE_CONVERSATION, 1.0),
+        (SUBENTRY_TYPE_AI_TASK_DATA, 1.5),
+        (SUBENTRY_TYPE_STT, 1.5),
+    ],
+)
+async def test_temperature_slider_stops_where_the_api_does(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+    maximum: float,
+) -> None:
+    """The slider cannot offer a temperature the endpoint will reject.
+
+    It went to 2.0, and nothing accepts that: chat completions caps at 1.5,
+    transcription at 1.5, and the conversations endpoint at 1.0. So the top of
+    the slider produced a 422 on every request that used it.
+
+    Conversation agents get the lowest of the three because web search moves
+    them to the conversations endpoint, and it is a checkbox on this same
+    form -- a temperature that works until an unrelated setting is switched on
+    is the worse failure.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": SOURCE_USER},
+    )
+
+    for marker, selector in result["data_schema"].schema.items():
+        if marker.schema == CONF_TEMPERATURE:
+            assert selector.config["max"] == maximum
+            break
+    else:
+        pytest.fail(f"{subentry_type} offers no temperature field")

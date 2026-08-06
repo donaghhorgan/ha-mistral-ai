@@ -33,6 +33,28 @@ SUBENTRY_TYPE_CONVERSATION = "conversation"
 SUBENTRY_TYPE_STT = "stt"
 SUBENTRY_TYPE_TTS = "tts"
 
+# The highest temperature each subentry type can actually send. Asked of the
+# API rather than taken from the OpenAPI schema, because the schema is wrong
+# about one of them and silent about another:
+#
+#   /v1/chat/completions          <= 1.5   schema agrees
+#   conversations completion_args <= 1.0   schema agrees
+#   /v1/audio/transcriptions      <= 1.5   schema declares no bound at all
+#
+# Anything above returns 422, and the slider used to go to 2.0, so the top
+# quarter of it broke every request that used it.
+#
+# Conversation agents get the lowest of the three. Web search moves them to
+# the conversations endpoint, and it is a checkbox on the same form -- a
+# temperature that works until an unrelated setting is switched on is worse
+# than one that is merely lower than it could be.
+MAX_TEMPERATURE = {
+    SUBENTRY_TYPE_AI_TASK_DATA: 1.5,
+    SUBENTRY_TYPE_CONVERSATION: 1.0,
+    SUBENTRY_TYPE_STT: 1.5,
+    SUBENTRY_TYPE_TTS: 1.5,
+}
+
 # These become the subentry title, which becomes the device name, which --
 # because the entities set _attr_name to None -- becomes the entity name and
 # the entity id. Matching how Home Assistant's own LLM integrations name
@@ -64,6 +86,15 @@ CAPABILITY_FUNCTION_CALLING = "function_calling"
 # extension. mp3 because it is what the media player pipeline handles with the
 # least ceremony; the API also offers pcm, wav, flac and opus.
 TTS_AUDIO_FORMAT = "mp3"
+
+# Voices are paged, and the page defaults to 10 -- both in the API and in the
+# SDK signature. Listing without asking for a page size showed the first ten
+# of an account's voices and silently dropped the rest, which on the account
+# this was found on meant showing 10 of 31.
+#
+# 100 is the documented maximum. The listing still pages, because an account
+# can have more than that.
+VOICE_PAGE_SIZE = 100
 
 # Offered to the assist pipeline as the languages the speech platforms accept.
 # Home Assistant matches a pipeline's language against this list before it will
