@@ -133,6 +133,51 @@ page.
   - Python: `uv run ruff check --fix`
   - TOML: `uv run toml-sort --in-place file.toml`
 
+#### A type signature is not a behaviour
+
+The rule above covers whether something *exists*. It says nothing about
+whether it *works*, and that gap has shipped two broken features.
+
+Generated SDK models and the OpenAPI spec describe what a request will
+serialise and what a validator will accept. They do not describe what the
+endpoint implements, and for this API they are more permissive than reality.
+Ranked by how authoritative each looked at the time:
+
+```text
+SDK request model     accepts web_search              misleading
+API reference page    lists WebSearchTool in tools    wrong
+OpenAPI spec          lists WebSearchTool in tools    wrong
+prose documentation   says unsupported there          correct
+one HTTP request      400                             correct
+```
+
+The two most machine-readable sources were the two most wrong. Web search
+shipped on that inference and returned 400 on the first message ([#65]).
+Image generation shipped the same way and returned nothing, because a chat
+completion response has nowhere to carry the file reference a connector
+produces ([#93]).
+
+**For anything that changes what is sent to the API, the check is a real
+request.** A `curl` with an API key is quicker than the reasoning it replaces.
+Mocked tests are not a substitute: every test for web search passed, on both
+supported Home Assistant versions, against a feature that had never once
+worked.
+
+This applies to our own claims too, not just third-party ones. `ai_task.py`
+carried a comment reading "the download reports what it actually sent" — it
+responds `application/octet-stream`, so every generated image would have been
+served with that as its mime type. A comment asserting a behaviour is a claim
+to be checked, not a fact to be relied on.
+
+Prose documentation won here because it gave a *mechanism*: chat completion
+responses do not carry the references these tools return. A mechanism can be
+checked against the response models, and it was — `ToolFileChunk` appears in
+the conversations content union and not in the chat completions one. A schema
+listing offers nothing to check.
+
+[#65]: https://github.com/donaghhorgan/ha-mistral-ai/issues/65
+[#93]: https://github.com/donaghhorgan/ha-mistral-ai/issues/93
+
 ### Documentation Standards
 
 - In general, write concise documentation
