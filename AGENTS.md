@@ -245,7 +245,15 @@ settings, which is not version controlled and therefore not visible here. It
 requires a pull request and passing checks, and blocks force pushes and
 deletion. The required checks are the blocking jobs in
 [`ci.yml`](./.github/workflows/ci.yml): `lint`, `Test (ha-current)`,
-`Test (ha-minimum)`, `Validate with hassfest` and `Validate with HACS`.
+`Test (ha-minimum)`, `Validate with hassfest` and `Validate with HACS`, plus
+`Contract` from [`contract.yml`](./.github/workflows/contract.yml).
+
+A new required check has to be added to the ruleset by hand, and the order
+matters. Adding the name before the workflow exists on `main` blocks every
+pull request in the repository on a check that will never report — the same
+failure the job names above warn about, arrived at from the other direction.
+So merge the workflow first, let it run once on `main`, and add it to the
+ruleset after.
 
 `Test against latest Home Assistant` is deliberately not among them. It is
 `continue-on-error` because it tracks a moving upstream target, so requiring
