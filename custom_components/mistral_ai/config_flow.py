@@ -123,15 +123,18 @@ async def async_list_models(
     speech platforms working across a Mistral release: names come and go, the
     capability flags do not.
 
-    Raises InvalidAuth if the key is rejected and CannotConnect for any other
-    failure, so callers can map both onto a form error.
+    Raises InvalidAuth if the key is rejected, Forbidden if it is accepted but
+    the account is not permitted, and CannotConnect for any other failure, so
+    callers can map each onto a form error.
     """
     try:
         async with asyncio.timeout(TIMEOUT):
             response = await client.models.list_async()
     except SDKError as err:
-        if err.status_code in (401, 403):
+        if err.status_code == 401:
             raise InvalidAuth from err
+        if err.status_code == 403:
+            raise Forbidden(str(err)) from err
         raise CannotConnect(str(err)) from err
     except (TimeoutError, httpx.HTTPError) as err:
         raise CannotConnect(str(err)) from err
@@ -164,6 +167,9 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
                 await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except Forbidden:
+                _LOGGER.exception("Mistral AI refused the request")
+                errors["base"] = "forbidden"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -205,6 +211,9 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
                 await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except Forbidden:
+                _LOGGER.exception("Mistral AI refused the request")
+                errors["base"] = "forbidden"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -271,6 +280,9 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             )
         except InvalidAuth:
             return self.async_abort(reason="invalid_auth")
+        except Forbidden:
+            _LOGGER.exception("Mistral AI refused the request")
+            return self.async_abort(reason="forbidden")
         except CannotConnect:
             _LOGGER.exception("Failed to list Mistral AI models")
             return self.async_abort(reason="cannot_connect")
@@ -453,3 +465,12 @@ class CannotConnect(Exception):
 
 class InvalidAuth(Exception):
     """Error to indicate the API key was rejected."""
+
+
+class Forbidden(Exception):
+    """Error to indicate the key is valid but the account is not permitted.
+
+    Kept apart from InvalidAuth because the remedy is different: there is no
+    key the user can type that resolves it, so a form that says "invalid key"
+    and offers the field again sends them in a circle.
+    """

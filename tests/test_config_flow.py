@@ -60,7 +60,7 @@ async def test_user_flow_creates_entry_and_subentry(
     ("side_effect", "expected_error"),
     [
         (make_sdk_error(401), "invalid_auth"),
-        (make_sdk_error(403), "invalid_auth"),
+        (make_sdk_error(403), "forbidden"),
         (make_sdk_error(500), "cannot_connect"),
         (httpx.ConnectError("no route to host"), "cannot_connect"),
         (TimeoutError(), "cannot_connect"),
@@ -142,6 +142,28 @@ async def test_reauth_flow_rejects_bad_key(
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_auth"}
+    assert init_integration.data[CONF_API_KEY] == "test-api-key"
+
+
+async def test_reauth_flow_reports_a_refusal_separately(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A 403 during reauth says so, rather than blaming the key again.
+
+    The worst place for the old 401/403 conflation: the user is already in a
+    dialog that exists because their key was said to be bad. Telling them the
+    replacement is bad too, when the account is what is refusing, is a loop
+    with no exit.
+    """
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    result = await init_integration.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "a-perfectly-good-key"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "forbidden"}
     assert init_integration.data[CONF_API_KEY] == "test-api-key"
 
 
@@ -282,6 +304,21 @@ async def test_subentry_aborts_when_api_unreachable(
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "cannot_connect"
+
+
+async def test_subentry_aborts_with_forbidden(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A 403 listing models aborts with its own reason, not invalid_auth."""
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "forbidden"
 
 
 def _suggested(result: dict, key: str) -> object:

@@ -643,13 +643,30 @@ class MistralBaseLLMEntity(MistralBaseEntity):
 
     def _convert_error(self, err: SDKError) -> HomeAssistantError:
         """Map a Mistral AI SDK error onto a Home Assistant error."""
-        if err.status_code in (401, 403):
+        if err.status_code == 401:
             # Prompt for a new key rather than failing on every future
             # sentence.
             self.entry.async_start_reauth(self.hass)
             return HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_api_key",
+            )
+        if err.status_code == 403:
+            # Not an authentication failure, despite the neighbouring status
+            # code, and this used to be handled as one.
+            #
+            # Every way of getting the key wrong -- a wrong key, no
+            # Authorization header, a header without the Bearer prefix --
+            # answers 401 with {"detail": "Invalid API Key"}. 403 is what the
+            # API says when the key is fine and the account is not allowed to
+            # do the thing, which a new key cannot fix. Treating it as auth
+            # meant a user with, say, no access to the model they had typed in
+            # was told their key had been rejected and handed a dialog asking
+            # for another one.
+            _LOGGER.error("Mistral AI refused the request: %s", err)
+            return HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="forbidden",
             )
         if err.status_code == 429:
             return HomeAssistantError(
