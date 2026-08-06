@@ -77,6 +77,8 @@ def _to_wav(pcm: bytes, metadata: stt.SpeechMetadata) -> bytes:
 class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
     """Mistral AI speech-to-text entity."""
 
+    _attr_translation_key = "stt"
+
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         super().__init__(entry, subentry)

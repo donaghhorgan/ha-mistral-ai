@@ -50,6 +50,8 @@ async def async_setup_entry(
 class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
     """Mistral AI text-to-speech entity."""
 
+    _attr_translation_key = "tts"
+
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""
         super().__init__(entry, subentry)

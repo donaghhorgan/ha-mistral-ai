@@ -1,0 +1,24 @@
+{
+    "entity": {
+        "ai_task": {
+            "ai_task": {
+                "default": "mdi:robot"
+            }
+        },
+        "conversation": {
+            "conversation": {
+                "default": "mdi:message-text"
+            }
+        },
+        "stt": {
+            "stt": {
+                "default": "mdi:microphone-message"
+            }
+        },
+        "tts": {
+            "tts": {
+                "default": "mdi:account-voice"
+            }
+        }
+    }
+}

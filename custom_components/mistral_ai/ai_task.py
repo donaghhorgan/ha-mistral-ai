@@ -69,6 +69,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
     """Mistral AI task entity."""
 
     _attr_supported_features = SUPPORTED_FEATURES
+    _attr_translation_key = "ai_task"
 
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the entity."""

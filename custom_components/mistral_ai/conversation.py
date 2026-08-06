@@ -41,6 +41,7 @@ class MistralConversationEntity(
     """Mistral AI conversation agent."""
 
     _attr_supports_streaming = True
+    _attr_translation_key = "conversation"
 
     def __init__(self, entry: MistralConfigEntry, subentry: ConfigSubentry) -> None:
         """Initialize the agent."""
