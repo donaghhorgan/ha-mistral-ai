@@ -113,6 +113,33 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
 
         return bool(getattr(capabilities, CAPABILITY_FUNCTION_CALLING, False))
 
+    async def _async_conversation_inputs(
+        self, chat_log: conversation.ChatLog
+    ) -> tuple[str | None, list[dict[str, Any]]]:
+        """Split a chat log into conversation instructions and input entries.
+
+        The conversations endpoint has no system role -- MessageInputEntry is
+        user or assistant only -- and takes the system prompt as `instructions`
+        instead. Everything else carries over as it is, because the input chunk
+        types are the same ones the chat log already converts to: text and
+        image_url, which is what an attachment becomes.
+        """
+        messages = await self._async_chat_log_messages(chat_log)
+
+        instructions = "\n\n".join(
+            content
+            for message in messages
+            if message["role"] == "system"
+            and isinstance(content := message["content"], str)
+        )
+        inputs = [
+            {"role": message["role"], "content": message["content"]}
+            for message in messages
+            if message["role"] in ("user", "assistant")
+        ]
+
+        return instructions or None, inputs
+
     async def _async_generate_image(
         self,
         task: ai_task.GenImageTask,
@@ -128,16 +155,30 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         # is what makes reference images reach the API -- naming the
         # instructions directly dropped them, while the entity went on
         # advertising SUPPORT_ATTACHMENTS.
-        messages = await self._async_chat_log_messages(chat_log)
+        instructions, inputs = await self._async_conversation_inputs(chat_log)
 
-        # Not streamed. There is nothing to stream for an image, and going
-        # through the ordinary completion call keeps this away from
-        # _transform_stream, which is built around text deltas.
+        # The conversations endpoint rather than chat completions, because
+        # connectors only run there. A chat completion response has nowhere to
+        # put what they return: its content union has no ToolFileChunk, so the
+        # file reference an image comes back as could never appear in one. The
+        # endpoint accepted the request, never ran the connector, and returned
+        # ordinary text -- which is what "Mistral AI returned no image" was.
+        #
+        # Still not streamed. There is nothing to stream for an image, and this
+        # way the conversation event shape stays out of _transform_stream,
+        # which is built around chat completion deltas.
         try:
-            response = await client.chat.complete_async(
+            response = await client.beta.conversations.start_async(
                 model=model,
-                messages=messages,
+                instructions=instructions,
+                inputs=inputs,
                 tools=[{"type": IMAGE_GENERATION_TOOL}],
+                # Explicit because the endpoint defaults it to true, unlike
+                # chat completions, which stores nothing. Left alone, every
+                # image task would be retained on Mistral's servers and
+                # listable afterwards -- a change in what leaves the house,
+                # not an implementation detail.
+                store=False,
                 timeout_ms=TIMEOUT * 1000,
             )
         except SDKError as err:
@@ -145,9 +186,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         except (TimeoutError, httpx.HTTPError) as err:
             raise HomeAssistantError(f"Error talking to Mistral AI: {err}") from err
 
-        choices = getattr(response, "choices", None)
-        message = choices[0].message if choices else None
-        content = getattr(message, "content", None)
+        outputs = getattr(response, "outputs", None) or []
 
         # Record the assistant turn. Home Assistant adds the user side before
         # calling us, so leaving this out traced an image task as a question
@@ -156,15 +195,12 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         # what the model said is the only clue as to why there is no image.
         chat_log.async_add_assistant_content_without_tools(
             conversation.AssistantContent(
-                agent_id=self.entity_id, content=_message_text(content)
+                agent_id=self.entity_id, content=_outputs_text(outputs)
             )
         )
 
-        chunk = _find_generated_file(content)
+        chunk = _find_generated_file(outputs)
         if chunk is None:
-            # Naming the model because this is the shape the remaining failures
-            # take: function_calling is a precondition for the connector, not a
-            # guarantee, so a model can pass the check and still not generate.
             raise HomeAssistantError(
                 f"Mistral AI returned no image. {model} may not support image "
                 "generation"
@@ -230,37 +266,47 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         )
 
 
-def _message_text(content: Any) -> str | None:
-    """Return the text a message carries, ignoring any file chunks.
+def _entry_chunks(outputs: Any) -> Any:
+    """Yield the content chunks of every message entry in a response.
 
-    Content is a plain string for an ordinary reply, but image generation
-    returns a list mixing whatever the model said with the file reference.
+    A conversation returns a list of entries rather than one message. Only
+    message.output entries carry content; tool.execution entries describe the
+    connector's own work and have none, so they are skipped rather than
+    special-cased.
     """
-    if content is None or isinstance(content, str):
-        return content
+    for entry in outputs:
+        content = getattr(entry, "content", None)
+        if content is None or isinstance(content, str):
+            continue
+        yield from content
 
+
+def _outputs_text(outputs: Any) -> str | None:
+    """Return the text a response carries, ignoring any file chunks."""
+    parts = [
+        content
+        for entry in outputs
+        if isinstance(content := getattr(entry, "content", None), str)
+    ]
     # isinstance rather than a truth test: a chunk carrying a non-string in
     # `text` would otherwise fail the join with a TypeError, which is a poor
-    # way to report that an image came back in an unexpected shape.
-    text = "".join(
-        chunk_text
-        for chunk in content
-        if isinstance(chunk_text := getattr(chunk, "text", None), str)
+    # way to report that a response came back in an unexpected shape.
+    parts.extend(
+        text
+        for chunk in _entry_chunks(outputs)
+        if isinstance(text := getattr(chunk, "text", None), str)
     )
-    return text or None
+    return "".join(parts) or None
 
 
-def _find_generated_file(content: Any) -> Any | None:
-    """Return the tool file chunk in a message, if there is one.
+def _find_generated_file(outputs: Any) -> Any | None:
+    """Return the tool file chunk in a response, if there is one.
 
     Image generation does not return the image. It returns a reference to a
     file the API is holding, as a chunk carrying a file_id, alongside whatever
     text the model produced. The bytes need a second call.
     """
-    if isinstance(content, str) or content is None:
-        return None
-
-    for chunk in content:
+    for chunk in _entry_chunks(outputs):
         if getattr(chunk, "file_id", None):
             return chunk
 
