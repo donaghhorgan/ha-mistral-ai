@@ -101,9 +101,21 @@ To change an existing one, click "Configure" next to it.
   list is fetched from the API rather than hard-coded, so it stays correct as
   Mistral adds and retires models. You can also type a model name directly.
 
-- **Temperature**: Controls randomness in responses (0.0 - 2.0)
+  A model Mistral has scheduled for retirement is shown with its end date and
+  its replacement, and sorted below the ones that are staying. It still works
+  until that date, so it stays selectable rather than disappearing — but you
+  will not pick one by accident. A model that has already been withdrawn also
+  stays in the list while it is the one configured, so reconfiguring an entity
+  that needs moving does not lose track of where it was.
+
+- **Temperature**: Controls randomness in responses
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
+  - The slider stops where the API does, which is not the same everywhere:
+    1.0 for conversation agents, 1.5 for AI tasks and speech-to-text. A
+    conversation agent gets the lower limit because web search moves its
+    requests to an endpoint that caps at 1.0, and that is a setting on the
+    same page.
 
 - **Maximum tokens**: Maximum length of responses. The default is 1000. A
   structured AI task that needs more than this comes back as truncated JSON,

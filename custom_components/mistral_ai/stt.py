@@ -18,11 +18,13 @@ from .const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
     DEFAULT_STT_TEMPERATURE,
+    MAX_TEMPERATURE,
     SPEECH_LANGUAGES,
     SUBENTRY_TYPE_STT,
     TIMEOUT,
 )
 from .entity import MistralBaseEntity
+from .helpers import clamped_temperature
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
@@ -137,8 +139,9 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
                     "content_type": "audio/wav",
                 },
                 language=metadata.language.split("-")[0],
-                temperature=self.subentry.data.get(
-                    CONF_TEMPERATURE, DEFAULT_STT_TEMPERATURE
+                temperature=clamped_temperature(
+                    self.subentry.data.get(CONF_TEMPERATURE, DEFAULT_STT_TEMPERATURE),
+                    MAX_TEMPERATURE[SUBENTRY_TYPE_STT],
                 ),
                 timeout_ms=TIMEOUT * 1000,
             )
