@@ -23,6 +23,7 @@ from mistralai.client.errors import SDKError
 from voluptuous_openapi import convert
 
 from .const import (
+    ATTACHMENT_DOCUMENT_TYPE,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DOMAIN,
+    MAX_ATTACHMENT_BYTES,
     MAX_TEMPERATURE,
     MAX_TOOL_ITERATIONS,
     SUBENTRY_TYPE_AI_TASK_DATA,
@@ -147,18 +149,42 @@ async def _async_attachment_chunks(
                 )
 
             mime_type = attachment.mime_type or guess_file_type(path)[0]
-            if not mime_type or not mime_type.startswith("image/"):
+
+            # Images go as image_url, PDFs as document_url. Anything else is
+            # refused -- the message names what is accepted rather than saying
+            # "only images", which read as a limit of the API and was not one.
+            if mime_type and mime_type.startswith("image/"):
+                chunk_type = "image_url"
+            elif mime_type == ATTACHMENT_DOCUMENT_TYPE:
+                chunk_type = "document_url"
+            else:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="unsupported_attachment_type",
                     translation_placeholders={"path": str(path)},
                 )
 
+            # Checked before reading, so an oversized file is never loaded at
+            # all. The endpoint is not what this protects: it accepted a 30 MB
+            # PDF happily. Attachments are inlined as base64, so the bytes and
+            # a string a third larger are resident together, and Home Assistant
+            # often runs somewhere that cannot spare it.
+            if (size := path.stat().st_size) > MAX_ATTACHMENT_BYTES:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="attachment_too_large",
+                    translation_placeholders={
+                        "path": str(path),
+                        "size": f"{size / 1024 / 1024:.1f}",
+                        "limit": f"{MAX_ATTACHMENT_BYTES // 1024 // 1024}",
+                    },
+                )
+
             encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
             chunks.append(
                 {
-                    "type": "image_url",
-                    "image_url": f"data:{mime_type};base64,{encoded}",
+                    "type": chunk_type,
+                    chunk_type: f"data:{mime_type};base64,{encoded}",
                 }
             )
         return chunks
