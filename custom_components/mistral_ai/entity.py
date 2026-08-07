@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from contextlib import asynccontextmanager
 from mimetypes import guess_file_type
 from typing import TYPE_CHECKING, Any
 
@@ -403,6 +404,48 @@ class MistralBaseEntity(Entity):
 class MistralBaseLLMEntity(MistralBaseEntity):
     """Mistral AI base LLM entity."""
 
+    @asynccontextmanager
+    async def _translating_errors(
+        self, *, transport_key: str = "api_error"
+    ) -> AsyncGenerator[None]:
+        """Turn anything the API raises into a Home Assistant error.
+
+        `transport_key` names the message for a timeout or a connection
+        failure, which is the only part that differs between callers --
+        downloading a generated image says so rather than blaming the chat
+        request.
+
+        A HomeAssistantError passes through untouched. It comes from tool
+        execution, or from our own conversion, and is already meaningful.
+
+        The bare `Exception` arm is deliberate. The SDK keeps adding exception
+        types that inherit from neither SDKError nor httpx.HTTPError -- 2.8.0
+        added StreamDisconnectedError for mid-stream SSE errors -- and they are
+        only reachable from private modules, so catching them by name would tie
+        us to SDK internals. Anything unexpected becomes a clean error rather
+        than a traceback in the user's face.
+        """
+        try:
+            yield
+        except SDKError as err:
+            raise self._convert_error(err) from err
+        except (TimeoutError, httpx.HTTPError) as err:
+            _LOGGER.error("Error talking to Mistral AI: %s", err)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key=transport_key,
+                translation_placeholders={"error": str(err)},
+            ) from err
+        except HomeAssistantError:
+            raise
+        except Exception as err:
+            _LOGGER.exception("Unexpected error from Mistral AI")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="unexpected_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
     async def _async_handle_chat_log_with_search(
         self, chat_log: conversation.ChatLog
     ) -> None:
@@ -413,12 +456,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         outright or never runs it, because its responses have nowhere to carry
         the references a connector returns.
 
-        Not streamed. The conversations endpoint does stream, but as a
-        different event shape that _transform_stream cannot read, and a
-        parallel implementation of it is a larger piece of work than this. The
-        cost is a longer pause before a reply begins, on an agent that is
-        already waiting on a web search. Every agent without web search keeps
-        the streaming path untouched.
+        Streamed through a transform of its own, because this endpoint reports
+        a different vocabulary of events -- see
+        _transform_conversation_stream.
         """
         options = self.subentry.data
         client = self.entry.runtime_data
@@ -438,7 +478,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # the chat completions path re-sends its messages.
             instructions, inputs = await self._async_conversation_inputs(chat_log)
 
-            try:
+            async with self._translating_errors():
                 stream = await client.beta.conversations.start_stream_async(
                     model=options.get(CONF_MODEL, DEFAULT_MODEL),
                     instructions=instructions,
@@ -481,24 +521,6 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     self.entity_id, _transform_conversation_stream(stream)
                 ):
                     pass
-            except SDKError as err:
-                raise self._convert_error(err) from err
-            except (TimeoutError, httpx.HTTPError) as err:
-                _LOGGER.error("Error talking to Mistral AI: %s", err)
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="api_error",
-                    translation_placeholders={"error": str(err)},
-                ) from err
-            except HomeAssistantError:
-                raise
-            except Exception as err:
-                _LOGGER.exception("Unexpected error from Mistral AI")
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="unexpected_error",
-                    translation_placeholders={"error": str(err)},
-                ) from err
 
             if not chat_log.unresponded_tool_results:
                 break
@@ -625,7 +647,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # previous iteration are included.
             messages = await _async_convert_messages(self.hass, chat_log.content)
 
-            try:
+            async with self._translating_errors():
                 # timeout_ms is applied by the SDK per read, so a stalled
                 # stream fails rather than hanging, while a long but steady
                 # response is left alone. Wrapping the loop in a deadline
@@ -638,33 +660,6 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     self.entity_id, _transform_stream(stream)
                 ):
                     pass
-            except SDKError as err:
-                raise self._convert_error(err) from err
-            except (TimeoutError, httpx.HTTPError) as err:
-                _LOGGER.error("Error talking to Mistral AI: %s", err)
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="api_error",
-                    translation_placeholders={"error": str(err)},
-                ) from err
-            except HomeAssistantError:
-                # Raised by tool execution, or by our own conversion above.
-                # Already meaningful, so let it through untouched.
-                raise
-            except Exception as err:
-                # The SDK keeps adding exception types that inherit from
-                # neither SDKError nor httpx.HTTPError -- 2.8.0 added
-                # StreamDisconnectedError for mid-stream SSE errors -- and
-                # they are only reachable from private modules, so catching
-                # them by name would tie us to SDK internals. Anything
-                # unexpected becomes a clean error rather than a traceback in
-                # the user's face.
-                _LOGGER.exception("Unexpected error from Mistral AI")
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="unexpected_error",
-                    translation_placeholders={"error": str(err)},
-                ) from err
 
             if not chat_log.unresponded_tool_results:
                 break

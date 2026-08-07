@@ -29,16 +29,29 @@ def _raised_translation_keys() -> set[str]:
     """
     keys: set[str] = set()
 
+    # translation_key is the direct form. transport_key is the indirection:
+    # the shared error helper takes one and passes it on, so the literal
+    # appears at the call site or as the parameter's default rather than
+    # beside the raise.
+    names = ("translation_key", "transport_key")
+
     for module in _integration_path().glob("*.py"):
         tree = ast.parse(module.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            for keyword in node.keywords:
-                if keyword.arg == "translation_key" and isinstance(
-                    keyword.value, ast.Constant
-                ):
-                    keys.add(keyword.value.value)
+            if isinstance(node, ast.Call):
+                keys.update(
+                    keyword.value.value
+                    for keyword in node.keywords
+                    if keyword.arg in names and isinstance(keyword.value, ast.Constant)
+                )
+            elif isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
+                keys.update(
+                    default.value
+                    for argument, default in zip(
+                        node.args.kwonlyargs, node.args.kw_defaults, strict=True
+                    )
+                    if argument.arg in names and isinstance(default, ast.Constant)
+                )
 
     return keys
 
