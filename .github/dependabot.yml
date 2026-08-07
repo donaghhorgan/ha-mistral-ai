@@ -47,9 +47,23 @@ updates:
     #                  needs. These resolve fine and then break at runtime,
     #                  which is the other failure mode -- see the ignore list
     #                  below.
+    #
+    # Everything else we declare is here. Audited by cross-referencing the
+    # declared packages against what homeassistant and
+    # pytest-homeassistant-custom-component pin exactly -- 46 and 27
+    # respectively, which is why the list above is short and this one is not
+    # its complement.
     allow:
       - dependency-name: mistralai
       - dependency-name: bandit
+      # ha-ffmpeg and mutagen are needed to import homeassistant.components.tts
+      # at all. Neither is pinned by Home Assistant, so both are ordinary dev
+      # dependencies -- they were simply missed when added to the dev group,
+      # and mutagen's floor had already drifted a release behind as a result.
+      # This is the failure the allowlist trades for: silence rather than
+      # breakage, but silence all the same.
+      - dependency-name: ha-ffmpeg
+      - dependency-name: mutagen
       - dependency-name: pre-commit
       - dependency-name: pymarkdownlnt
       - dependency-name: pyturbojpeg
