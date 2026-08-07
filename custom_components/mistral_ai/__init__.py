@@ -3,23 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import httpx
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryError,
     ConfigEntryNotReady,
 )
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
 from mistralai.client import Mistral
 from mistralai.client.errors import SDKError
 
 from .client import async_create_client
-from .const import CONF_API_KEY, DOMAIN, TIMEOUT
+from .const import CONF_API_KEY, CONF_MODEL, DOMAIN, TIMEOUT
+from .repairs import async_clear_issue, issue_id
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -41,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> b
     # flow, rather than as a failure on the user's first sentence.
     try:
         async with asyncio.timeout(TIMEOUT):
-            await client.models.list_async()
+            models = await client.models.list_async()
     except SDKError as err:
         if err.status_code == 401:
             raise ConfigEntryAuthFailed("Invalid Mistral AI API key") from err
@@ -61,6 +64,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> b
 
     entry.runtime_data = client
 
+    # Free: setup already fetched the list to validate the key, and used to
+    # discard it.
+    _async_review_models(hass, entry, models)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
@@ -75,3 +82,63 @@ async def async_unload_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> 
 async def async_update_options(hass: HomeAssistant, entry: MistralConfigEntry) -> None:
     """Reload the config entry when its options change."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+@callback
+def _async_review_models(
+    hass: HomeAssistant, entry: MistralConfigEntry, models: Any
+) -> None:
+    """Warn about any subentry pointing at a model that is being retired.
+
+    The dropdown labels retiring models for whoever is choosing one. That
+    helps the next person to open the form and nobody who set theirs up a year
+    ago -- so this is the other half: telling someone before the model stops
+    working rather than after.
+
+    Raised and withdrawn on every setup rather than tracked, so that changing
+    the model, or Mistral cancelling a retirement, clears the warning without
+    anything having to notice.
+    """
+    retiring = {
+        card.id: card
+        for card in (getattr(models, "data", None) or [])
+        if getattr(card, "id", None) and getattr(card, "deprecation", None)
+    }
+
+    for subentry_id, subentry in entry.subentries.items():
+        card = retiring.get(subentry.data.get(CONF_MODEL))
+        if card is None:
+            async_clear_issue(hass, subentry_id)
+            continue
+
+        replacement = getattr(card, "deprecation_replacement_model", None)
+        deprecation = card.deprecation
+
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id(subentry_id),
+            data={
+                "entry_id": entry.entry_id,
+                "subentry_id": subentry_id,
+                "replacement": replacement,
+            },
+            # Fixable only when the API names a successor. Offering a button
+            # that has to guess where to move someone would be worse than
+            # telling them to choose, which is what the unfixable form of this
+            # issue says.
+            is_fixable=replacement is not None,
+            issue_domain=DOMAIN,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=(
+                "deprecated_model" if replacement else "deprecated_model_no_successor"
+            ),
+            translation_placeholders={
+                "name": subentry.title,
+                "model": subentry.data[CONF_MODEL],
+                "replacement": replacement or "",
+                "date": deprecation.date().isoformat()
+                if hasattr(deprecation, "date")
+                else str(deprecation),
+            },
+        )

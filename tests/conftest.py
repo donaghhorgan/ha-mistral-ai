@@ -36,6 +36,7 @@ STT_MODEL = "voxtral-mini-latest"
 TTS_MODEL = "voxtral-speech-latest"
 VOICE_ID = "voice-abc"
 DEPRECATED_MODEL = "mistral-medium-2508"
+ORPHANED_MODEL = "mistral-nemo-2407"
 NON_CHAT_MODEL = "mistral-ocr-latest"
 
 
@@ -111,6 +112,13 @@ def mock_models_response() -> MagicMock:
             function_calling=True,
             deprecation=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
             replacement="mistral-medium-3-5",
+        ),
+        # Retiring with nothing named to move to. The API does this, and it
+        # is the case where a repair cannot offer a button.
+        _model_card(
+            ORPHANED_MODEL,
+            completion_chat=True,
+            deprecation=datetime(2026, 8, 31, 12, 0, tzinfo=UTC),
         ),
     ]
     return response

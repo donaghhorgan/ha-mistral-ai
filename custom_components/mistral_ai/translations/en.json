@@ -187,5 +187,22 @@
         "unsupported_attachment_type": {
             "message": "Only images can be sent to Mistral AI, and {path} is not an image."
         }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} uses a model that is being retired",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Switch {name} to {replacement}",
+                        "description": "{name} is set to use {model}, which Mistral AI retires on {date}. After that date it will stop answering.\n\nMistral AI names {replacement} as its replacement. Submit to switch {name} over to it.\n\nNothing else about {name} changes, and you can pick a different model yourself at any time by reconfiguring it."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} uses a model that is being retired",
+            "description": "{name} is set to use {model}, which Mistral AI retires on {date}. After that date it will stop answering.\n\nMistral AI has not named a replacement for this one, so there is nothing to switch to automatically. Reconfigure {name} and choose another model — the dropdown marks anything else that is being retired, so you will not land on the same problem twice."
+        }
     }
 }

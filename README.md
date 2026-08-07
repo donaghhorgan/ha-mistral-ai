@@ -101,6 +101,12 @@ To change an existing one, click "Configure" next to it.
   list is fetched from the API rather than hard-coded, so it stays correct as
   Mistral adds and retires models. You can also type a model name directly.
 
+  If an agent you already set up is using a model that is being retired, Home
+  Assistant raises a repair for it under Settings → System → Repairs, before
+  the model stops working rather than after. Where Mistral names a successor,
+  the repair offers to switch that agent over in one click; where it does not,
+  the repair says so and leaves the choice to you.
+
   A model Mistral has scheduled for retirement is shown with its end date and
   its replacement, and sorted below the ones that are staying. It still works
   until that date, so it stays selectable rather than disappearing — but you
