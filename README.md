@@ -203,6 +203,16 @@ conversation. Add one with "Add AI task", then call
 `ai_task.generate_data` with its entity ID. Passing a structure returns
 validated JSON, using Mistral's native structured output.
 
+Conversation agents and AI tasks both accept attachments: images, and PDFs.
+A PDF is sent as a document rather than a picture, and the model answers from
+its contents — asked what a bill was for, it reads the amount and the date off
+the page. No model capability gates this; extraction happens on Mistral's side
+and any chat model can do it.
+
+Attachments are inlined into the request, so they are capped at 20 MB. That is
+not the API's limit — it accepts considerably more — it is to avoid reading an
+unbounded file into memory on a machine that may not have it to spare.
+
 The same entity also generates images via `ai_task.generate_image`, on the
 model already configured on the subentry — there is no second model to pick.
 Home Assistant saves the result to the media source and returns a reference

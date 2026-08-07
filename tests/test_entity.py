@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import voluptuous as vol
@@ -13,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 
+from custom_components.mistral_ai.const import MAX_ATTACHMENT_BYTES
 from custom_components.mistral_ai.entity import (
     _async_convert_messages,
     _convert_content,
@@ -22,9 +24,6 @@ from custom_components.mistral_ai.entity import (
 )
 
 from .helpers import make_chunk, make_stream, make_tool_call
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_convert_user_content() -> None:
@@ -322,10 +321,84 @@ async def test_convert_messages_with_image_attachment(
     )
 
 
-async def test_convert_messages_rejects_non_image(
+async def test_convert_messages_with_pdf_attachment(
     hass: HomeAssistant, tmp_path: Path
 ) -> None:
-    """A non-image attachment is rejected rather than silently dropped."""
+    """A PDF goes as a document chunk, not an image one.
+
+    The integration used to refuse anything that was not an image, with a
+    message saying so, which read as a limit of the API. It is not one: a
+    chat completion carrying a document_url returns 200 and the model answers
+    from the contents.
+
+    Deliberately not gated on a model capability. `vision` is the obvious
+    candidate and is wrong -- a model without it read a PDF back correctly, so
+    extraction happens server side and gating would have hidden the feature
+    from most of the model list.
+    """
+    document = tmp_path / "bill.pdf"
+    document.write_bytes(b"%PDF-1.4 fake")
+
+    content = conversation.UserContent(
+        content="what is due?",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media",
+                mime_type="application/pdf",
+                path=document,
+            )
+        ],
+    )
+
+    messages = await _async_convert_messages(hass, [content])
+
+    _, chunk = messages[0]["content"]
+    assert chunk["type"] == "document_url"
+    assert chunk["document_url"] == (
+        "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4 fake").decode()
+    )
+
+
+async def test_convert_messages_rejects_an_oversized_attachment(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A file past the limit is refused before it is read.
+
+    Not the endpoint's limit -- it accepted a 30 MB PDF without complaint.
+    This is about the Home Assistant process: an attachment is inlined as
+    base64, so the bytes and a string a third larger are resident together.
+
+    Asserted on the size check happening before the read, because a limit that
+    only applies after loading the file protects nothing.
+    """
+    big = tmp_path / "huge.pdf"
+    big.write_bytes(b"%PDF-1.4")
+
+    content = conversation.UserContent(
+        content="read this",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media", mime_type="application/pdf", path=big
+            )
+        ],
+    )
+
+    with (
+        patch.object(Path, "stat") as stat,
+        patch.object(Path, "read_bytes") as read_bytes,
+    ):
+        stat.return_value.st_size = MAX_ATTACHMENT_BYTES + 1
+        with pytest.raises(HomeAssistantError) as raised:
+            await _async_convert_messages(hass, [content])
+
+    assert raised.value.translation_key == "attachment_too_large"
+    read_bytes.assert_not_called()
+
+
+async def test_convert_messages_rejects_an_unsupported_type(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Anything that is neither an image nor a PDF is rejected."""
     doc = tmp_path / "notes.txt"
     doc.write_bytes(b"hello")
 
