@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import httpx
 import voluptuous as vol
@@ -55,6 +55,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TTS_NAME,
     DOMAIN,
+    MAX_TEMPERATURE,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
@@ -66,6 +67,7 @@ from .helpers import async_list_voices
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from datetime import datetime
 
     from mistralai.client import Mistral
 
@@ -113,25 +115,62 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
+class ModelChoice(NamedTuple):
+    """A model the key can reach, and what the API says about its future."""
+
+    id: str
+    deprecation: datetime | None
+    replacement: str | None
+
+    @property
+    def label(self) -> str:
+        """Return the text to show in a dropdown.
+
+        A deprecated model still works until its date, so it stays selectable
+        and says so rather than disappearing. Someone with a reason to pick one
+        can; someone choosing blind is told what they are choosing.
+        """
+        if self.deprecation is None:
+            return self.id
+
+        retires = self.deprecation.date().isoformat()
+        if self.replacement:
+            return f"{self.id} — retires {retires}, replaced by {self.replacement}"
+        return f"{self.id} — retires {retires}"
+
+
 async def async_list_models(
     client: Mistral, *, capability: str | None = None
-) -> list[str]:
+) -> list[ModelChoice]:
     """Return the models available to the given client.
 
-    `capability` filters to models advertising it, e.g. audio_transcription.
-    Filtering on what the API reports rather than on model names keeps the
-    speech platforms working across a Mistral release: names come and go, the
-    capability flags do not.
+        `capability` filters to models advertising it, e.g. audio_transcription.
+        Filtering on what the API reports rather than on model names keeps the
+        speech platforms working across a Mistral release: names come and go, the
+        capability flags do not.
 
-    Raises InvalidAuth if the key is rejected and CannotConnect for any other
-    failure, so callers can map both onto a form error.
+    <<<<<<< HEAD
+        Raises InvalidAuth if the key is rejected, Forbidden if it is accepted but
+        the account is not permitted, and CannotConnect for any other failure, so
+        callers can map each onto a form error.
+    =======
+        Deprecation is carried through rather than discarded. The API reports a
+        retirement date and a replacement for every model on its way out, and the
+        dropdown used to show those exactly like any other -- so a model could be
+        chosen weeks before it stopped working, with nothing said at any point.
+
+        Raises InvalidAuth if the key is rejected and CannotConnect for any other
+        failure, so callers can map both onto a form error.
+    >>>>>>> origin/main
     """
     try:
         async with asyncio.timeout(TIMEOUT):
             response = await client.models.list_async()
     except SDKError as err:
-        if err.status_code in (401, 403):
+        if err.status_code == 401:
             raise InvalidAuth from err
+        if err.status_code == 403:
+            raise Forbidden(str(err)) from err
         raise CannotConnect(str(err)) from err
     except (TimeoutError, httpx.HTTPError) as err:
         raise CannotConnect(str(err)) from err
@@ -144,7 +183,21 @@ async def async_list_models(
             if getattr(getattr(model, "capabilities", None), capability, False)
         ]
 
-    return sorted(model.id for model in models)
+    choices = [
+        ModelChoice(
+            id=model.id,
+            deprecation=getattr(model, "deprecation", None),
+            replacement=getattr(model, "deprecation_replacement_model", None),
+        )
+        for model in models
+    ]
+
+    # Live models first, then the ones on their way out, each group by name.
+    # Sorting purely by name buries a deprecation warning among fifty entries
+    # that do not have one.
+    return sorted(
+        choices, key=lambda choice: (choice.deprecation is not None, choice.id)
+    )
 
 
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -164,6 +217,9 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
                 await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except Forbidden:
+                _LOGGER.exception("Mistral AI refused the request")
+                errors["base"] = "forbidden"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -205,6 +261,9 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
                 await async_list_models(client)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
+            except Forbidden:
+                _LOGGER.exception("Mistral AI refused the request")
+                errors["base"] = "forbidden"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except Exception:
@@ -271,6 +330,9 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             )
         except InvalidAuth:
             return self.async_abort(reason="invalid_auth")
+        except Forbidden:
+            _LOGGER.exception("Mistral AI refused the request")
+            return self.async_abort(reason="forbidden")
         except CannotConnect:
             _LOGGER.exception("Failed to list Mistral AI models")
             return self.async_abort(reason="cannot_connect")
@@ -302,6 +364,19 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 for voice in await async_list_voices(client)
             ]
 
+            # An empty list means the listing failed, not that there is
+            # nothing to choose from: preset voices exist on every workspace,
+            # including a brand new empty one, and async_list_voices returns
+            # an empty list for any error rather than raising.
+            #
+            # Aborting is the point. The form used to be shown anyway, minus
+            # the voice field, and produced an entity that could never speak --
+            # the endpoint refuses a request with no voice, and the 400 comes
+            # back as silence. Better to say so now than to hand someone a
+            # working-looking entity that is not.
+            if not voices:
+                return self.async_abort(reason="no_voices")
+
         return self.async_show_form(
             step_id="set_options",
             data_schema=vol.Schema(
@@ -326,7 +401,7 @@ def _subentry_schema(
     is_new: bool,
     subentry_type: str,
     options: Mapping[str, Any],
-    models: list[str],
+    models: list[ModelChoice],
     voices: list[SelectOptionDict] | None = None,
 ) -> dict[vol.Marker, Any]:
     """Build the schema for a subentry options form."""
@@ -343,13 +418,23 @@ def _subentry_schema(
     # here would go stale the next time Mistral retires one; this only names
     # the one general-purpose default and treats it as a preference rather
     # than a guarantee.
-    if (fallback_model := DEFAULT_MODEL) not in models:
-        fallback_model = models[0] if models else DEFAULT_MODEL
+    listed = {choice.id: choice for choice in models}
+
+    if (fallback_model := DEFAULT_MODEL) not in listed:
+        fallback_model = models[0].id if models else DEFAULT_MODEL
     default_model = options.get(CONF_MODEL, fallback_model)
 
     # Keep the configured model selectable even if the API stops listing it,
-    # so reconfiguring does not silently drop the user's choice.
-    model_options = sorted({*models, default_model})
+    # so reconfiguring does not silently drop the user's choice. A model that
+    # has been retired outright is exactly when someone needs to open this
+    # form, so it must not vanish from it.
+    model_options = [
+        SelectOptionDict(label=choice.label, value=choice.id) for choice in models
+    ]
+    if default_model not in listed:
+        model_options.insert(
+            0, SelectOptionDict(label=default_model, value=default_model)
+        )
 
     schema[vol.Required(CONF_MODEL, default=default_model)] = SelectSelector(
         SelectSelectorConfig(
@@ -378,16 +463,31 @@ def _subentry_schema(
             )
         ] = NumberSelector(
             NumberSelectorConfig(
-                min=0.0, max=2.0, step=0.1, mode=NumberSelectorMode.SLIDER
+                min=0.0,
+                max=MAX_TEMPERATURE[subentry_type],
+                step=0.1,
+                mode=NumberSelectorMode.SLIDER,
             )
         )
 
-    # Only offered when the account has voices to choose between. Left out
-    # rather than shown empty, because an empty dropdown reads as a fault when
-    # the endpoint is perfectly happy to pick a voice itself.
-    if subentry_type == SUBENTRY_TYPE_TTS and voices:
+    # Required, because the endpoint will not choose one:
+    #
+    #   400 Either ref_audio or voice must be provided.
+    #
+    # This used to be optional and was left out entirely when no voices could
+    # be listed, on the belief that the API would pick one. It does not. An
+    # entity configured that way stored no voice, sent no voice, and answered
+    # every request with a 400 that async_get_tts_audio turns into silence.
+    #
+    # `is not None` rather than a truthiness test, and the distinction is the
+    # bug. `and voices` silently dropped the field for an empty list, which is
+    # how an entity with no voice came to exist. An empty list cannot reach
+    # here -- the flow aborts on it before building the form -- so this only
+    # narrows the argument's type, and an empty dropdown would be a visible
+    # fault rather than a missing field.
+    if subentry_type == SUBENTRY_TYPE_TTS and voices is not None:
         schema[
-            vol.Optional(
+            vol.Required(
                 CONF_VOICE,
                 description={"suggested_value": options.get(CONF_VOICE)},
             )
@@ -453,3 +553,12 @@ class CannotConnect(Exception):
 
 class InvalidAuth(Exception):
     """Error to indicate the API key was rejected."""
+
+
+class Forbidden(Exception):
+    """Error to indicate the key is valid but the account is not permitted.
+
+    Kept apart from InvalidAuth because the remedy is different: there is no
+    key the user can type that resolves it, so a form that says "invalid key"
+    and offers the field again sends them in a circle.
+    """

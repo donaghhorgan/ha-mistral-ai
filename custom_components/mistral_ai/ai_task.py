@@ -218,6 +218,19 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             )
 
         image = downloaded.content
+
+        # The bytes are ours now, and Home Assistant saves its own copy to the
+        # media source, so the remote file has no further purpose. Nothing
+        # else deletes it: `store: false` governs the conversation, not the
+        # file the connector wrote, so without this every image an automation
+        # ever generates stays on the account. An hourly dashboard would leave
+        # 8,760 of them a year, readable and deletable by anyone holding the
+        # API key.
+        #
+        # Deleted before the empty check below, so a zero-byte result is still
+        # cleaned up rather than left behind by the error path.
+        await self._async_delete_file(chunk.file_id)
+
         if not image:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
@@ -230,6 +243,30 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             mime_type=_image_mime_type(image, getattr(chunk, "file_type", None)),
             model=model,
         )
+
+    async def _async_delete_file(self, file_id: str) -> None:
+        """Remove a generated file from the account, best effort.
+
+        Never raises. By the time this runs the caller holds the image and the
+        task has effectively succeeded, so turning a failed cleanup into a
+        failed generation would be the wrong trade -- the user would see an
+        error for something they actually got.
+
+        Logged at debug rather than warning for the same reason: a file left
+        behind costs a little storage on an account the user controls, and it
+        is not a thing they can act on from a notification.
+        """
+        try:
+            await self.entry.runtime_data.files.delete_async(
+                file_id=file_id, timeout_ms=TIMEOUT * 1000
+            )
+        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+            _LOGGER.debug("Could not delete generated file %s: %s", file_id, err)
+        except Exception:  # noqa: BLE001
+            # Deliberately broad. The SDK has exception types that inherit from
+            # none of the above, and nothing here is worth failing a completed
+            # image generation over.
+            _LOGGER.debug("Could not delete generated file %s", file_id)
 
     async def _async_generate_data(
         self,
