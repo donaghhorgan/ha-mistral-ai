@@ -202,10 +202,19 @@ async def _transform_stream(
     # one response do not overwrite each other.
     tool_calls: dict[int, dict[str, Any]] = {}
 
+    # Whether the model ever said anything, as opposed to only thinking, and
+    # whether the response was cut off. Together they identify a reply that
+    # ran out of room before it began -- see the check after the loop.
+    said_something = False
+    truncated = False
+
     async for chunk in stream:
         data = getattr(chunk, "data", None)
         if data is None or not data.choices:
             continue
+
+        if data.choices[0].finish_reason == "length":
+            truncated = True
 
         delta = data.choices[0].delta
 
@@ -217,6 +226,7 @@ async def _transform_stream(
             # Content is usually a plain string, but reasoning models return a
             # list of chunks, mixing text with the model's thinking.
             if isinstance(delta.content, str):
+                said_something = True
                 yield {"content": delta.content}
             else:
                 for part in delta.content:
@@ -225,6 +235,7 @@ async def _transform_stream(
                             if text := getattr(thought, "text", None):
                                 yield {"thinking_content": text}
                     elif text := getattr(part, "text", None):
+                        said_something = True
                         yield {"content": text}
 
         for index, tool_call in enumerate(delta.tool_calls or []):
@@ -255,6 +266,27 @@ async def _transform_stream(
                 for call in complete
             ]
         }
+        return
+
+    # Cut off before the model said anything. A reasoning model spends tokens
+    # thinking before it answers, and maximum tokens caps the whole response,
+    # so a low enough limit produces a successful reply containing only
+    # thinking -- no error anywhere, and nothing for the user.
+    #
+    # Left alone when there is partial text: half an answer is worth more than
+    # an error, and the user can see it was cut short. Only the case with
+    # nothing at all is worth raising over, because it is indistinguishable
+    # from the model having ignored the question.
+    #
+    # Also catches ordinary truncation with no reasoning involved, which is
+    # the same failure with a different cause: an AI task whose structured
+    # output was cut off used to arrive as "did not return valid structured
+    # data", blaming the model for a length problem.
+    if truncated and not said_something:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="truncated_before_answering",
+        )
 
 
 async def _transform_conversation_stream(
