@@ -770,6 +770,7 @@ async def test_a_validation_error_reaches_the_user_readably(
     assert "agent_id" not in spoken
     assert len(spoken) < 200
 
+
 async def test_top_p_is_sent_on_the_chat_completions_path(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
