@@ -19,6 +19,9 @@
     "integration_type": "service",
     "iot_class": "cloud_polling",
     "issue_tracker": "https://github.com/donaghhorgan/ha-mistral-ai/issues",
+    "loggers": [
+        "mistralai"
+    ],
     "requirements": [
         "mistralai>=2.1.0"
     ],
