@@ -409,10 +409,16 @@ uv run pre-commit run --all-files
 # Run the tests
 uv run pytest
 
-# Run the tests against the oldest supported Home Assistant version
-uv sync --no-default-groups --group dev --group ha-minimum
-uv run --no-sync pytest
-uv sync  # switch back
+# Run the tests against the oldest supported Home Assistant version.
+# Resolved on the fly rather than locked -- see CLAUDE.md for why, and
+# .github/workflows/ci.yml for the pins this mirrors.
+uv run --isolated --no-project \
+  --with pytest-homeassistant-custom-component==0.13.269 \
+  --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
+  --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
+  --with pymicro-vad --with pyspeex-noise \
+  --with "mistralai>=2.1.0" --with PyTurboJPEG \
+  pytest tests/ -q --no-cov
 ```
 
 See [`AGENTS.md`](AGENTS.md) for conventions and

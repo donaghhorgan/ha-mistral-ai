@@ -78,8 +78,10 @@ print([r for r in requires('homeassistant') if 'PACKAGE' in r.lower()])"
 ```
 
 If it comes back with `==`, the version is not yours to pick. Match it, or use
-a floor at or below it. This has bitten twice: `pillow>=12.0.0` made
-`ha-minimum` unresolvable because Home Assistant 2025.8.0 wants `11.3.0`.
+a floor at or below it. This has bitten twice: `pillow>=12.0.0` once made the
+minimum-version group unresolvable because Home Assistant 2025.8.0 wants
+`11.3.0`. That group no longer exists, but `ha-current` pins pillow exactly
+too, so the rule stands -- only the version in the error message changed.
 
 #### Dependabot works from an allowlist
 
@@ -99,16 +101,26 @@ page.
 - Python code should be written for the version in [`.python-version`](.python-version)
 - The integration is tested against three Home Assistant versions, because no
   single environment can cover the supported range:
-  - `test (ha-current)` — whatever `uv.lock` resolves, on Python 3.13
-  - `test (ha-minimum)` — the floor named in `hacs.json`, on Python 3.13
-  - `test-latest` — the newest release, on Python 3.14, since Home Assistant
-    2026.5.0 and later require it. Advisory only; it tracks a moving target.
+  - `Test (ha-current)` — whatever `uv.lock` resolves, on Python 3.13
+  - `Test (ha-minimum)` — the floor named in `hacs.json`, on Python 3.13
+  - `Test against latest Home Assistant` — the newest release, on Python 3.14,
+    since Home Assistant 2026.5.0 and later require it. Advisory only; it
+    tracks a moving target.
 
-  The first two are conflicting dependency groups in `pyproject.toml`, so uv
-  locks a resolution for each and both are reproducible. Switch between them
-  with `uv sync --no-default-groups --group dev --group <group>`; a plain
-  `uv sync` gets `ha-current`. Note that `uv sync --all-groups` cannot work
-  here, because the groups conflict by design.
+  Only the first comes from `uv.lock`, and it is the only resolution there —
+  `uv sync` gets it, and `uv sync --all-groups` works again now that nothing
+  conflicts.
+
+  The other two resolve on the fly, with their pins in the `env:` block of
+  `ci.yml`. The floor was a dependency group until its year-old pins made the
+  project unresolvable for Dependabot — silently, with no pull request — and
+  raised security alerts on versions that cannot move by design. Reproducibility
+  barely suffers: `pytest-homeassistant-custom-component` pins Home Assistant
+  exactly, and Home Assistant pins some 46 packages exactly, so the lockfile
+  was mostly restating pins that already existed upstream.
+
+  The trade is that `Test (ha-minimum)` blocks without `--locked`, so a
+  transitive re-release can break it independently of any pull request.
 
   `test-latest` cannot be a group: it needs Python 3.14, which `uv.lock`
   cannot resolve under `requires-python = ">=3.13.2"`. Marker-gating it makes

@@ -60,16 +60,19 @@ both.
 uv run python scripts/check_intent_pin_consistency.py
 uv run pre-commit run intent-pin-consistency --all-files
 
-# And against the floor
-uv sync --no-default-groups --group dev --group ha-minimum
-uv run --no-sync python scripts/check_intent_pin_consistency.py
-uv sync
+# And against the floor, whose pins live in ci.yml rather than pyproject.toml
+uv run --isolated --no-project \
+  --with pytest-homeassistant-custom-component==0.13.269 \
+  --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
+  --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
+  --with pymicro-vad --with pyspeex-noise \
+  python scripts/check_intent_pin_consistency.py
 ```
 
 Example failure:
 
 ```text
-❌ No dependency group matches Home Assistant 2026.2.3
+❌ Nothing matches Home Assistant 2026.2.3
 ```
 
 ## `check_manifest_consistency.py`
