@@ -24,32 +24,29 @@ updates:
     #                  README.md, and raising it is a decision rather than an
     #                  upgrade.
     #   pytest-homeassistant-custom-component
-    #                  the same, twice over. It is pinned once per Home
-    #                  Assistant group, and the ha-minimum pin is the
-    #                  supported floor rather than a version to keep current.
-    #                  Dependabot cannot tell the two apart -- allowing it, it
-    #                  raised the ha-minimum pin to the ha-current one, which
-    #                  deletes the thing that group exists to test:
+    #                  it chooses the Home Assistant version everything is
+    #                  tested against, which is a decision rather than an
+    #                  upgrade. New releases are noticed by the test-latest
+    #                  job in ci.yml, which resolves the newest one on every
+    #                  run.
     #
-    #                    Because aiodns==4.0.0 depends on pycares>=5.0.0 and
-    #                    homeassistant==2026.2.3 depends on aiodns==4.0.0 [...]
-    #                    ha-mistral-conversation:ha-minimum and
-    #                    pytest-homeassistant-custom-component==0.13.316 are
-    #                    incompatible.
-    #
-    #                  The pycares pin below made that fail loudly instead of
-    #                  landing quietly, which was luck rather than design.
-    #                  New releases are noticed by the test-latest job in
-    #                  ci.yml, which resolves the newest one on every run.
+    #                  This used to be pinned twice, once per Home Assistant
+    #                  group, and Dependabot could not tell the floor pin from
+    #                  the current one -- it raised the floor to match, which
+    #                  deleted the thing that group existed to test. The floor
+    #                  now lives in ci.yml and resolves on the fly, so it is
+    #                  out of reach of this file entirely.
     #   pillow         we declare it for scripts/generate_brand_assets.py, but
-    #                  Home Assistant pins it exactly (11.3.0 on the floor), so
-    #                  allowing it reproduces exactly the failure this avoids.
-    #   hassil, home-assistant-intents, pycares, ha-ffmpeg, mutagen,
-    #   pymicro-vad, pyspeex-noise
-    #                  pinned per group to mirror what a given Home Assistant
-    #                  release needs. These resolve fine and then break at
-    #                  runtime, which is the other failure mode -- see the
-    #                  ignore list below.
+    #                  Home Assistant pins it exactly -- 12.0.0 in 2026.2.3 --
+    #                  so allowing it reproduces exactly the failure this
+    #                  avoids. The floor in pyproject.toml used to be held
+    #                  down to 11.3.0 by the minimum-version group; that is
+    #                  gone, but the exact pin above it is not.
+    #   hassil, home-assistant-intents
+    #                  pinned to mirror what a given Home Assistant release
+    #                  needs. These resolve fine and then break at runtime,
+    #                  which is the other failure mode -- see the ignore list
+    #                  below.
     allow:
       - dependency-name: mistralai
       - dependency-name: bandit
@@ -67,23 +64,18 @@ updates:
       # These are not ours to choose. Each Home Assistant release pins them
       # exactly in the conversation component's manifest, and the pins differ
       # between the versions we test: 2026.2.3 wants hassil 3.5.0 while
-      # 2025.8.0 wants 2.2.3. They are pinned per group in pyproject.toml to
-      # match, and move only when the Home Assistant version does. Bumping
+      # 2025.8.0 wants 2.2.3. The current one is pinned in pyproject.toml to
+      # match and moves only when the Home Assistant version does. Bumping
       # them on their own upstream release schedule breaks the build --
       # hassil 3.11 dropped hassil.fuzzy, which Home Assistant 2026.2
       # imports.
+      #
+      # pycares used to be here too, pinned to 4.9.0 because later releases
+      # removed attributes the aiodns in Home Assistant 2025.8.0 reads at
+      # import time. That constrained only the floor, and the floor is no
+      # longer in this resolution, so the entry is gone with it.
       - dependency-name: hassil
       - dependency-name: home-assistant-intents
-      # Same shape. pycares is pinned in ha-minimum because releases after
-      # 4.9.0 removed attributes that the aiodns shipped with Home Assistant
-      # 2025.8.0 references at import time:
-      #
-      #   AttributeError: module 'pycares' has no attribute
-      #   'ares_query_a_result'
-      #
-      # ha-current resolves 5.0.1 quite happily, so this constrains only the
-      # floor, and it lifts when the floor does.
-      - dependency-name: pycares
       # pyjwt is pinned exactly by Home Assistant itself -- PyJWT==2.10.1, in
       # both 2025.8.0 and 2026.2.3 -- rather than by a component manifest, and
       # nothing else in the tree constrains it harder than >=2.8.0. So it
@@ -92,8 +84,8 @@ updates:
       # resolve your Python dependency files" error with no pull request at
       # all:
       #
-      #   Because homeassistant==2025.8.0 depends on pyjwt==2.10.1 and
-      #   pyjwt==2.13.0, we can conclude that homeassistant==2025.8.0 cannot
+      #   Because homeassistant==2026.2.3 depends on pyjwt==2.10.1 and
+      #   pyjwt==2.13.0, we can conclude that homeassistant==2026.2.3 cannot
       #   be used.
       #
       # It moves when Home Assistant moves.

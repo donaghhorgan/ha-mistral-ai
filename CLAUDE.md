@@ -20,15 +20,25 @@ Both must pass before committing.
 
 ## Two things that catch people out
 
-**`uv sync --all-groups` does not work here, by design.** `ha-current` and
-`ha-minimum` pin different Home Assistant versions and are declared as
-conflicting groups, so they cannot be installed together. A plain `uv sync`
-gets `ha-current`. To work against the oldest supported version:
+**The oldest supported Home Assistant is not a dependency group.** There is
+one resolution in `uv.lock`, and `uv sync` gets it. The floor is tested by the
+`Test (ha-minimum)` job, which resolves it on the fly so that a year-old set
+of pins never enters this project's dependency graph -- carrying them here
+made the project unresolvable for Dependabot and raised security alerts on
+versions frozen by design.
+
+To run against the floor locally, use the same command that job does. Its pins
+live in the `env:` block of [`ci.yml`](.github/workflows/ci.yml), which is the
+only place they are written down:
 
 ```bash
-uv sync --no-default-groups --group dev --group ha-minimum
-uv run --no-sync pytest
-uv sync                              # switch back
+uv run --isolated --no-project \
+  --with pytest-homeassistant-custom-component==0.13.269 \
+  --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
+  --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
+  --with pymicro-vad --with pyspeex-noise \
+  --with "mistralai>=2.1.0" --with PyTurboJPEG \
+  pytest tests/ -q --no-cov
 ```
 
 **Verify third-party APIs against the installed package, not from memory.**

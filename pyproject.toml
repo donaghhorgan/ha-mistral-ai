@@ -3,14 +3,15 @@ dev = [
   "bandit>=1.8.6",
   # homeassistant.components.tts imports mutagen, and reaches ffmpeg, at module
   # level -- so the TTS platform cannot even be imported without both. The
-  # ha-minimum group already carries them; ha-current does not, because that
-  # release of pytest-homeassistant-custom-component does not pull them in.
+  # The ha-current release of pytest-homeassistant-custom-component does not
+  # pull them in, so they are named here.
   "ha-ffmpeg>=3.2.2",
   "mutagen>=1.47.0",
-  # Only used by scripts/generate_brand_assets.py. Home Assistant pins pillow
-  # exactly and the pin differs per release, so this floor has to sit at or
-  # below the oldest one we test against -- 2025.8.0 wants 11.3.0. Raising it
-  # past that makes ha-minimum unresolvable rather than merely outdated.
+  # Only used by scripts/generate_brand_assets.py. This floor used to be held
+  # down to what Home Assistant 2025.8.0 pinned, because raising it made the
+  # minimum-version group unresolvable. That group is gone, so the constraint
+  # is lifted -- but ha-current still pins pillow exactly (12.0.0), which is
+  # why Dependabot is not allowed to move it either way.
   "pillow>=11.3.0",
   "pre-commit>=4.3.0",
   "pymarkdownlnt>=0.9.32",
@@ -23,12 +24,14 @@ dev = [
   "validate-pyproject>=0.20.2",
 ]
 # pytest-homeassistant-custom-component pins Home Assistant to an exact
-# version, so the version we test against is chosen by picking one of these
-# groups. They are declared as conflicting in [tool.uv], which makes uv lock a
-# separate resolution for each, so both are reproducible.
+# version, so this group chooses the version everything here is tested
+# against. It is the only resolution in uv.lock -- `uv sync` gets it.
 #
-# Sync one at a time: `uv sync --no-default-groups --group dev --group ha-minimum`.
-# A plain `uv sync` gets dev + ha-current, per default-groups below.
+# The oldest supported version is tested too, but deliberately not from here:
+# its pins are a year old and cannot move, and carrying them in this file made
+# the project unresolvable for Dependabot and raised security alerts on
+# versions frozen by design. That job resolves on the fly instead, and its
+# pins live in .github/workflows/ci.yml.
 ha-current = [
   "pytest-homeassistant-custom-component==0.13.316", # HA 2026.2.3
   # Pinned to what this Home Assistant version declares in the conversation
@@ -36,20 +39,6 @@ ha-current = [
   # hassil 3.11 dropped hassil.fuzzy, which HA 2026.2 imports.
   "hassil==3.5.0",
   "home-assistant-intents==2026.1.28",
-]
-ha-minimum = [
-  "pytest-homeassistant-custom-component==0.13.269", # HA 2025.8.0, the floor in hacs.json
-  # As above, matching what HA 2025.8.0 declares.
-  "hassil==2.2.3",
-  "home-assistant-intents==2025.7.30",
-  # Setting up the conversation component on 2025.8 needs these; newer
-  # releases of pytest-homeassistant-custom-component provide them for us.
-  "ha-ffmpeg",
-  "mutagen",
-  "pymicro-vad",
-  "pyspeex-noise",
-  # Current pycares releases break aiodns on this Home Assistant version.
-  "pycares==4.9.0",
 ]
 
 [project]
@@ -67,12 +56,6 @@ dependencies = [
 ]
 
 [tool.uv]
-conflicts = [
-  [
-    { group = "ha-current" },
-    { group = "ha-minimum" }
-  ]
-]
 default-groups = ["dev", "ha-current"]
 
 [tool.pytest.ini_options]

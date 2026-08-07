@@ -60,22 +60,13 @@ jobs:
           uv run pre-commit run --all-files
 
   test:
-    name: Test (${{ matrix.ha-group }})
+    name: Test (ha-current)
     runs-on: ubuntu-latest
 
-    # ha-current and ha-minimum are conflicting dependency groups, each
-    # pinning a different Home Assistant version through
-    # pytest-homeassistant-custom-component. uv locks a separate resolution
-    # for each, so both runs are reproducible and both dependency lists live
-    # in pyproject.toml rather than in this file.
-    #
-    # ha-minimum is the version advertised in hacs.json, so that claim is
-    # backed by a passing run.
-    strategy:
-      fail-fast: false
-      matrix:
-        ha-group: [ha-current, ha-minimum]
-
+    # The locked resolution: dev plus ha-current, which pins Home Assistant
+    # exactly through pytest-homeassistant-custom-component. Run with
+    # --locked so a stale lockfile fails here rather than being regenerated
+    # silently.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -91,11 +82,80 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --locked --no-default-groups --group dev --group ${{ matrix.ha-group }}
+          uv sync --locked
 
       - name: Run tests
         run: |
           uv run --no-sync pytest
+
+  test-minimum:
+    # Named to match the branch ruleset, which requires this check by exact
+    # string. It reads like a matrix leg because it used to be one.
+    name: Test (ha-minimum)
+    runs-on: ubuntu-latest
+
+    # The oldest supported Home Assistant -- the floor advertised in
+    # hacs.json, so that claim is backed by a passing run.
+    #
+    # Resolved on the fly rather than locked, which is the whole point. These
+    # pins are a year old and cannot move by design, and while they lived in
+    # pyproject.toml three things tripped over them: Dependabot could not
+    # resolve the project at all and failed silently, security alerts fired on
+    # frozen versions that could only be dismissed by hand, and the dev group
+    # inherited floor constraints it had no reason to carry.
+    #
+    # Little reproducibility is lost. pytest-homeassistant-custom-component
+    # pins Home Assistant exactly, and Home Assistant pins some 46 packages
+    # exactly, so the lockfile was mostly restating pins that already exist
+    # upstream.
+    #
+    # Unlike test-latest this job blocks, and without --locked a transitive
+    # re-release could break it independently of any pull request. Exposure is
+    # small, but that is the trade being made.
+    env:
+      # HA 2025.8.0, the floor in hacs.json.
+      PHCC_VERSION: 0.13.269
+      # Pinned to what that Home Assistant version declares in the
+      # conversation component's manifest -- they are not interchangeable
+      # across releases.
+      HASSIL_VERSION: 2.2.3
+      INTENTS_VERSION: 2025.7.30
+      # Current pycares releases break aiodns on this Home Assistant version.
+      PYCARES_VERSION: 4.9.0
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Run tests against the oldest supported Home Assistant version
+        # ha-ffmpeg, mutagen, pymicro-vad and pyspeex-noise are needed to set
+        # up the conversation and tts components on this release; newer
+        # releases of pytest-homeassistant-custom-component provide them. The
+        # project normally gets them from its dev group, which an isolated run
+        # does not have, so they are named here -- the same arrangement as
+        # test-latest below.
+        run: |
+          uv run --isolated --no-project \
+            --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
+            --with "hassil==${HASSIL_VERSION}" \
+            --with "home-assistant-intents==${INTENTS_VERSION}" \
+            --with "pycares==${PYCARES_VERSION}" \
+            --with "mistralai>=2.1.0" \
+            --with PyTurboJPEG \
+            --with ha-ffmpeg \
+            --with mutagen \
+            --with pymicro-vad \
+            --with pyspeex-noise \
+            pytest tests/ -q --no-cov
 
   test-latest:
     name: Test against latest Home Assistant
