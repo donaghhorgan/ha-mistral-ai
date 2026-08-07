@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 import base64
+import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+import respx
 from homeassistant.components import tts
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.mistral_ai.const import CONF_MODEL, VOICE_PAGE_SIZE
 from custom_components.mistral_ai.helpers import async_list_voices
+from custom_components.mistral_ai.tts import _sentences
 
 from .conftest import TTS_MODEL, VOICE_ID
 from .helpers import make_sdk_error
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 ENTITY_ID = "tts.mistral_ai_tts"
@@ -297,3 +303,221 @@ async def test_every_voice_is_listed_not_just_the_first_page(
     # times at the default of 10.
     first = mock_client.audio.voices.list_async.await_args_list[0]
     assert first.kwargs["limit"] == VOICE_PAGE_SIZE
+
+
+def _sse(*payloads: dict) -> bytes:
+    """Build a speech event stream the way the endpoint sends one."""
+    lines = []
+    for payload in payloads:
+        lines.append(f"event: {payload['type']}")
+        lines.append(f"data: {json.dumps(payload)}")
+        lines.append("")
+    return "\n".join(lines).encode()
+
+
+def _delta(audio: bytes) -> dict:
+    """Build one speech.audio.delta event carrying audio."""
+    return {
+        "type": "speech.audio.delta",
+        "audio_data": base64.b64encode(audio).decode(),
+    }
+
+
+DONE = {"type": "speech.audio.done"}
+
+
+async def _gen(*chunks: str) -> AsyncGenerator[str]:
+    """Yield text the way a streaming conversation agent does."""
+    for chunk in chunks:
+        yield chunk
+
+
+async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, bytes]:
+    """Drive the streaming path and return its extension and audio."""
+    response = await entity.async_stream_tts_audio(
+        tts.TTSAudioRequest(language="en", options={}, message_gen=_gen(*chunks))
+    )
+    return response.extension, b"".join([part async for part in response.data_gen])
+
+
+@pytest.mark.parametrize(
+    ("chunks", "expected"),
+    [
+        # Split on terminators, but only once a chunk is worth a request.
+        (
+            ["This is the first sentence, which is long enough. ", "And a second one."],
+            ["This is the first sentence, which is long enough.", "And a second one."],
+        ),
+        # Short leading fragments join what follows rather than each becoming
+        # a billed request with an audible seam at the join.
+        (
+            ["Yes. ", "OK. ", "The kitchen light is on and the hall light is off."],
+            ["Yes. OK. The kitchen light is on and the hall light is off."],
+        ),
+        # A decimal point is not the end of a sentence.
+        (
+            ["The thermostat is set to 20.5 degrees in the living room right now."],
+            ["The thermostat is set to 20.5 degrees in the living room right now."],
+        ),
+        # Token-by-token arrival, which is how it actually turns up.
+        (
+            ["The kit", "chen ligh", "t is on and the hallway light is off."],
+            ["The kitchen light is on and the hallway light is off."],
+        ),
+        # Nothing said means nothing spoken.
+        ([], []),
+    ],
+)
+async def test_sentences_regroups_streamed_text(
+    chunks: list[str], expected: list[str]
+) -> None:
+    """Text is regrouped into speakable units before any request is made.
+
+    The incoming generator is chunked however the model streamed it, which is
+    by token and therefore mid-word. Speaking those directly would be one
+    request per fragment.
+    """
+    assert [sentence async for sentence in _sentences(_gen(*chunks))] == expected
+
+
+@respx.mock
+async def test_streaming_yields_audio_as_it_arrives(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Deltas are decoded and yielded rather than buffered into one blob.
+
+    The endpoint answers a streamed speech request with text/event-stream,
+    which the SDK has no method for -- audio.speech offers complete_async and
+    nothing else -- so this path is built on httpx directly.
+    """
+    route = respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=_sse(_delta(b"ID3 first"), _delta(b" second"), DONE),
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    extension, audio = await _collect(
+        _entity(hass), "The kitchen light is on and the hallway light is off."
+    )
+
+    assert extension == "mp3"
+    assert audio == b"ID3 first second"
+
+    sent = json.loads(route.calls.last.request.content)
+    assert sent["stream"] is True
+    assert sent["voice_id"] == VOICE_ID
+    assert sent["model"] == TTS_MODEL
+    assert sent["response_format"] == "mp3"
+    assert "Bearer" in route.calls.last.request.headers["authorization"]
+
+
+@respx.mock
+async def test_each_sentence_is_spoken_as_it_is_written(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A sentence goes out before the model has written the next one.
+
+    This is the half that matters most for a long reply: the shim this
+    replaces joined the entire message first, so audio could not start until
+    the conversation agent had finished composing.
+    """
+    route = respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=_sse(_delta(b"audio"), DONE),
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    _, audio = await _collect(
+        _entity(hass),
+        "The kitchen light is on and the hall light is off. ",
+        "The garage door is closed and the porch light is on.",
+    )
+
+    assert route.call_count == 2
+    assert audio == b"audioaudio"
+
+    spoken = [json.loads(call.request.content)["input"] for call in route.calls]
+    assert spoken == [
+        "The kitchen light is on and the hall light is off.",
+        "The garage door is closed and the porch light is on.",
+    ]
+
+
+@respx.mock
+async def test_streaming_reports_a_refused_request(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An error body is raised rather than played as silence.
+
+    Built by hand rather than via the SDK, so the error mapping _convert_error
+    provides elsewhere has to be done here -- and a streamed response has to
+    be read before its body can be touched at all.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            400, json={"message": "Either ref_audio or voice must be provided."}
+        )
+    )
+
+    with pytest.raises(HomeAssistantError, match="400"):
+        await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+
+@respx.mock
+async def test_streaming_rejects_audio_that_is_not_base64(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Bad audio is an error here rather than silence at playback.
+
+    Decoded strictly for the same reason the non-streaming path does it:
+    handing Home Assistant the wrong bytes fails at the speaker, a long way
+    from the cause.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=b'event: speech.audio.delta\ndata: {"audio_data": "not base64!!"}\n\n',
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    with pytest.raises(HomeAssistantError, match="not valid base64"):
+        await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+
+@respx.mock
+async def test_streaming_without_a_voice_says_nothing(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An entity with no voice ends the stream instead of calling the API.
+
+    The endpoint refuses a request with no voice, and that 400 reaches the
+    user as silence either way -- but not spending the request, and logging
+    the reason, is the difference between silence and unexplained silence.
+    """
+    entity = _entity(hass)
+    hass.config_entries.async_update_subentry(
+        init_integration, entity.subentry, data={CONF_MODEL: TTS_MODEL}
+    )
+    await hass.async_block_till_done()
+
+    _, audio = await _collect(_entity(hass), "The kitchen light is on.")
+
+    assert audio == b""
+    assert not respx.calls
+
+
+async def test_streaming_input_is_advertised(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    """Home Assistant only streams text in when the entity says it can.
+
+    Detected from the override rather than declared, so this asserts the
+    method is actually overridden -- inheriting it silently would put the
+    entity back on the joined-message shim.
+    """
+    assert _entity(hass).async_supports_streaming_input() is True

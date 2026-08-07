@@ -20,7 +20,8 @@ and dashboards, and speech-to-text and text-to-speech for the assist pipeline.
 - 🎤 **Speech-to-text**: Transcribe assist pipeline audio, with the model list
   filtered to those that report the capability
 - 🔊 **Text-to-speech**: Speak replies using the voices on your account,
-  including custom ones
+  including custom ones, streamed so playback starts while the reply is still
+  being written
 - 🎛️ **Multiple agents**: Run several agents and tasks off one API key, each
   with its own model, prompt and parameters
 - 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models
@@ -224,6 +225,15 @@ Two things worth knowing:
 Add a text-to-speech entity with "Add text-to-speech" and select it as the
 text-to-speech engine of an assist pipeline, or call `tts.speak` with its
 entity ID.
+
+Speech is streamed, in both directions. Audio starts playing as Mistral
+produces it rather than once the whole file has arrived, and the reply is
+spoken sentence by sentence as the conversation agent writes it — so the
+first words are heard without waiting for the last ones to be composed.
+
+Nothing to configure, and it applies to `tts.speak` as well as to a pipeline.
+A short phrase still arrives in one piece; the difference shows on long
+replies, which is where the wait was worth removing.
 
 The model dropdown lists only models reporting the `audio_speech` capability.
 The voice dropdown is populated from your account, because custom voices are

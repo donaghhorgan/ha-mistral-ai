@@ -631,3 +631,94 @@ async def test_a_conversation_that_finishes_stays_under_the_budget(
 
     assert response.status_code == 200
     assert response.json()["usage"]["completion_tokens"] < 500
+
+
+async def test_streamed_speech_is_an_event_stream_of_base64_deltas(
+    client: httpx.AsyncClient,
+) -> None:
+    """The streamed shape the TTS entity parses by hand.
+
+    The SDK has no method for this -- audio.speech offers complete_async and
+    nothing else -- so tts.py builds the request and parses the response
+    itself. Nothing else would notice if the event names, the base64 encoding
+    or the content type moved.
+
+    Asserted over the wire rather than against the spec: `stream` is declared
+    in SpeechRequest, but so was `handoff_execution` on a request the endpoint
+    rejects outright.
+    """
+    voices = await client.get("/audio/voices", params={"limit": 1})
+    voice_id = voices.json()["items"][0]["id"]
+
+    payload = {
+        "input": "The kitchen light is on and the hallway light is off.",
+        "model": TTS_MODEL,
+        "response_format": "mp3",
+        "voice_id": voice_id,
+        "stream": True,
+    }
+
+    audio = b""
+    events: list[str] = []
+
+    async with client.stream("POST", "/audio/speech", json=payload) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+
+        async for line in response.aiter_lines():
+            if line.startswith("event:"):
+                events.append(line.removeprefix("event:").strip())
+            elif line.startswith("data:"):
+                event = json.loads(line.removeprefix("data:").strip())
+                if encoded := event.get("audio_data"):
+                    audio += base64.b64decode(encoded, validate=True)
+
+    assert "speech.audio.delta" in events
+    # The terminator, which carries no audio and must not be read as a chunk.
+    assert "speech.audio.done" in events
+    # mp3, so the extension the entity reports is not a guess.
+    assert audio.startswith(b"ID3")
+
+
+async def test_streamed_speech_arrives_in_more_than_one_piece(
+    client: httpx.AsyncClient,
+) -> None:
+    """The streamed response is genuinely incremental, not one blob in an event.
+
+    This is what the latency win rests on: audio can start playing before the
+    endpoint has finished generating it. A stream that delivered everything in
+    a single delta would satisfy the shape test above while being no faster
+    than complete_async, and the hand-written parser would be buying nothing.
+
+    Deliberately not a timing assertion. Measured over five trials each while
+    implementing, the medians were about 0.67s streamed against about 2.44s
+    complete -- but individual samples overlapped, so any threshold here would
+    flake. Counting deltas tests the mechanism rather than the weather.
+    """
+    voices = await client.get("/audio/voices", params={"limit": 1})
+    voice_id = voices.json()["items"][0]["id"]
+
+    payload = {
+        # Long enough to be chunked. A short phrase comes back as one delta,
+        # which is correct behaviour and would make this test meaningless.
+        "input": (
+            "The kitchen light is on. The hallway light is off. "
+            "The porch light is on. The garage door is closed. "
+            "The thermostat is set to twenty degrees in the living room."
+        ),
+        "model": TTS_MODEL,
+        "response_format": "mp3",
+        "voice_id": voice_id,
+        "stream": True,
+    }
+
+    deltas = 0
+    async with client.stream("POST", "/audio/speech", json=payload) as response:
+        assert response.status_code == 200
+        async for line in response.aiter_lines():
+            if line.startswith("data:"):
+                event = json.loads(line.removeprefix("data:").strip())
+                if event.get("audio_data"):
+                    deltas += 1
+
+    assert deltas > 1
