@@ -79,7 +79,7 @@ repos:
         name: Check Manifest Consistency
         entry: python scripts/check_manifest_consistency.py
         language: system
-        files: ^(pyproject\.toml|custom_components/.*/manifest\.json)$
+        files: ^(pyproject\.toml|custom_components/.*/manifest\.json|\.github/workflows/ci\.yml)$
         pass_filenames: false
       - id: ty-check
         name: Ty Type Check

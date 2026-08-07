@@ -384,6 +384,31 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
             ["The thermostat is set to 20.5 degrees in the living room right now."],
             ["The thermostat is set to 20.5 degrees in the living room right now."],
         ),
+        # Nor is a dotted abbreviation, which the comment claimed and the
+        # regex did not do: "e.g." ends in a period followed by a space, so
+        # it split there and spoke a fragment ending "e.g.". Only caught
+        # past the minimum length, which is how it went unnoticed.
+        (
+            [
+                "The sensor readings look normal today, e.g. the kitchen "
+                "is at 20.5 degrees right now."
+            ],
+            [
+                "The sensor readings look normal today, e.g. the kitchen "
+                "is at 20.5 degrees right now."
+            ],
+        ),
+        # A real sentence end still splits when an abbreviation precedes it.
+        (
+            [
+                "Several rooms are warm, e.g. the kitchen and the hall. "
+                "The porch light is still on."
+            ],
+            [
+                "Several rooms are warm, e.g. the kitchen and the hall.",
+                "The porch light is still on.",
+            ],
+        ),
         # Token-by-token arrival, which is how it actually turns up.
         (
             ["The kit", "chen ligh", "t is on and the hallway light is off."],

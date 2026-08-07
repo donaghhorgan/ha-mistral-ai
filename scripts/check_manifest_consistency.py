@@ -7,6 +7,7 @@ are in sync with the corresponding values in pyproject.toml.
 """
 
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -65,6 +66,41 @@ def extract_requirements_from_dependencies(dependencies: list[str]) -> list[str]
     return sorted(requirements)
 
 
+# Where the mistralai requirement is restated outside pyproject.toml. The
+# isolated CI jobs have no project to read it from, and the docs quote the
+# command those jobs run so it can be copied and pasted.
+RESTATED_IN = (
+    Path(".github") / "workflows" / "ci.yml",
+    Path("README.md"),
+    Path("CLAUDE.md"),
+)
+
+
+def restated_specs(root: Path) -> dict[str, list[str]]:
+    """Return the mistralai constraints written down outside pyproject.toml.
+
+    It drifted once already: the floor moved to >=2.9.0 in manifest.json and
+    pyproject.toml while both CI jobs and both documents still asked for
+    >=2.1.0, which reads as a claim that 2.1.0 works and nothing checked.
+
+    CLAUDE.md opens by warning that two documents describing one rule drift
+    apart. This is that, so it is enforced rather than trusted.
+    """
+    found: dict[str, list[str]] = {}
+
+    for relative in RESTATED_IN:
+        try:
+            text = (root / relative).read_text()
+        except FileNotFoundError:
+            continue
+
+        specs = re.findall(r"mistralai\s*(?:>=|==)\s*[0-9][^\"\s]*", text)
+        if specs:
+            found[str(relative)] = [spec.replace(" ", "") for spec in specs]
+
+    return found
+
+
 def main() -> int:
     """Main function to check manifest consistency."""
     workspace_root = Path(__file__).parent.parent
@@ -103,6 +139,20 @@ def main() -> int:
     print(f"Manifest requirements: {current_requirements}")
     print()
 
+    restated = restated_specs(workspace_root)
+    mistral_requirement = next(
+        (r for r in expected_requirements if r.startswith("mistralai")), ""
+    ).replace(" ", "")
+    drifted = {
+        where: [spec for spec in specs if spec != mistral_requirement]
+        for where, specs in restated.items()
+        if any(spec != mistral_requirement for spec in specs)
+    }
+
+    for where, specs in sorted(restated.items()):
+        print(f"{where}: {', '.join(sorted(set(specs)))}")
+    print()
+
     # Compare values
     version_in_sync = current_version == expected_version
     requirements_in_sync = current_requirements == expected_requirements
@@ -124,6 +174,12 @@ def main() -> int:
             if req not in current_requirements:
                 issues.append(f"  + {req} (expected but not in manifest.json)")
 
+    if drifted:
+        issues.append(f"mistralai requirement restated as {mistral_requirement} in")
+        issues.append("pyproject.toml, but written differently in:")
+        for where, specs in sorted(drifted.items()):
+            issues.append(f"  {where}: {', '.join(sorted(set(specs)))}")
+
     if issues:
         print("❌ manifest.json is inconsistent with pyproject.toml!")
         for issue in issues:
@@ -133,6 +189,9 @@ def main() -> int:
         print(
             "Update manifest.json to match the version and requirements in pyproject.toml"
         )
+        print("If a restatement drifted, update it there instead: the isolated")
+        print("CI jobs have no project to read the requirement from, and the")
+        print("docs quote the command those jobs run.")
         return 1
     else:
         print("✅ manifest.json is consistent with pyproject.toml!")
