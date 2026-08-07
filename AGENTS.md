@@ -90,6 +90,12 @@ Dependabot may update, rather than listing the ones it may not — the blocklist
 could never be complete, for the reason above. **Add a new dev tool to that
 allowlist, or it will silently never be updated.**
 
+`check_dependabot_coverage.py` enforces that, because the rule was written
+down here and broken anyway: `ha-ffmpeg` and `mutagen` were added to the dev
+group and never allowlisted. Every declared package must be allowed, ignored,
+or named in the script's `EXPECTED_ABSENT` with a reason. It does not judge
+whether a package should move — only that somebody decided.
+
 Do not add a package to the allowlist without checking it is not one Home
 Assistant pins. Allowing one puts back exactly the failure the allowlist
 exists to prevent, and that failure is invisible from GitHub: no pull request

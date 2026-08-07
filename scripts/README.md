@@ -11,6 +11,41 @@ can be run directly as well as through pre-commit.
 The exception is `generate_brand_assets.py`, which is a one-off generator
 rather than a check and is not wired into pre-commit.
 
+## `check_dependabot_coverage.py`
+
+Checks that every package declared in `pyproject.toml` is a decision somebody
+has made: allowed in `.github/dependabot.yml`, ignored there, or listed in the
+script's own `EXPECTED_ABSENT` with the reason it needs no entry.
+
+This exists because an allowlist fails quietly. A package added to a
+dependency group and not added to the allowlist is simply never updated — no
+failed check, no warning, just a floor drifting behind. That is how
+`ha-ffmpeg` and `mutagen` went a year without updates, with `mutagen` a
+release behind its installed version before anyone noticed.
+
+It deliberately does not judge whether a package *should* move, only whether
+somebody decided. The three ways to satisfy it map onto the three real
+answers: free to move, resolves-then-breaks, or not ours to touch.
+
+```bash
+# Run directly -- stdlib only, so no environment needed
+python3 scripts/check_dependabot_coverage.py
+uv run pre-commit run dependabot-coverage --all-files
+```
+
+Example failure:
+
+```text
+❌ No Dependabot decision for:
+
+  ha-ffmpeg
+  mutagen
+```
+
+A package configured but no longer declared is reported as a warning rather
+than an error, so that removing a dependency does not block the commit that
+removes it.
+
 ## `check_ha_version_consistency.py`
 
 Checks that the minimum Home Assistant version agrees across three files:
@@ -45,16 +80,16 @@ match what the *installed* Home Assistant declares in the conversation
 component's manifest.
 
 Home Assistant pins both to exact versions, and the pins differ between
-releases, so they are pinned per Home Assistant dependency group rather than
-shared. Nothing else keeps the two in step: bumping
+releases, so they are pinned beside each Home Assistant version rather than
+shared: `ha-current` in `pyproject.toml`, and the floor in the `env:` block of
+`ci.yml`. Both are read. Nothing else keeps the two in step: bumping
 `pytest-homeassistant-custom-component` changes the Home Assistant version
 without touching the pins next to it, and a mismatch can break the build
 outright — `hassil` 3.11 dropped `hassil.fuzzy`, which Home Assistant 2026.2
 imports.
 
-Only the group matching the currently synced Home Assistant is checked; the
-others describe a version that is not installed. Run it under both to cover
-both.
+Only the source matching the installed Home Assistant is checked; the other
+describes a version that is not present. Run it under both to cover both.
 
 ```bash
 uv run python scripts/check_intent_pin_consistency.py
