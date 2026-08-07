@@ -101,9 +101,21 @@ To change an existing one, click "Configure" next to it.
   list is fetched from the API rather than hard-coded, so it stays correct as
   Mistral adds and retires models. You can also type a model name directly.
 
-- **Temperature**: Controls randomness in responses (0.0 - 2.0)
+  A model Mistral has scheduled for retirement is shown with its end date and
+  its replacement, and sorted below the ones that are staying. It still works
+  until that date, so it stays selectable rather than disappearing — but you
+  will not pick one by accident. A model that has already been withdrawn also
+  stays in the list while it is the one configured, so reconfiguring an entity
+  that needs moving does not lose track of where it was.
+
+- **Temperature**: Controls randomness in responses
   - Lower values (0.1-0.3): More focused and deterministic
   - Higher values (0.7-1.0): More creative and varied
+  - The slider stops where the API does, which is not the same everywhere:
+    1.0 for conversation agents, 1.5 for AI tasks and speech-to-text. A
+    conversation agent gets the lower limit because web search moves its
+    requests to an endpoint that caps at 1.0, and that is a setting on the
+    same page.
 
 - **Maximum tokens**: Maximum length of responses. The default is 1000. A
   structured AI task that needs more than this comes back as truncated JSON,
@@ -168,9 +180,14 @@ entity ID.
 
 The model dropdown lists only models reporting the `audio_speech` capability.
 The voice dropdown is populated from your account, because custom voices are
-created against it — if the account has none, the field is omitted and the
-API picks a voice itself. Callers can override the configured voice per
-request with the `voice` option.
+created against it, and a voice is required — the API will not choose one,
+and refuses a request without it. Callers can override the configured voice
+per request with the `voice` option.
+
+If the voices cannot be listed, adding the entity is refused rather than
+offered without the field. Preset voices exist on every account, so an empty
+list means the request failed, and an entity saved in that state could never
+speak.
 
 The language is not sent to the API: the voice carries its own language.
 Selecting a French voice and an English pipeline gets you a French voice
@@ -198,6 +215,14 @@ consequences worth knowing:
 - The request sets `store: false`, so the conversation is not retained by
   Mistral. That endpoint would otherwise keep it and list it afterwards,
   where chat completions stores nothing.
+- `store: false` covers the conversation and not the image. The connector
+  writes the image as a file on your account and hands back a reference to
+  it, so the integration downloads the bytes and then deletes the remote
+  copy. Home Assistant has its own copy in the media source by that point.
+
+  Earlier versions did not delete it, so an account used for image generation
+  before this may have images still sitting on it. They are listed under
+  Files in the Mistral console.
 - The conversations API is in public preview, so image generation rests on a
   less stable footing than the rest of the integration.
 

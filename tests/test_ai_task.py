@@ -192,6 +192,11 @@ def mock_image_client(mock_client: MagicMock) -> MagicMock:
         )
     )
     mock_client.files.download_async = AsyncMock(return_value=_download())
+    # A real AsyncMock rather than the bare attribute a MagicMock invents.
+    # Awaiting the invented one raises TypeError, which the best-effort delete
+    # swallows by design -- so a test asserting the delete would pass without
+    # the delete ever happening.
+    mock_client.files.delete_async = AsyncMock()
     return mock_client
 
 
@@ -503,3 +508,43 @@ async def test_generate_image_tolerates_entries_without_content(
     assert result["mime_type"] == "image/png"
     outputs = mock_image_client.beta.conversations.start_async.return_value.outputs
     assert any(getattr(entry, "type", None) == "tool.execution" for entry in outputs)
+
+
+@requires_image_support
+async def test_generated_file_is_deleted_after_download(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """The remote copy is removed once we hold the bytes.
+
+    `store: false` covers the conversation, not the file the connector writes,
+    so nothing else cleans this up. Without it every image an automation ever
+    generates stays on the account -- an hourly dashboard leaves 8,760 a year,
+    readable and deletable by anyone holding the API key.
+    """
+    await ai_task.async_generate_image(
+        hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+    )
+
+    mock_image_client.files.delete_async.assert_awaited_once()
+    assert (
+        mock_image_client.files.delete_async.await_args.kwargs["file_id"]
+        == mock_image_client.files.download_async.await_args.kwargs["file_id"]
+    )
+
+
+@requires_image_support
+async def test_a_failed_delete_does_not_fail_the_task(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_image_client: MagicMock
+) -> None:
+    """Cleanup is best effort, because by now the user has their image.
+
+    Raising here would report a failure for something that succeeded, which is
+    a worse outcome than a file left behind on an account they control.
+    """
+    mock_image_client.files.delete_async = AsyncMock(side_effect=make_sdk_error(500))
+
+    result = await ai_task.async_generate_image(
+        hass, task_name="poster", entity_id=ENTITY_ID, instructions="a red bicycle"
+    )
+
+    assert result["mime_type"] == "image/png"
