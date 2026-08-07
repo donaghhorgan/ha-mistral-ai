@@ -14,21 +14,33 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set the version in the manifest
-        # HACS reads the version from the manifest, so it must match the tag.
+      - name: Check the committed version matches the tag
+        # This used to rewrite the manifest to match the tag, on the belief
+        # that HACS reads the version from the archive attached here. It does
+        # not: hacs.json sets no zip_release, and without it HACS installs the
+        # repository source at the tagged ref and never looks at release
+        # assets. So the rewrite reached manual installers only, and a HACS
+        # user tagging v1.2.0 without committing the bump would have been
+        # given a manifest still saying 1.0.0 -- two version claims for one
+        # install, with bug reports quoting whichever they happened to see.
+        #
+        # Checking rather than rewriting keeps one source of truth. The
+        # committed version is the version; check_manifest_consistency.py
+        # already ties manifest.json to pyproject.toml, and this extends the
+        # same rule to the tag. A forgotten bump now fails the release loudly
+        # instead of being papered over for one audience out of two.
         run: |
           version="${GITHUB_REF_NAME#v}"
-          python - "$version" <<'PY'
-          import json
-          import pathlib
-          import sys
+          manifest=$(python -c "import json,pathlib; print(json.loads(pathlib.Path('custom_components/mistral_ai/manifest.json').read_text())['version'])")
 
-          version = sys.argv[1]
-          path = pathlib.Path("custom_components/mistral_ai/manifest.json")
-          manifest = json.loads(path.read_text())
-          manifest["version"] = version
-          path.write_text(json.dumps(manifest, indent=4) + "\n")
-          PY
+          if [ "$version" != "$manifest" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match the committed"\
+                 "manifest version ${manifest}. Bump the version in"\
+                 "pyproject.toml and manifest.json, merge that, then retag."
+            exit 1
+          fi
+
+          echo "Tag and committed manifest agree on ${version}."
 
       - name: Build the release archive
         run: |

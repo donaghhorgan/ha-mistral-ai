@@ -258,6 +258,19 @@ CI runs on pull requests targeting `main` and on pushes to `main`. It does not
 run on pushes to a topic branch, so opening the pull request is what starts
 the checks — open it early, in draft if it is not ready.
 
+### Releasing
+
+**The committed version is the version.** Bump it in `pyproject.toml` and
+`manifest.json` in a pull request, merge that, then tag. `release.yml` checks
+the tag against the committed manifest and fails the release if they disagree.
+
+It used to rewrite the manifest to match the tag instead, which only ever
+reached manual installers: `hacs.json` sets no `zip_release`, so HACS installs
+the repository source at the tagged ref and never reads the attached archive.
+A tag without a committed bump would have given HACS users one version and
+manual installers another. The archive is still attached, for the manual
+install path in the README.
+
 `main` is additionally protected by a branch ruleset in the repository
 settings, which is not version controlled and therefore not visible here. It
 requires a pull request and passing checks, and blocks force pushes and
