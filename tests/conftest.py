@@ -134,6 +134,13 @@ def mock_client(mock_models_response: MagicMock) -> Generator[MagicMock]:
     """Patch the Mistral client everywhere it is constructed."""
     client = MagicMock()
     client.models.list_async = AsyncMock(return_value=mock_models_response)
+    # A real tuple, because the streaming speech path unpacks this to build
+    # its URL. A bare MagicMock unpacks to nothing and fails far from the
+    # cause.
+    client.sdk_configuration.get_server_details.return_value = (
+        "https://api.mistral.ai",
+        {},
+    )
 
     # retrieve_async answers for one model. The AI task entity uses it to ask
     # whether the configured model can call tools, which is a precondition for
