@@ -7,7 +7,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from mimetypes import guess_file_type
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import httpx
 import voluptuous as vol
@@ -171,6 +171,40 @@ def _reasoning_args(options: Mapping[str, Any]) -> dict[str, Any]:
     if effort := options.get(CONF_REASONING_EFFORT):
         return {"reasoning_effort": effort}
     return {}
+
+
+def _raise_tool_loop_exhausted() -> NoReturn:
+    """Report a model that never stopped calling tools.
+
+    Both tool loops run a fixed number of passes and break when the model
+    stops asking for tools. Falling off the end used to be silent: no log
+    line, no error, and a chat log still holding tool results that were never
+    sent back.
+
+    What the user saw did not name the cause on either platform. A
+    conversation returned whatever fragmentary text came with the last tool
+    call, usually nothing, indistinguishable from the model having had nothing
+    to say. An AI task hit `chat_log.content[-1]` not being an
+    AssistantContent and raised "Last content in chat log is not an
+    AssistantContent" -- untranslated, internal-sounding, and about a symptom
+    rather than the cause.
+
+    Raising rather than returning the empty reply follows what #131 settled
+    for truncation: a successful-looking response with no answer in it is
+    reported, not passed up as if it were an answer. For AI tasks this only
+    replaces a worse message with a better one, since that path already
+    failed.
+    """
+    _LOGGER.warning(
+        "Mistral AI kept calling tools for all %s rounds without finishing; "
+        "giving up on this turn",
+        MAX_TOOL_ITERATIONS,
+    )
+    raise HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key="tool_loop_exhausted",
+        translation_placeholders={"limit": str(MAX_TOOL_ITERATIONS)},
+    )
 
 
 def _convert_content(content: conversation.Content) -> dict[str, Any]:
@@ -401,7 +435,7 @@ async def _transform_stream(
 
 
 async def _transform_conversation_stream(
-    stream: AsyncIterable[Any],
+    stream: AsyncIterable[Any], max_tokens: int
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
     """Transform a conversations event stream into chat log deltas.
 
@@ -422,8 +456,24 @@ async def _transform_conversation_stream(
       tool_call_id rather than by index. They are buffered and emitted at the
       end, because Home Assistant dispatches a tool call the moment it is
       yielded and a partial one would run with broken arguments.
+
+    Truncation is the fifth difference, and the reason max_tokens is passed
+    in. No conversation event carries a finish reason -- searching the SDK's
+    models for one finds it only on the two chat-completions shapes -- so the
+    test #131 applies on the other path is simply unavailable here, and a
+    reply cut off before it said anything arrived as silence.
+
+    What the endpoint does report is usage on the closing event, and a
+    truncated response spends the cap exactly. Measured: max_tokens 12 with
+    reasoning on returns completion_tokens 12 and a content list holding only
+    thinking, while an answer that finishes uses 13 of a 500 or 3000 cap. So
+    reaching the ceiling stands in for finish_reason "length" here, and the
+    rest of the rule matches _transform_stream -- raise only when nothing was
+    said and no tool call was made.
     """
     started = False
+    said_something = False
+    completion_tokens = 0
     tool_calls: dict[str, dict[str, Any]] = {}
 
     async for event in stream:
@@ -443,6 +493,11 @@ async def _transform_conversation_stream(
                 },
             )
 
+        if event_type == "conversation.response.done":
+            usage = getattr(data, "usage", None)
+            completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+            continue
+
         if event_type not in ("message.output.delta", "function.call.delta"):
             # Lifecycle, connector progress, and agent handoff. Nothing in the
             # chat log corresponds to any of them.
@@ -454,6 +509,10 @@ async def _transform_conversation_stream(
 
         if event_type == "message.output.delta":
             for delta in _content_deltas(getattr(data, "content", None)):
+                # Thinking is not an answer. _content_deltas emits it so the
+                # reasoning is visible, but a reply made only of it has told
+                # the user nothing.
+                said_something = said_something or "content" in delta
                 yield delta
             continue
 
@@ -478,6 +537,15 @@ async def _transform_conversation_stream(
                 for call in complete
             ]
         }
+        return
+
+    # A truncated turn that produced a tool call still dispatches it, handled
+    # by the return above: the tool call is the answer in that turn.
+    if completion_tokens >= max_tokens and not said_something:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="truncated_before_answering",
+        )
 
 
 def _content_deltas(content: Any) -> list[conversation.AssistantContentDeltaDict]:
@@ -613,6 +681,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 for tool in chat_log.llm_api.tools
             ]
         tools.append({"type": options[CONF_WEB_SEARCH]})
+        max_tokens = options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
             # Rebuilt each pass so tool results from the previous one are
@@ -656,7 +725,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                             MAX_TEMPERATURE[SUBENTRY_TYPE_CONVERSATION],
                         ),
                         "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
-                        "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                        "max_tokens": max_tokens,
                         # Only when set, and only ever set on a model that
                         # advertises reasoning -- see _reasoning_args.
                         **_reasoning_args(options),
@@ -665,12 +734,15 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 )
 
                 async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id, _transform_conversation_stream(stream)
+                    self.entity_id,
+                    _transform_conversation_stream(stream, max_tokens),
                 ):
                     pass
 
             if not chat_log.unresponded_tool_results:
                 break
+        else:
+            _raise_tool_loop_exhausted()
 
     async def _async_conversation_inputs(
         self, chat_log: conversation.ChatLog
@@ -817,6 +889,8 @@ class MistralBaseLLMEntity(MistralBaseEntity):
 
             if not chat_log.unresponded_tool_results:
                 break
+        else:
+            _raise_tool_loop_exhausted()
 
     def _convert_error(self, err: SDKError) -> HomeAssistantError:
         """Map a Mistral AI SDK error onto a Home Assistant error."""

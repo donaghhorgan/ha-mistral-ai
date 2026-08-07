@@ -932,3 +932,24 @@ def test_reasoning_effort_offers_only_the_values_the_api_accepts() -> None:
     selector built from either list would offer options that fail.
     """
     assert REASONING_EFFORTS == ("none", "high")
+
+
+async def test_reauth_dialog_is_given_the_entry_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The reauth description names the entry rather than showing {name}.
+
+    Home Assistant fills this one in: ConfigFlow.async_show_form injects
+    name=entry.title for any reauth flow that has an entry_id, so the
+    integration does not pass it and must not -- the check there is
+    `if description_placeholders.get(CONF_NAME) is None`, and supplying it
+    here would only duplicate what core already does.
+
+    Asserted anyway, because the translation string depends on that behaviour
+    and nothing else in this repository would notice if it went away.
+    """
+    result = await init_integration.start_reauth_flow(hass)
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["description_placeholders"]["name"] == init_integration.title

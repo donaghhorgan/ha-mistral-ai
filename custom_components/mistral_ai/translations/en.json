@@ -194,6 +194,9 @@
         "no_image_returned": {
             "message": "Mistral AI returned no image. {model} may not be able to generate images."
         },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI kept asking to use tools and did not finish within {limit} rounds. Try rephrasing the request, or breaking it into smaller steps."
+        },
         "rate_limited": {
             "message": "Rate limited by Mistral AI. Please try again in a moment."
         },
