@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
+    CONF_TOP_P,
     CONF_WEB_SEARCH,
     SUBENTRY_TYPE_CONVERSATION,
 )
@@ -743,3 +744,45 @@ async def test_web_search_citations_do_not_break_the_reply(
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "weather")) == "It is 21 degrees in Dublin."
+
+
+async def test_top_p_is_sent_on_the_chat_completions_path(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The configured value reaches the request rather than only being stored."""
+    entry = next(
+        subentry
+        for subentry in init_integration.subentries.values()
+        if subentry.subentry_type == "conversation"
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, entry, data={**entry.data, CONF_TOP_P: 0.4}
+    )
+    await hass.async_block_till_done()
+
+    await converse(hass)
+
+    assert mock_client.chat.stream_async.await_args.kwargs["top_p"] == 0.4
+
+
+async def test_top_p_is_sent_on_the_conversations_path(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """And on the other endpoint, where it lives inside completion_args.
+
+    Worth its own test because the two paths take it in different places, and
+    a setting that applies until web search is switched on is exactly the
+    failure the temperature bounds already had to be fixed for.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok")
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_TOP_P: 0.4})
+    await hass.async_block_till_done()
+
+    await converse(hass)
+
+    request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
+    assert request["completion_args"]["top_p"] == 0.4

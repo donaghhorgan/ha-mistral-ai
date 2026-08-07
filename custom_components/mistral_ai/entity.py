@@ -26,10 +26,12 @@ from .const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
+    CONF_TOP_P,
     CONF_WEB_SEARCH,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_P,
     DOMAIN,
     MAX_TEMPERATURE,
     MAX_TOOL_ITERATIONS,
@@ -512,6 +514,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                             options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
                             MAX_TEMPERATURE[SUBENTRY_TYPE_CONVERSATION],
                         ),
+                        "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
                         "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
                     },
                     timeout_ms=TIMEOUT * 1000,
@@ -607,6 +610,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
                 MAX_TEMPERATURE[SUBENTRY_TYPE_AI_TASK_DATA],
             ),
+            # Bounded at 1.0 by both endpoints, so unlike temperature there is
+            # no per-endpoint ceiling to pick between.
+            "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
             "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
         }
 

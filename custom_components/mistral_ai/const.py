@@ -8,6 +8,7 @@ CONF_MAX_TOKENS = "max_tokens"
 CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
 CONF_TEMPERATURE = "temperature"
+CONF_TOP_P = "top_p"
 CONF_VOICE = "voice"
 CONF_WEB_SEARCH = "web_search"
 
@@ -20,6 +21,12 @@ CONF_WEB_SEARCH = "web_search"
 DEFAULT_MAX_TOKENS = 3000
 DEFAULT_MODEL = "mistral-small-latest"
 DEFAULT_TEMPERATURE = 0.7
+
+# 1.0 leaves sampling alone, which is what every core LLM integration defaults
+# to for this. openai_conversation uses 1.0 and
+# google_generative_ai_conversation 0.95, and neither is a tuned figure -- it
+# is "do not restrict the distribution unless asked".
+DEFAULT_TOP_P = 1.0
 
 # Transcription is asked to report what was said, not to be interesting about
 # it, so it gets its own default rather than the conversational 0.7. The
@@ -48,6 +55,12 @@ SUBENTRY_TYPE_TTS = "tts"
 # the conversations endpoint, and it is a checkbox on the same form -- a
 # temperature that works until an unrelated setting is switched on is worse
 # than one that is merely lower than it could be.
+# top_p is bounded at 1.0 by both endpoints, unlike temperature, whose limit
+# differs between them. Checked with real requests rather than read off the
+# schema, since the schema was wrong about one temperature bound and silent
+# about another.
+MAX_TOP_P = 1.0
+
 MAX_TEMPERATURE = {
     SUBENTRY_TYPE_AI_TASK_DATA: 1.5,
     SUBENTRY_TYPE_CONVERSATION: 1.0,
