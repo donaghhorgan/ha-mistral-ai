@@ -258,6 +258,8 @@ async def test_no_configured_voice_says_so_rather_than_going_quiet(
     # without a voice, so the round trip would only confirm what is already
     # known here.
     mock_client.audio.speech.complete_async.assert_not_awaited()
+
+
 async def test_every_voice_is_listed_not_just_the_first_page(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
