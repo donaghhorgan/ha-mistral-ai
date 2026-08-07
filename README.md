@@ -123,6 +123,16 @@ To change an existing one, click "Configure" next to it.
   surfaces as `Mistral AI did not return valid structured data` — a parse
   failure that reads like a model problem but is a length one.
 
+- **Top-p** (conversation agents and AI tasks): An alternative to
+  temperature. The model considers only the most likely words whose
+  probabilities add up to this value, so lowering it narrows what it will
+  choose from. 1.0 leaves sampling alone, which is the default.
+
+  Lower this or the temperature, not both — they are two ways of doing the
+  same thing and reducing both at once tends to make replies repetitive. It
+  is not offered for speech-to-text or text-to-speech, because neither
+  endpoint takes it.
+
 - **Instructions** (conversation agents only): Custom instructions for the
   assistant. You can use Home Assistant template variables like
   `{{ ha_name }}`.
