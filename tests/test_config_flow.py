@@ -19,12 +19,14 @@ from custom_components.mistral_ai.const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
+    CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_VOICE,
     DEFAULT_MODEL,
     DEFAULT_STT_TEMPERATURE,
     DOMAIN,
+    REASONING_EFFORTS,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
@@ -748,3 +750,172 @@ async def test_opening_the_form_twice_fetches_the_model_list_once(
         )
 
     assert mock_client.models.list_async.await_count - before <= 1
+
+
+def _has_field(result: dict, field: str) -> bool:
+    """Return whether a form offers a named field."""
+    return any(marker.schema == field for marker in result["data_schema"].schema)
+
+
+@pytest.mark.parametrize(
+    "subentry_type", [SUBENTRY_TYPE_CONVERSATION, SUBENTRY_TYPE_AI_TASK_DATA]
+)
+async def test_reasoning_effort_offered_for_a_reasoning_model(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+) -> None:
+    """The field appears when the default model advertises reasoning.
+
+    DEFAULT_MODEL is mistral-small-latest, which reports reasoning: true on
+    the live API, so a new subentry starts on a model that accepts the field.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": SOURCE_USER},
+    )
+
+    assert _has_field(result, CONF_REASONING_EFFORT)
+
+
+async def test_reasoning_effort_hidden_for_a_model_that_cannot_reason(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A model without the capability is not offered the field.
+
+    Not cosmetic. Such a model rejects every value including "none" with
+    400 "reasoning_effort is not enabled for this model", so offering the
+    field would hand someone a setting that breaks their agent.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_MODEL: "mistral-large-latest"},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+
+    assert _has_field(result, CONF_MODEL)
+    assert not _has_field(result, CONF_REASONING_EFFORT)
+
+
+async def test_switching_to_a_non_reasoning_model_drops_the_setting(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The stored effort is pruned when the model can no longer accept it.
+
+    This is the gap a config flow cannot close any other way: the form decides
+    whether to show the field from the model already stored, so switching to a
+    non-reasoning model submits a field that was valid when the form was drawn.
+    Saving it would produce a subentry that 400s on every request, from a form
+    that was filled in correctly.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_MODEL: "mistral-large-latest",
+            CONF_TEMPERATURE: 0.5,
+            CONF_REASONING_EFFORT: "high",
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    updated = init_integration.subentries[subentry.subentry_id]
+    assert updated.data[CONF_MODEL] == "mistral-large-latest"
+    assert CONF_REASONING_EFFORT not in updated.data
+
+
+async def test_reasoning_effort_survives_a_reasoning_model(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Pruning is narrow: a model that reasons keeps the setting.
+
+    Asserted because a prune that fired too widely would silently delete a
+    working setting, which is harder to notice than one that never fires.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_MODEL: DEFAULT_MODEL,
+            CONF_TEMPERATURE: 0.5,
+            CONF_REASONING_EFFORT: "high",
+        },
+    )
+    await hass.async_block_till_done()
+
+    updated = init_integration.subentries[subentry.subentry_id]
+    assert updated.data[CONF_REASONING_EFFORT] == "high"
+
+
+async def test_reasoning_effort_kept_for_an_unlisted_model(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A hand-typed model is left alone rather than assumed incapable.
+
+    The dropdown allows a custom value, and the API stops listing retired
+    models. Nothing is known about either, so pruning on "not in the list"
+    would delete a setting that may well work.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_MODEL: "magistral-medium-2512",
+            CONF_TEMPERATURE: 0.5,
+            CONF_REASONING_EFFORT: "high",
+        },
+    )
+    await hass.async_block_till_done()
+
+    updated = init_integration.subentries[subentry.subentry_id]
+    assert updated.data[CONF_REASONING_EFFORT] == "high"
+
+
+def test_reasoning_effort_offers_only_the_values_the_api_accepts() -> None:
+    """Two options, not the six the spec declares nor the seven it 422s with.
+
+    The schema layer names none, minimal, low, medium, high, xhigh and max;
+    the model layer then rejects five of those with 400 and code 3051. A
+    selector built from either list would offer options that fail.
+    """
+    assert REASONING_EFFORTS == ("none", "high")

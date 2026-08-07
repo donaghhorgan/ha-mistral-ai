@@ -26,6 +26,7 @@ from .const import (
     ATTACHMENT_DOCUMENT_TYPE,
     CONF_MAX_TOKENS,
     CONF_MODEL,
+    CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_WEB_SEARCH,
@@ -45,7 +46,7 @@ from .const import (
 from .helpers import clamped_temperature
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterable, Callable
+    from collections.abc import AsyncGenerator, AsyncIterable, Callable, Mapping
     from pathlib import Path
 
     from . import MistralConfigEntry
@@ -144,6 +145,32 @@ def _validation_detail(err: SDKError) -> str:
             messages.append(f"{field}: {message}" if field else message)
 
     return "; ".join(dict.fromkeys(messages))
+
+
+def _reasoning_args(options: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the reasoning effort to send, or nothing at all.
+
+    Absent by default, and that is the whole point. Every other generation
+    parameter here has a default sent on every request; this one must not,
+    because a model that does not advertise the capability rejects the field
+    outright rather than ignoring it:
+
+        400 reasoning_effort is not enabled for this model
+
+    So sending "none" to mean "off" would break every non-reasoning model --
+    codestral, ministral, devstral, voxtral, and the pinned mistral-medium
+    builds among them. Omitting the key leaves each model on its own default,
+    which is the behaviour every subentry has today.
+
+    The config flow is what guarantees a stored value only ever belongs to a
+    model that accepts it: the field is offered only for a reasoning-capable
+    model, and _prune_unsupported drops it when the model is changed to one
+    that is not. Checking here instead would mean a model lookup on every
+    request, on the path where the user is waiting for a reply.
+    """
+    if effort := options.get(CONF_REASONING_EFFORT):
+        return {"reasoning_effort": effort}
+    return {}
 
 
 def _convert_content(content: conversation.Content) -> dict[str, Any]:
@@ -630,6 +657,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                         ),
                         "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
                         "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                        # Only when set, and only ever set on a model that
+                        # advertises reasoning -- see _reasoning_args.
+                        **_reasoning_args(options),
                     },
                     timeout_ms=TIMEOUT * 1000,
                 )
@@ -728,6 +758,10 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # no per-endpoint ceiling to pick between.
             "top_p": options.get(CONF_TOP_P, DEFAULT_TOP_P),
             "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+            # Accepted top level here and inside completion_args there, with
+            # the same values in both, so unlike temperature there is no
+            # per-endpoint ceiling to pick between.
+            **_reasoning_args(options),
         }
 
         # llm.selector_serializer rather than None when there is no LLM API.

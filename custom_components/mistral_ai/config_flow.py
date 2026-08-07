@@ -39,10 +39,12 @@ from .const import (
     CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
     CAPABILITY_COMPLETION_CHAT,
+    CAPABILITY_REASONING,
     CONF_API_KEY,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_PROMPT,
+    CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_VOICE,
@@ -59,6 +61,7 @@ from .const import (
     DOMAIN,
     MAX_TEMPERATURE,
     MAX_TOP_P,
+    REASONING_EFFORTS,
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     SUBENTRY_TYPE_STT,
@@ -124,6 +127,7 @@ class ModelChoice(NamedTuple):
     id: str
     deprecation: datetime | None
     replacement: str | None
+    reasoning: bool = False
 
     @property
     def label(self) -> str:
@@ -198,6 +202,11 @@ def model_choices(
             id=card.id,
             deprecation=getattr(card, "deprecation", None),
             replacement=getattr(card, "deprecation_replacement_model", None),
+            reasoning=bool(
+                getattr(
+                    getattr(card, "capabilities", None), CAPABILITY_REASONING, False
+                )
+            ),
         )
         for card in cards
     ]
@@ -332,20 +341,16 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
         if entry.state is not ConfigEntryState.LOADED:
             return self.async_abort(reason="entry_not_loaded")
 
-        if user_input is not None:
-            if self._is_new:
-                title = user_input.pop(CONF_NAME)
-                return self.async_create_entry(title=title, data=user_input)
-            return self.async_update_and_abort(
-                entry, self._get_reconfigure_subentry(), data=user_input
-            )
-
         # The entry is loaded, so it already holds a client and a model list.
         # Both matter for the same reason: this form is rendered often, and it
         # used to build a connection pool and spend a round trip on every
         # render, before showing anything.
         data = entry.runtime_data
 
+        # Fetched before the submit branch as well as for the form, because
+        # _prune_unsupported needs to know what the newly chosen model can do.
+        # Effectively free on submit: rendering the form populated the cache
+        # moments earlier, and it holds for an hour.
         try:
             cards = await data.async_models(async_fetch_model_cards)
             models = model_choices(
@@ -360,6 +365,15 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
         except CannotConnect:
             _LOGGER.exception("Failed to list Mistral AI models")
             return self.async_abort(reason="cannot_connect")
+
+        if user_input is not None:
+            user_input = _prune_unsupported(user_input, models)
+            if self._is_new:
+                title = user_input.pop(CONF_NAME)
+                return self.async_create_entry(title=title, data=user_input)
+            return self.async_update_and_abort(
+                entry, self._get_reconfigure_subentry(), data=user_input
+            )
 
         if not self._is_new:
             options = dict(self._get_reconfigure_subentry().data)
@@ -417,6 +431,36 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
 
     async_step_user = async_step_set_options
     async_step_reconfigure = async_step_set_options
+
+
+def _prune_unsupported(
+    user_input: Mapping[str, Any], models: list[ModelChoice]
+) -> dict[str, Any]:
+    """Drop settings the chosen model cannot accept.
+
+    Only reasoning effort, for now. The form decides whether to offer that
+    field from the model already stored, because a config flow cannot re-render
+    when a dropdown changes -- so switching from a reasoning model to one
+    without it submits a field that was valid when the form was drawn and is
+    not valid now.
+
+    Saving it anyway would be a config that 400s on every single request, from
+    a form the user filled in correctly. The stored value is dropped instead,
+    and comes back the next time a reasoning model is chosen only if they set
+    it again -- which is the honest outcome, since the setting genuinely does
+    not exist for the model they picked.
+
+    An unlisted model -- one typed in by hand, or one the API has stopped
+    offering -- is left alone rather than pruned. Nothing is known about it, so
+    guessing that it cannot reason would silently delete a working setting.
+    """
+    reasoning = {choice.id: choice.reasoning for choice in models}
+    model = user_input.get(CONF_MODEL)
+
+    if reasoning.get(model, True):
+        return dict(user_input)
+
+    return {k: v for k, v in user_input.items() if k != CONF_REASONING_EFFORT}
 
 
 def _subentry_schema(
@@ -507,6 +551,31 @@ def _subentry_schema(
                 min=0.0, max=MAX_TOP_P, step=0.05, mode=NumberSelectorMode.SLIDER
             )
         )
+
+        # Offered only when the chosen model advertises reasoning, because a
+        # model without it rejects every value including "none" -- so this is
+        # not a setting that does nothing on the wrong model, it is one that
+        # breaks it. Keyed on the model already stored, since a config flow
+        # cannot re-render when a dropdown changes: after switching to a
+        # reasoning model the field appears the next time the form is opened.
+        #
+        # No default. Leaving it unset sends nothing at all, which is what
+        # every existing subentry does today and must keep doing -- defaulting
+        # to "none" would silently turn reasoning off for anyone relying on a
+        # reasoning model's own default.
+        if listed.get(default_model, ModelChoice(default_model, None, None)).reasoning:
+            schema[
+                vol.Optional(
+                    CONF_REASONING_EFFORT,
+                    description={"suggested_value": options.get(CONF_REASONING_EFFORT)},
+                )
+            ] = SelectSelector(
+                SelectSelectorConfig(
+                    options=list(REASONING_EFFORTS),
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key=CONF_REASONING_EFFORT,
+                )
+            )
 
     # Required, because the endpoint will not choose one:
     #
