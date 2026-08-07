@@ -9,7 +9,7 @@ import logging
 import re
 from contextlib import aclosing
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from homeassistant.components import tts
@@ -115,21 +115,31 @@ async def _speech_events(response: httpx.Response) -> AsyncGenerator[dict[str, A
     """
     data: list[str] = []
 
-    async for line in response.aiter_lines():
-        if line.startswith("data:"):
-            # One optional space after the colon belongs to the framing.
-            data.append(line[5:].removeprefix(" "))
-            continue
+    # Closed with the generator rather than left to the garbage collector,
+    # for the same reason as the callers below: it holds the open response.
+    #
+    # Cast because httpx annotates this as AsyncIterator, which has no
+    # aclose, while returning an async generator that does. Narrowing to what
+    # it actually returns rather than dropping the close, since dropping it is
+    # the bug being fixed.
+    lines_gen = cast("AsyncGenerator[str]", response.aiter_lines())
 
-        if line.strip():
-            # event:, id:, retry:, or a comment.
-            continue
+    async with aclosing(lines_gen) as lines:
+        async for line in lines:
+            if line.startswith("data:"):
+                # One optional space after the colon belongs to the framing.
+                data.append(line[5:].removeprefix(" "))
+                continue
 
-        # A blank line ends the event.
-        if data:
-            payload, data = "\n".join(data), []
-            if (event := _decode_event(payload)) is not None:
-                yield event
+            if line.strip():
+                # event:, id:, retry:, or a comment.
+                continue
+
+            # A blank line ends the event.
+            if data:
+                payload, data = "\n".join(data), []
+                if (event := _decode_event(payload)) is not None:
+                    yield event
 
     # A final event with no trailing blank line before the stream closed.
     if data and (event := _decode_event("\n".join(data))) is not None:
@@ -308,24 +318,29 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                         _validation_detail_from_body(response.text),
                     )
 
-                async for event in _speech_events(response):
-                    if not (encoded := event.get("audio_data")):
-                        # The terminating speech.audio.done carries no audio.
-                        continue
+                # Closed explicitly: the decode below raises, and abandoning
+                # this generator is what left an async_generator_athrow task
+                # pending after the test that caused it.
+                async with aclosing(_speech_events(response)) as events:
+                    async for event in events:
+                        if not (encoded := event.get("audio_data")):
+                            # The terminating speech.audio.done carries no
+                            # audio.
+                            continue
 
-                    # Decoded strictly. Handing Home Assistant the wrong bytes
-                    # produces silence at playback rather than an error here,
-                    # which is a miserable thing to debug.
-                    try:
-                        chunk = base64.b64decode(encoded, validate=True)
-                    except (TypeError, binascii.Error) as err:
-                        raise HomeAssistantError(
-                            translation_domain=DOMAIN,
-                            translation_key="speech_not_base64",
-                        ) from err
+                        # Decoded strictly. Handing Home Assistant the wrong
+                        # bytes produces silence at playback rather than an
+                        # error here, which is a miserable thing to debug.
+                        try:
+                            chunk = base64.b64decode(encoded, validate=True)
+                        except (TypeError, binascii.Error) as err:
+                            raise HomeAssistantError(
+                                translation_domain=DOMAIN,
+                                translation_key="speech_not_base64",
+                            ) from err
 
-                    spoke = True
-                    yield chunk
+                        spoke = True
+                        yield chunk
 
         except (TimeoutError, httpx.HTTPError) as err:
             # The non-streaming path catches these and this did not, so a
