@@ -23,7 +23,7 @@
         "mistralai"
     ],
     "requirements": [
-        "mistralai>=2.1.0"
+        "mistralai>=2.9.0"
     ],
     "version": "1.0.0"
 }
