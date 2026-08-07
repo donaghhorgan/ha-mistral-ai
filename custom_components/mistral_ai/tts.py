@@ -7,8 +7,9 @@ import binascii
 import json
 import logging
 import re
+from contextlib import aclosing
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 from homeassistant.components import tts
@@ -23,12 +24,13 @@ from .const import (
     CONF_API_KEY,
     CONF_MODEL,
     CONF_VOICE,
+    DOMAIN,
     SPEECH_LANGUAGES,
     SUBENTRY_TYPE_TTS,
     TIMEOUT,
     TTS_AUDIO_FORMAT,
 )
-from .entity import MistralBaseEntity
+from .entity import MistralBaseEntity, _validation_detail_from_body
 from .helpers import async_list_voices
 
 if TYPE_CHECKING:
@@ -90,6 +92,78 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
 
     if final := buffer.strip():
         yield final
+
+
+async def _speech_events(response: httpx.Response) -> AsyncGenerator[dict[str, Any]]:
+    """Yield the decoded payload of each event in a speech stream.
+
+    Server-sent events are framed by blank lines, and a single event's `data`
+    may be split across several lines which the client joins with newlines.
+    The first version of this treated every `data:` line as a whole JSON
+    document, which is true of every response seen from this endpoint so far
+    and not promised by the format.
+
+    The joining rule bounds how bad that could get: a server can only break a
+    line where a newline is valid JSON whitespace, so the base64 string itself
+    is never split -- that would corrupt it. But a payload broken between
+    fields would have failed to parse and been dropped, losing audio quietly,
+    which is the failure this file keeps guarding against.
+
+    Non-data lines are skipped rather than read. `event:` names the event, but
+    audio is recognised by carrying an `audio_data` field, so a renamed event
+    keeps working and an unfamiliar one is simply ignored.
+    """
+    data: list[str] = []
+
+    # Closed with the generator rather than left to the garbage collector,
+    # for the same reason as the callers below: it holds the open response.
+    #
+    # Cast because httpx annotates this as AsyncIterator, which has no
+    # aclose, while returning an async generator that does. Narrowing to what
+    # it actually returns rather than dropping the close, since dropping it is
+    # the bug being fixed.
+    lines_gen = cast("AsyncGenerator[str]", response.aiter_lines())
+
+    async with aclosing(lines_gen) as lines:
+        async for line in lines:
+            if line.startswith("data:"):
+                # One optional space after the colon belongs to the framing.
+                data.append(line[5:].removeprefix(" "))
+                continue
+
+            if line.strip():
+                # event:, id:, retry:, or a comment.
+                continue
+
+            # A blank line ends the event.
+            if data:
+                payload, data = "\n".join(data), []
+                if (event := _decode_event(payload)) is not None:
+                    yield event
+
+    # A final event with no trailing blank line before the stream closed.
+    if data and (event := _decode_event("\n".join(data))) is not None:
+        yield event
+
+
+def _decode_event(payload: str) -> dict[str, Any] | None:
+    """Return one event's JSON, or None having said it could not be read.
+
+    Logged at warning rather than debug: by this point a whole event has been
+    assembled, so failing to read it means audio is being dropped. Not raised,
+    because an unfamiliar event that is not audio is harmless -- the empty
+    stream is caught by the caller instead, which is the case that matters.
+    """
+    try:
+        event = json.loads(payload)
+    except ValueError:
+        _LOGGER.warning(
+            "Could not read a Mistral AI speech event, skipping it: %s",
+            payload[:120],
+        )
+        return None
+
+    return event if isinstance(event, dict) else None
 
 
 async def async_setup_entry(
@@ -206,6 +280,10 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
         async_create_client hands the SDK, so no second connection pool is
         built here. Taken from get_async_client rather than off the SDK
         configuration, where it is typed as possibly absent.
+
+        Building the request by hand means the failure handling the SDK path
+        gets from _convert_error has to be asked for explicitly, which is
+        what _error_for_status is for.
         """
         base_url, _ = (
             self.entry.runtime_data.client.sdk_configuration.get_server_details()
@@ -219,46 +297,70 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
             "stream": True,
         }
 
-        async with get_async_client(self.hass).stream(
-            "POST",
-            f"{base_url.rstrip('/')}/v1/audio/speech",
-            json=payload,
-            headers={"Authorization": f"Bearer {self.entry.data[CONF_API_KEY]}"},
-            timeout=TIMEOUT,
-        ) as response:
-            if response.status_code != HTTPStatus.OK:
-                # The body has to be pulled in before it can be read at all on
-                # a streamed response, and it is small: these are JSON errors,
-                # not audio.
-                await response.aread()
-                raise HomeAssistantError(
-                    f"Mistral AI refused the speech request "
-                    f"({response.status_code}): {response.text[:200]}"
-                )
+        spoke = False
 
-            async for line in response.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
+        try:
+            async with get_async_client(self.hass).stream(
+                "POST",
+                f"{base_url.rstrip('/')}/v1/audio/speech",
+                json=payload,
+                headers={"Authorization": f"Bearer {self.entry.data[CONF_API_KEY]}"},
+                timeout=TIMEOUT,
+            ) as response:
+                if response.status_code != HTTPStatus.OK:
+                    # The body has to be pulled in before it can be read at
+                    # all on a streamed response, and it is small: these are
+                    # JSON errors, not audio.
+                    await response.aread()
+                    raise self._error_for_status(
+                        response.status_code,
+                        response.text[:500],
+                        _validation_detail_from_body(response.text),
+                    )
 
-                try:
-                    event = json.loads(line.removeprefix("data:").strip())
-                except ValueError:
-                    _LOGGER.debug("Ignoring unparseable speech event: %s", line[:100])
-                    continue
+                # Closed explicitly: the decode below raises, and abandoning
+                # this generator is what left an async_generator_athrow task
+                # pending after the test that caused it.
+                async with aclosing(_speech_events(response)) as events:
+                    async for event in events:
+                        if not (encoded := event.get("audio_data")):
+                            # The terminating speech.audio.done carries no
+                            # audio.
+                            continue
 
-                if not (encoded := event.get("audio_data")):
-                    # The terminating speech.audio.done carries no audio.
-                    continue
+                        # Decoded strictly. Handing Home Assistant the wrong
+                        # bytes produces silence at playback rather than an
+                        # error here, which is a miserable thing to debug.
+                        try:
+                            chunk = base64.b64decode(encoded, validate=True)
+                        except (TypeError, binascii.Error) as err:
+                            raise HomeAssistantError(
+                                translation_domain=DOMAIN,
+                                translation_key="speech_not_base64",
+                            ) from err
 
-                # Decoded strictly. Handing Home Assistant the wrong bytes
-                # produces silence at playback rather than an error here,
-                # which is a miserable thing to debug.
-                try:
-                    yield base64.b64decode(encoded, validate=True)
-                except (TypeError, binascii.Error) as err:
-                    raise HomeAssistantError(
-                        "Mistral AI returned audio that is not valid base64"
-                    ) from err
+                        spoke = True
+                        yield chunk
+
+        except (TimeoutError, httpx.HTTPError) as err:
+            # The non-streaming path catches these and this did not, so a
+            # connection reset part way through a reply surfaced as a raw
+            # httpx traceback rather than as an error about speech.
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="speech_transport_error",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
+        if not spoke:
+            # A stream that parsed cleanly and produced nothing is the failure
+            # this file keeps guarding against: silence with no explanation.
+            # Reachable if the event shape moves under us, which is exactly
+            # when nobody is looking for it.
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="speech_no_audio",
+            )
 
     async def async_stream_tts_audio(
         self, request: tts.TTSAudioRequest
@@ -284,9 +386,20 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                 # reason has already been logged.
                 return
 
-            async for sentence in _sentences(request.message_gen):
-                async for chunk in self._async_stream_speech(sentence, voice):
-                    yield chunk
+            # Closed deterministically rather than left to the garbage
+            # collector's async-generator hook. Each speech stream holds an
+            # open httpx response, so abandoning one part way through -- which
+            # is what happens when any of these raise -- would keep the
+            # connection until finalisation caught up. Home Assistant's
+            # lingering-task check sees that hook running after the test that
+            # caused it, which is how it surfaced.
+            async with aclosing(_sentences(request.message_gen)) as sentences:
+                async for sentence in sentences:
+                    async with aclosing(
+                        self._async_stream_speech(sentence, voice)
+                    ) as speech:
+                        async for chunk in speech:
+                            yield chunk
 
         return tts.TTSAudioResponse(TTS_AUDIO_FORMAT, data_gen())
 

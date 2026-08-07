@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
+from contextlib import aclosing, contextmanager
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -23,12 +25,30 @@ from .conftest import TTS_MODEL, VOICE_ID
 from .helpers import make_sdk_error
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Iterator
 
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 ENTITY_ID = "tts.mistral_ai_tts"
 AUDIO = b"ID3 fake mp3 bytes"
+
+
+@contextmanager
+def caplog_at_warning() -> Iterator[list[str]]:
+    """Collect warning messages from the integration's logger."""
+    records: list[str] = []
+    logger = logging.getLogger("custom_components.mistral_ai.tts")
+
+    class _Collect(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record.getMessage())
+
+    handler = _Collect(level=logging.WARNING)
+    logger.addHandler(handler)
+    try:
+        yield records
+    finally:
+        logger.removeHandler(handler)
 
 
 def _entity(hass: HomeAssistant) -> tts.TextToSpeechEntity:
@@ -337,7 +357,12 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
     response = await entity.async_stream_tts_audio(
         tts.TTSAudioRequest(language="en", options={}, message_gen=_gen(*chunks))
     )
-    return response.extension, b"".join([part async for part in response.data_gen])
+    # Closed even when consuming it raises, which several of these tests do on
+    # purpose. Leaving it to the garbage collector schedules the finalisation
+    # after the test has ended, and Home Assistant reports that as a lingering
+    # task on newer releases.
+    async with aclosing(response.data_gen) as data:
+        return response.extension, b"".join([part async for part in data])
 
 
 @pytest.mark.parametrize(
@@ -453,9 +478,14 @@ async def test_streaming_reports_a_refused_request(
 ) -> None:
     """An error body is raised rather than played as silence.
 
-    Built by hand rather than via the SDK, so the error mapping _convert_error
-    provides elsewhere has to be done here -- and a streamed response has to
-    be read before its body can be touched at all.
+    Built by hand rather than via the SDK, so the status mapping has to be
+    asked for explicitly -- and a streamed response has to be read before its
+    body can be touched at all.
+
+    Asserted on the translation key rather than the text, because that is what
+    reaches the user: this path used to raise an English f-string with the raw
+    response body in it, the only user-facing error in the integration without
+    a key.
     """
     respx.post("https://api.mistral.ai/v1/audio/speech").mock(
         return_value=httpx.Response(
@@ -463,8 +493,10 @@ async def test_streaming_reports_a_refused_request(
         )
     )
 
-    with pytest.raises(HomeAssistantError, match="400"):
+    with pytest.raises(HomeAssistantError) as raised:
         await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+    assert raised.value.translation_key == "api_error"
 
 
 @respx.mock
@@ -485,8 +517,10 @@ async def test_streaming_rejects_audio_that_is_not_base64(
         )
     )
 
-    with pytest.raises(HomeAssistantError, match="not valid base64"):
+    with pytest.raises(HomeAssistantError) as raised:
         await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+    assert raised.value.translation_key == "speech_not_base64"
 
 
 @respx.mock
@@ -521,3 +555,114 @@ async def test_streaming_input_is_advertised(
     entity back on the joined-message shim.
     """
     assert _entity(hass).async_supports_streaming_input() is True
+
+
+@respx.mock
+async def test_an_event_split_across_data_lines_is_reassembled(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Server-sent events may split one payload over several data lines.
+
+    The client joins them with newlines, so a server can only break the line
+    where a newline is valid JSON whitespace -- between tokens, never inside
+    the base64 string, which would corrupt it. That bounds the risk but does
+    not remove it: the first version of this treated every data line as a
+    whole JSON document, so a payload broken between fields would have failed
+    to parse and been dropped, losing audio quietly.
+
+    Every response seen from this endpoint so far is single-line. The format
+    does not promise that.
+    """
+    delta = _delta(b"ID3 split across lines")
+    body = (
+        b"event: speech.audio.delta\n"
+        + f'data: {{"type": "{delta["type"]}",\n'.encode()
+        + f'data:  "audio_data": "{delta["audio_data"]}"}}\n'.encode()
+        + b"\n"
+        + _sse(DONE)
+    )
+
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200, content=body, headers={"content-type": "text/event-stream"}
+        )
+    )
+
+    _, audio = await _collect(
+        _entity(hass), "The kitchen light is on and the hall light is off."
+    )
+
+    assert audio == b"ID3 split across lines"
+
+
+@respx.mock
+async def test_a_dropped_connection_is_reported_as_a_speech_error(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A transport failure becomes an error about speech, not a raw traceback.
+
+    The non-streaming path catches these; this one did not, so a connection
+    reset part way through a reply surfaced as an httpx exception from inside
+    an async generator.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        side_effect=httpx.ConnectError("connection reset")
+    )
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+    assert raised.value.translation_key == "speech_transport_error"
+
+
+@respx.mock
+async def test_a_stream_that_produces_no_audio_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Parsing cleanly and yielding nothing is a failure, not a quiet success.
+
+    Reachable if the event shape moves under us -- an audio field renamed,
+    say -- which is exactly when nobody is looking for it. Without this the
+    entity would return an empty stream and the speaker would simply stay
+    silent.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=_sse({"type": "speech.audio.delta", "audio": "renamed"}, DONE),
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    with pytest.raises(HomeAssistantError) as raised:
+        await _collect(_entity(hass), "The kitchen light is on, and the hall is dark.")
+
+    assert raised.value.translation_key == "speech_no_audio"
+
+
+@respx.mock
+async def test_an_unreadable_event_is_skipped_loudly(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """One bad event does not sink the reply, but it is not silent either.
+
+    Skipped rather than raised, because an unfamiliar event that carries no
+    audio is harmless. The case that matters -- ending up with no audio at
+    all -- is caught separately, so this can afford to be forgiving.
+    """
+    body = b"event: speech.audio.delta\ndata: {not json at all\n\n" + _sse(
+        _delta(b"ID3 good"), DONE
+    )
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200, content=body, headers={"content-type": "text/event-stream"}
+        )
+    )
+
+    with caplog_at_warning() as records:
+        _, audio = await _collect(
+            _entity(hass), "The kitchen light is on and the hall light is off."
+        )
+
+    assert audio == b"ID3 good"
+    assert any("Could not read" in message for message in records)
