@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from homeassistant.helpers import issue_registry as ir
 
 from custom_components.mistral_ai.const import CONF_MODEL, DOMAIN
-from custom_components.mistral_ai.repairs import issue_id
+from custom_components.mistral_ai.repairs import async_create_fix_flow, issue_id
 
 from .conftest import DEPRECATED_MODEL, ORPHANED_MODEL
 
@@ -135,3 +135,86 @@ async def test_a_retiring_model_with_no_successor_is_not_fixable(
     assert issue is not None
     assert not issue.is_fixable
     assert issue.translation_key == "deprecated_model_no_successor"
+
+
+async def test_orphaned_issue_is_withdrawn_when_the_subentry_is_deleted(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A warning does not outlive the entity it is about.
+
+    The per-subentry sweep can only clear issues for subentries it can see, so
+    deleting one left its warning behind: the reload afterwards loops over
+    what remains and never visits the orphan. The fixable variant self-heals
+    if anyone presses the button, but the no-successor variant has no button
+    and simply sat there naming an entity that no longer existed.
+    """
+    subentry_id, subentry = _conversation(init_integration)
+    hass.config_entries.async_update_subentry(
+        init_integration, subentry, data={CONF_MODEL: ORPHANED_MODEL}
+    )
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id(subentry_id))
+
+    hass.config_entries.async_remove_subentry(init_integration, subentry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id(subentry_id)) is None
+
+
+async def test_removing_the_entry_withdraws_its_issues(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The last entry going away takes its warnings with it.
+
+    The sweep during setup only runs if something is left to set up. Remove
+    the last entry and nothing would run again, so the warnings would sit in
+    the repairs dashboard until Home Assistant restarted -- which is why
+    async_remove_entry exists rather than relying on the sweep alone.
+    """
+    subentry_id, subentry = _conversation(init_integration)
+    hass.config_entries.async_update_subentry(
+        init_integration, subentry, data={CONF_MODEL: ORPHANED_MODEL}
+    )
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id(subentry_id))
+
+    await hass.config_entries.async_remove(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id(subentry_id)) is None
+
+
+async def test_the_repair_form_is_given_its_placeholders(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The confirm step names the entity, model, successor and date.
+
+    Its title and description carry four placeholders, and a RepairsFlow
+    builds its form from the issue's data rather than from the issue's own
+    translation_placeholders -- so without these the dialog rendered four
+    literal {braces}, the same fault as the reauth step in #137.
+    """
+    subentry_id, subentry = _conversation(init_integration)
+    hass.config_entries.async_update_subentry(
+        init_integration, subentry, data={CONF_MODEL: DEPRECATED_MODEL}
+    )
+    await hass.config_entries.async_reload(init_integration.entry_id)
+    await hass.async_block_till_done()
+
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, issue_id(subentry_id))
+    assert issue is not None
+
+    flow = await async_create_fix_flow(hass, issue.issue_id, dict(issue.data or {}))
+    flow.hass = hass
+    result = await flow.async_step_confirm()
+
+    placeholders = result["description_placeholders"]
+    assert placeholders["model"] == DEPRECATED_MODEL
+    assert placeholders["replacement"] == "mistral-medium-3-5"
+    assert placeholders["date"] == "2026-08-31"
+    assert placeholders["name"]
+    assert "{" not in "".join(placeholders.values())

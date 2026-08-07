@@ -47,6 +47,9 @@ class DeprecatedModelRepairFlow(RepairsFlow):
         self._entry_id = cast("str", data["entry_id"])
         self._subentry_id = cast("str", data["subentry_id"])
         self._replacement = cast("str", data["replacement"])
+        self._name = str(data.get("name", ""))
+        self._model = str(data.get("model", ""))
+        self._date = str(data.get("date", ""))
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
@@ -59,7 +62,21 @@ class DeprecatedModelRepairFlow(RepairsFlow):
     ) -> FlowResult:
         """Switch the model, or show the confirmation form."""
         if user_input is None:
-            return self.async_show_form(step_id="confirm", data_schema=vol.Schema({}))
+            return self.async_show_form(
+                step_id="confirm",
+                data_schema=vol.Schema({}),
+                # The confirm step's title and description name the entity, the
+                # model, its replacement and the retirement date. The frontend
+                # substitutes only what it is handed, so without these the
+                # repair dialog showed four literal {placeholders} -- the same
+                # fault as the reauth step in #137, in the flow added by #133.
+                description_placeholders={
+                    "name": self._name,
+                    "model": self._model,
+                    "replacement": self._replacement,
+                    "date": self._date,
+                },
+            )
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         subentry = entry.subentries.get(self._subentry_id) if entry else None
@@ -93,3 +110,32 @@ async def async_create_fix_flow(
 def async_clear_issue(hass: HomeAssistant, subentry_id: str) -> None:
     """Withdraw the warning for a subentry."""
     ir.async_delete_issue(hass, DOMAIN, issue_id(subentry_id))
+
+
+@callback
+def async_clear_orphaned_issues(hass: HomeAssistant, known: set[str]) -> None:
+    """Withdraw warnings whose subentry no longer exists.
+
+    The per-subentry sweep in _async_review_models can only clear issues for
+    subentries it can see. Delete an entity while its warning is open and the
+    id is never visited again: the reload afterwards loops over what remains,
+    so the orphan is skipped rather than cleared.
+
+    The fixable variant self-heals if anyone presses the button -- the flow
+    handles a vanished subentry and completes, which closes the issue. The
+    no-successor variant has no button, so it stays in the repairs dashboard
+    describing an entity that is gone, under a name that no longer exists.
+
+    Not permanent: the issues are not persistent, so a restart clears them.
+    But "restart Home Assistant to dismiss a warning about something you have
+    already deleted" is how an integration gets reported as broken.
+
+    `known` is the set of subentry ids that should still have warnings. Ids
+    are read back out of the registry rather than tracked, for the same reason
+    the warnings themselves are recreated each setup: nothing has to remember.
+    """
+    for issue in list(ir.async_get(hass).issues.values()):
+        if issue.domain != DOMAIN or not issue.issue_id.startswith(ISSUE_PREFIX):
+            continue
+        if issue.issue_id.removeprefix(ISSUE_PREFIX) not in known:
+            ir.async_delete_issue(hass, DOMAIN, issue.issue_id)

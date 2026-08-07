@@ -18,11 +18,13 @@ from mistralai.client.errors import SDKError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.const import (
+    CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_WEB_SEARCH,
+    MAX_TOOL_ITERATIONS,
     SUBENTRY_TYPE_CONVERSATION,
 )
 
@@ -456,6 +458,24 @@ def _event(**fields: object) -> MagicMock:
     return event
 
 
+def _usage(completion_tokens: int) -> MagicMock:
+    """Return the usage payload the closing conversation event carries."""
+    usage = MagicMock(spec=["completion_tokens"])
+    usage.completion_tokens = completion_tokens
+    return usage
+
+
+def _thinking_chunk(text: str) -> MagicMock:
+    """Return a content chunk holding reasoning rather than an answer."""
+    thought = MagicMock(spec=["type", "text"])
+    thought.type = "text"
+    thought.text = text
+    chunk = MagicMock(spec=["type", "thinking"])
+    chunk.type = "thinking"
+    chunk.thinking = [thought]
+    return chunk
+
+
 def _conversation_stream(*events: MagicMock):
     """Return a side effect producing a fresh event stream on each call.
 
@@ -869,3 +889,186 @@ async def test_reasoning_effort_is_absent_when_unset(
     await converse(hass)
 
     assert "reasoning_effort" not in mock_client.chat.stream_async.await_args.kwargs
+
+
+async def test_web_search_reply_cut_off_before_answering_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The web search path detects truncation too, without a finish reason.
+
+    #131 fixed this on chat completions using finish_reason "length". No
+    conversation event carries one -- the SDK has it only on the two
+    chat-completions shapes -- so the same failure still arrived here as
+    silence.
+
+    What the endpoint does report is usage on the closing event, and a
+    truncated response spends the cap exactly. Captured from a real request:
+    max_tokens 12 with reasoning on returns completion_tokens 12 and a content
+    list holding one thinking chunk.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(
+                type="message.output.delta",
+                content=_thinking_chunk("working through this"),
+            ),
+            _event(type="conversation.response.done", usage=_usage(12)),
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 12})
+    await hass.async_block_till_done()
+
+    result = await converse(hass)
+
+    assert result.response.response_type is intent.IntentResponseType.ERROR
+
+
+async def test_web_search_keeps_a_truncated_partial_answer(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Half an answer is still worth more than an error here too.
+
+    Spending the whole budget is only a failure when nothing was said. Cut off
+    part way through a sentence, the user can see it was cut short and read
+    what arrived.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="The kitchen light is"),
+            _event(type="conversation.response.done", usage=_usage(12)),
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 12})
+    await hass.async_block_till_done()
+
+    result = await converse(hass)
+
+    assert result.response.response_type is not intent.IntentResponseType.ERROR
+    assert "kitchen light" in result.response.speech["plain"]["speech"]
+
+
+async def test_web_search_does_not_report_a_reply_that_finished(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The control. A reply well inside the cap is not truncation.
+
+    Without this, the test above would pass just as happily if every web
+    search reply raised. Measured: an answer that finishes uses 13 tokens of
+    a 500 or 3000 cap, so reaching the ceiling really does distinguish them.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok"),
+            _event(type="conversation.response.done", usage=_usage(13)),
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 3000})
+    await hass.async_block_till_done()
+
+    result = await converse(hass)
+
+    assert result.response.response_type is not intent.IntentResponseType.ERROR
+
+
+async def test_a_model_that_never_stops_calling_tools_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Exhausting the tool loop says so instead of returning nothing.
+
+    Both loops ran a fixed number of passes and broke when the model stopped
+    asking for tools. Falling off the end was silent -- no log line, no error,
+    and a chat log still holding tool results that were never sent back -- so
+    the user got whatever fragmentary text came with the last tool call,
+    usually nothing, indistinguishable from the model having nothing to say.
+
+    A real API and a resolving tool are needed to reach it: without them the
+    tool call is never dispatched, no result comes back, and the loop breaks
+    after one pass rather than running out.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={CONF_MODEL: "mistral-small-latest", CONF_LLM_HASS_API: ["assist"]},
+    )
+    await hass.async_block_till_done()
+
+    # Never stops asking, so every pass produces another unresponded result.
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(
+                        index=0, call_id="call_1", name="test_tool", arguments="{}"
+                    )
+                ]
+            )
+        )
+    )
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "turn on the light")
+
+    # The message, not just the fact of an error. Without the fix this is
+    # still an error -- Home Assistant falls back to "Unable to get response"
+    # once the chat log ends on a tool result -- so asserting the type alone
+    # would pass either way and test nothing.
+    assert result.response.response_type is intent.IntentResponseType.ERROR
+    assert (
+        "did not finish within 10 rounds" in (result.response.speech["plain"]["speech"])
+    )
+    assert mock_client.chat.stream_async.await_count == MAX_TOOL_ITERATIONS
+
+
+async def test_web_search_tool_loop_exhaustion_is_reported(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """And on the other loop, which had the same silence."""
+    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    await hass.async_block_till_done()
+
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(
+                type="function.call.delta",
+                tool_call_id="call_1",
+                name="test_tool",
+                arguments="{}",
+            ),
+            _event(type="conversation.response.done", usage=_usage(5)),
+        )
+    )
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "turn on the light")
+
+    assert result.response.response_type is intent.IntentResponseType.ERROR
+    assert (
+        "did not finish within 10 rounds" in (result.response.speech["plain"]["speech"])
+    )
+    assert (
+        mock_client.beta.conversations.start_stream_async.await_count
+        == MAX_TOOL_ITERATIONS
+    )

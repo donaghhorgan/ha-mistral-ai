@@ -127,7 +127,9 @@ To change an existing one, click "Configure" next to it.
   before the model has said anything — which happens with reasoning models,
   since thinking is spent from the same budget — the request reports that
   rather than returning nothing. A reply cut off part way through is kept, so
-  you see what arrived.
+  you see what arrived. This applies with web search on as well as off,
+  although the two are detected differently — that endpoint reports no finish
+  reason, so a response that spends the entire budget is what gives it away.
 
   The default is 3000,
   matching Home Assistant's own OpenAI and Google integrations.
@@ -174,6 +176,11 @@ To change an existing one, click "Configure" next to it.
   Clearing it gives an agent that only answers questions. Note that it then
   stops advertising the `CONTROL` feature, so Home Assistant will not offer it
   anywhere control is required — the agent is not broken, it is scoped.
+
+  A model that keeps asking to use tools is stopped after ten rounds, and says
+  so. That limit is what Home Assistant's own LLM integrations use. Reaching it
+  usually means the request needs breaking into smaller steps; the message
+  names the cause rather than leaving you with an empty reply.
 
 ### Web search (beta)
 

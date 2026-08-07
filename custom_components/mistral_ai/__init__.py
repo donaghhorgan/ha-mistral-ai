@@ -25,7 +25,7 @@ from .config_flow import (
 )
 from .const import CONF_API_KEY, CONF_MODEL, DOMAIN
 from .data import MistralData
-from .repairs import async_clear_issue, issue_id
+from .repairs import async_clear_issue, async_clear_orphaned_issues, issue_id
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -98,6 +98,17 @@ async def async_update_options(hass: HomeAssistant, entry: MistralConfigEntry) -
     await hass.config_entries.async_reload(entry.entry_id)
 
 
+async def async_remove_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> None:
+    """Withdraw this entry's deprecation warnings when it is deleted.
+
+    The sweep during setup covers a removed entry only if another one is left
+    to run a setup. Remove the last entry and nothing would run again, leaving
+    warnings about entities the user has just deleted until a restart.
+    """
+    for subentry_id in entry.subentries:
+        async_clear_issue(hass, subentry_id)
+
+
 @callback
 def _async_review_models(
     hass: HomeAssistant, entry: MistralConfigEntry, cards: list[Any]
@@ -116,6 +127,20 @@ def _async_review_models(
     # Already filtered to cards carrying an id, so only deprecation is checked.
     retiring = {card.id: card for card in cards if getattr(card, "deprecation", None)}
 
+    # Across every entry in the domain, not just this one. The registry is
+    # global, so sweeping on this entry's ids alone would delete a sibling
+    # entry's warnings; and gathering all of them means a whole entry being
+    # removed is cleaned up by the next setup of any other, which the
+    # per-subentry loop below can never do.
+    async_clear_orphaned_issues(
+        hass,
+        {
+            subentry_id
+            for loaded in hass.config_entries.async_entries(DOMAIN)
+            for subentry_id in loaded.subentries
+        },
+    )
+
     for subentry_id, subentry in entry.subentries.items():
         card = retiring.get(subentry.data.get(CONF_MODEL))
         if card is None:
@@ -124,15 +149,27 @@ def _async_review_models(
 
         replacement = getattr(card, "deprecation_replacement_model", None)
         deprecation = card.deprecation
+        date = (
+            deprecation.date().isoformat()
+            if hasattr(deprecation, "date")
+            else str(deprecation)
+        )
 
         ir.async_create_issue(
             hass,
             DOMAIN,
             issue_id(subentry_id),
+            # Carries what the fix flow's own form needs to render, as well as
+            # what it needs to act. A RepairsFlow builds its form from this
+            # dict rather than from the issue's translation_placeholders, so
+            # the two overlap by necessity.
             data={
                 "entry_id": entry.entry_id,
                 "subentry_id": subentry_id,
                 "replacement": replacement,
+                "name": subentry.title,
+                "model": subentry.data[CONF_MODEL],
+                "date": date,
             },
             # Fixable only when the API names a successor. Offering a button
             # that has to guess where to move someone would be worse than
@@ -148,8 +185,6 @@ def _async_review_models(
                 "name": subentry.title,
                 "model": subentry.data[CONF_MODEL],
                 "replacement": replacement or "",
-                "date": deprecation.date().isoformat()
-                if hasattr(deprecation, "date")
-                else str(deprecation),
+                "date": date,
             },
         )

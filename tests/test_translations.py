@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import custom_components.mistral_ai as integration
@@ -84,3 +85,67 @@ def test_no_messages_without_an_error() -> None:
 
     for key in _translations()["exceptions"]:
         assert key in raised, f"message {key!r} is never raised"
+
+
+def _placeholders_in_translations() -> set[str]:
+    """Return every {placeholder} named anywhere in the English strings."""
+    names: set[str] = set()
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, str):
+            names.update(re.findall(r"\{(\w+)\}", node))
+
+    walk(_translations())
+    return names
+
+
+def _supplied_placeholders() -> set[str]:
+    """Return every placeholder key the source passes to Home Assistant.
+
+    Both keywords, because the two halves of this are separate APIs:
+    description_placeholders fills a form's title and description, and
+    translation_placeholders fills an exception message or a repair issue.
+    Read statically for the same reason as the keys above -- reaching every
+    one at runtime would mean provoking every failure the integration has.
+    """
+    names: set[str] = set()
+    keywords = ("description_placeholders", "translation_placeholders")
+
+    for module in _integration_path().glob("*.py"):
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg not in keywords:
+                    continue
+                if isinstance(keyword.value, ast.Dict):
+                    names.update(
+                        key.value
+                        for key in keyword.value.keys
+                        if isinstance(key, ast.Constant)
+                    )
+
+    return names
+
+
+def test_every_placeholder_is_supplied_by_the_code() -> None:
+    """A message must not name something nothing fills in.
+
+    Home Assistant substitutes only the placeholders it is handed and leaves
+    the rest as literal text, so a string referring to {name} that no code
+    path supplies renders the braces to the user. That happened twice: the
+    reauth dialog (#137), and the deprecated-model repair's confirm step,
+    which needs four and was given none.
+
+    Checked as a set rather than per-string, which is looser than ideal --
+    it would not catch the right key being supplied at the wrong call site --
+    but it does catch a placeholder that nothing anywhere provides, which is
+    the failure both of those were.
+    """
+    missing = _placeholders_in_translations() - _supplied_placeholders()
+
+    assert not missing, f"never supplied by any code path: {sorted(missing)}"

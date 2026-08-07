@@ -575,3 +575,59 @@ async def test_reasoning_effort_is_accepted_inside_completion_args(
     )
 
     assert response.status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Conversations truncation
+# --------------------------------------------------------------------------
+
+
+async def test_a_truncated_conversation_spends_the_whole_budget(
+    post: Callable,
+) -> None:
+    """Reaching the cap is how truncation is detected without a finish reason.
+
+    No conversation event carries one -- the SDK has finish_reason only on the
+    two chat-completions shapes -- so _transform_conversation_stream infers
+    truncation from usage instead. That inference is only sound if a truncated
+    response really does spend the cap exactly, which is what this pins.
+
+    Reasoning on with a tiny cap is the reproducer from #139: the model thinks
+    until the budget is gone and the content list holds only thinking, so the
+    turn is "successful" with no answer in it.
+    """
+    response = await post(
+        "/conversations",
+        {
+            "model": MODEL,
+            "inputs": "Explain the history of the Roman empire in detail.",
+            "store": False,
+            "completion_args": {"max_tokens": 12, "reasoning_effort": "high"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["usage"]["completion_tokens"] >= 12
+
+
+async def test_a_conversation_that_finishes_stays_under_the_budget(
+    post: Callable,
+) -> None:
+    """The control, without which the test above proves nothing.
+
+    If every response reported usage at the cap, inferring truncation from it
+    would raise on every web search reply. A short answer with room to spare
+    is what makes reaching the ceiling meaningful.
+    """
+    response = await post(
+        "/conversations",
+        {
+            "model": MODEL,
+            "inputs": "Say hi.",
+            "store": False,
+            "completion_args": {"max_tokens": 500},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["usage"]["completion_tokens"] < 500
