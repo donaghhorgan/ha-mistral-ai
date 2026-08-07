@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.httpx_client import get_async_client
@@ -35,15 +34,13 @@ async def test_unload_entry(
     assert init_integration.state is ConfigEntryState.NOT_LOADED
 
 
-@pytest.mark.parametrize("status_code", [401, 403])
 async def test_setup_invalid_auth_starts_reauth(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_client: MagicMock,
-    status_code: int,
 ) -> None:
     """A rejected API key fails setup and raises a reauth flow."""
-    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(status_code))
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(401))
 
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
@@ -53,6 +50,29 @@ async def test_setup_invalid_auth_starts_reauth(
     flows = hass.config_entries.flow.async_progress()
     assert len(flows) == 1
     assert flows[0]["context"]["source"] == "reauth"
+
+
+async def test_setup_forbidden_does_not_start_reauth(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_client: MagicMock,
+) -> None:
+    """A 403 fails setup permanently and asks for no new key.
+
+    403 used to be handled here as an authentication failure. It is not one --
+    every way of getting the key wrong answers 401 -- so the reauth flow it
+    raised asked the user to replace a key that was working.
+
+    SETUP_ERROR rather than SETUP_RETRY matters too: the account is not going
+    to start being permitted, so retrying the same call forever is noise.
+    """
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    assert not hass.config_entries.flow.async_progress()
 
 
 async def test_setup_server_error_retries(

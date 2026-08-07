@@ -8,7 +8,11 @@ import httpx
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from mistralai.client import Mistral
@@ -39,8 +43,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> b
         async with asyncio.timeout(TIMEOUT):
             await client.models.list_async()
     except SDKError as err:
-        if err.status_code in (401, 403):
+        if err.status_code == 401:
             raise ConfigEntryAuthFailed("Invalid Mistral AI API key") from err
+        if err.status_code == 403:
+            # Permanent rather than not-ready: the key authenticated, so
+            # retrying the same call on the same account will keep getting the
+            # same answer. ConfigEntryError says so and stops, where
+            # ConfigEntryNotReady would retry a failure that cannot resolve
+            # itself, and ConfigEntryAuthFailed -- which is what this was --
+            # would ask for a replacement key that is not the problem.
+            raise ConfigEntryError(
+                f"Mistral AI refused the request, and the API key is valid: {err}"
+            ) from err
         raise ConfigEntryNotReady(f"Error talking to Mistral AI: {err}") from err
     except (TimeoutError, httpx.HTTPError) as err:
         raise ConfigEntryNotReady(f"Error talking to Mistral AI: {err}") from err

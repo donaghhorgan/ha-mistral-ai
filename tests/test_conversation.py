@@ -278,6 +278,7 @@ async def test_control_feature_requires_llm_api(
     ("status_code", "translation_key"),
     [
         (401, "invalid_api_key"),
+        (403, "forbidden"),
         (429, "rate_limited"),
         (500, "api_error"),
     ],
@@ -314,6 +315,27 @@ async def test_auth_error_starts_reauth(
 
     flows = hass.config_entries.flow.async_progress()
     assert [flow["context"]["source"] for flow in flows] == ["reauth"]
+
+
+async def test_forbidden_does_not_start_reauth(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A 403 mid-conversation reports the refusal and asks for no new key.
+
+    The pair to the test above, and the reason this one exists: 401 and 403
+    were handled together, so a refusal the user could do nothing about
+    arrived as "your key was rejected" plus a dialog demanding a replacement.
+    Asserting the error alone would not have caught it -- both paths produce
+    one -- so what is asserted here is the absence of the flow.
+    """
+    mock_client.chat.stream_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    result = await converse(hass)
+    await hass.async_block_till_done()
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert speech(result)
+    assert not hass.config_entries.flow.async_progress()
 
 
 async def test_prompt_and_history_are_sent(
