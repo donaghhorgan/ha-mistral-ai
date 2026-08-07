@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
 
+import httpx
 import pytest
 import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
+from mistralai.client.errors import SDKError
 
 from custom_components.mistral_ai.entity import (
     _async_convert_messages,
@@ -19,12 +21,10 @@ from custom_components.mistral_ai.entity import (
     _format_tool,
     _parse_arguments,
     _transform_stream,
+    _validation_detail,
 )
 
 from .helpers import make_chunk, make_stream, make_tool_call
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_convert_user_content() -> None:
@@ -398,3 +398,63 @@ async def test_transform_stream_thinking_content() -> None:
         {"thinking_content": "hmm"},
         {"content": "answer"},
     ]
+
+
+def _sdk_error(status_code: int, body: str) -> SDKError:
+    """Build an SDKError carrying a real response body."""
+    return SDKError("boom", httpx.Response(status_code, text=body), body)
+
+
+def test_validation_detail_drops_the_branch_we_did_not_send() -> None:
+    """A union validation error is reduced to the part that is about us.
+
+    The conversations endpoint validates against two request shapes and
+    reports failures against both, so one wrong field arrives as four errors
+    and about 1.8 kB. Three of them are about the agent-based request this
+    integration never sends, and the first of those -- "Field required:
+    agent_id" -- sends the reader looking for a setting that does not exist.
+
+    Built from a body captured from the live endpoint rather than written by
+    hand, so the shape being parsed is the shape that actually arrives.
+    """
+    body = (Path(__file__).parent / "fixtures" / "conversations_422.json").read_text()
+
+    detail = _validation_detail(_sdk_error(422, body))
+
+    assert (
+        detail == "completion_args.temperature: Input should be less than or equal to 1"
+    )
+    assert "agent_id" not in detail
+    assert len(detail) < len(body) / 10
+
+
+def test_validation_detail_keeps_everything_when_nothing_matches() -> None:
+    """An unfamiliar shape degrades to all of it rather than to none of it.
+
+    The filter drops entries belonging to the other branch of the union. If a
+    body ever contains only those -- a different endpoint, or a shape that has
+    moved -- dropping them all would leave an empty message, which is worse
+    than a long one.
+    """
+    body = json.dumps(
+        {
+            "detail": [
+                {
+                    "loc": ["body", "AgentConversationRequest", "agent_id"],
+                    "msg": "Field required",
+                }
+            ]
+        }
+    )
+
+    assert _validation_detail(_sdk_error(422, body)) == "agent_id: Field required"
+
+
+@pytest.mark.parametrize("body", ["", "not json at all", '{"detail": "a string"}'])
+def test_validation_detail_gives_up_quietly(body: str) -> None:
+    """An unparseable body returns empty, and the caller falls back.
+
+    Asserted because the alternative is an exception raised while building an
+    error message, which would replace a bad message with a worse traceback.
+    """
+    assert _validation_detail(_sdk_error(422, body)) == ""

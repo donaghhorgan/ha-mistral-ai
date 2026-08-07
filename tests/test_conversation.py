@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -13,6 +14,7 @@ from homeassistant.const import CONF_LLM_HASS_API, MATCH_ALL
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import intent
+from mistralai.client.errors import SDKError
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.const import (
@@ -743,3 +745,26 @@ async def test_web_search_citations_do_not_break_the_reply(
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "weather")) == "It is 21 degrees in Dublin."
+
+
+async def test_a_validation_error_reaches_the_user_readably(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The user is told which field is wrong, not shown the whole union.
+
+    The end-to-end half of the parsing tests: a 422 has to travel through
+    _convert_error and the translation to arrive as a sentence. Asserted on
+    what the user actually sees, because that is the thing that was 2.5 kB of
+    machinery and one useful line.
+    """
+    body = (Path(__file__).parent / "fixtures" / "conversations_422.json").read_text()
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=SDKError("boom", httpx.Response(422, text=body), body)
+    )
+
+    result = await converse(hass)
+
+    spoken = speech(result)
+    assert "temperature" in spoken
+    assert "agent_id" not in spoken
+    assert len(spoken) < 200

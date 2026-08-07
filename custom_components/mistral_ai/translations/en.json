@@ -168,6 +168,9 @@
         "invalid_api_key": {
             "message": "The Mistral AI API key was rejected. Please reconfigure the integration."
         },
+        "invalid_request": {
+            "message": "Mistral AI rejected the request: {detail}"
+        },
         "invalid_structured_response": {
             "message": "Mistral AI did not return valid structured data. Try simplifying the structure, or asking again."
         },

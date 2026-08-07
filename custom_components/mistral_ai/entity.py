@@ -86,6 +86,62 @@ def _parse_arguments(arguments: Any) -> dict[str, Any]:
     return parsed
 
 
+def _validation_detail(err: SDKError) -> str:
+    """Return the readable part of a 422, or an empty string.
+
+    The conversations endpoint validates a request against a union of two
+    shapes -- one keyed by `model`, one by `agent_id` -- and reports failures
+    against **both**. This integration only ever sends the first, so one wrong
+    field arrives as four errors, three of them about a request that was never
+    made:
+
+        completion_args.temperature  Input should be less than or equal to 1
+        agent_id                     Field required
+        model                        Extra inputs are not permitted
+        completion_args              Extra inputs are not permitted
+
+    Roughly 2.5 kB of it, led by `Field required: agent_id` -- which sends the
+    reader looking for an agent ID setting this integration does not have, and
+    buries the one line that says what is actually wrong.
+
+    So the entries for the branch we did not use are dropped. If none match --
+    a different endpoint, or a shape that has changed -- everything is kept
+    rather than nothing, because a wall of text still beats an empty message.
+
+    Returns an empty string when the body cannot be parsed at all, which the
+    caller treats as "fall back to the generic error".
+    """
+    try:
+        body = json.loads(err.body or err.raw_response.text)
+    except (ValueError, AttributeError):
+        return ""
+
+    entries = body.get("detail")
+    if not isinstance(entries, list):
+        return ""
+
+    def _is_ours(entry: Any) -> bool:
+        return "AgentConversationRequest" not in str(entry.get("loc", ""))
+
+    ours = [entry for entry in entries if isinstance(entry, dict) and _is_ours(entry)]
+    chosen = ours or [entry for entry in entries if isinstance(entry, dict)]
+
+    messages = []
+    for entry in chosen:
+        # The field name, without the union machinery wrapped around it.
+        parts = [
+            str(part)
+            for part in entry.get("loc", [])
+            if isinstance(part, str) and "ConversationRequest" not in part
+        ]
+        field = ".".join(part for part in parts if part != "body")
+        message = str(entry.get("msg", "")).strip()
+        if message:
+            messages.append(f"{field}: {message}" if field else message)
+
+    return "; ".join(dict.fromkeys(messages))
+
+
 def _convert_content(content: conversation.Content) -> dict[str, Any]:
     """Convert Home Assistant chat log content to a Mistral AI message."""
     if isinstance(content, conversation.UserContent):
@@ -695,6 +751,13 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             return HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="rate_limited",
+            )
+        if err.status_code == 422 and (detail := _validation_detail(err)):
+            _LOGGER.error("Mistral AI rejected the request: %s", err)
+            return HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_request",
+                translation_placeholders={"detail": detail},
             )
         _LOGGER.error("Mistral AI API error: %s", err)
         return HomeAssistantError(
