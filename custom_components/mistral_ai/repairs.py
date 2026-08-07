@@ -59,9 +59,7 @@ class DeprecatedModelRepairFlow(RepairsFlow):
     ) -> FlowResult:
         """Switch the model, or show the confirmation form."""
         if user_input is None:
-            return self.async_show_form(
-                step_id="confirm", data_schema=vol.Schema({})
-            )
+            return self.async_show_form(step_id="confirm", data_schema=vol.Schema({}))
 
         entry = self.hass.config_entries.async_get_entry(self._entry_id)
         subentry = entry.subentries.get(self._subentry_id) if entry else None

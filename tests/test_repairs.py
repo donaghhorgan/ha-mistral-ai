@@ -32,9 +32,7 @@ async def test_no_issue_when_the_model_is_current(
 ) -> None:
     """A healthy configuration raises nothing."""
     assert not [
-        issue
-        for issue in ir.async_get(hass).issues.values()
-        if issue.domain == DOMAIN
+        issue for issue in ir.async_get(hass).issues.values() if issue.domain == DOMAIN
     ]
 
 

@@ -67,7 +67,7 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
         created against an account, so what exists depends on the API key.
         """
         await super().async_added_to_hass()
-        self._voices = await async_list_voices(self.entry.runtime_data)
+        self._voices = await async_list_voices(self.entry.runtime_data.client)
 
     @callback
     def async_get_supported_voices(self, language: str) -> list[tts.Voice] | None:
@@ -116,7 +116,7 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
         self, message: str, language: str, options: dict[str, Any]
     ) -> tts.TtsAudioType:
         """Synthesise speech for a message."""
-        client = self.entry.runtime_data
+        client = self.entry.runtime_data.client
 
         # The language is not sent. The speech endpoint takes a voice, and the
         # voice carries its language; passing a conflicting code would be a way

@@ -142,24 +142,19 @@ class ModelChoice(NamedTuple):
         return f"{self.id} — retires {retires}"
 
 
-async def async_list_models(
-    client: Mistral, *, capability: str | None = None
-) -> list[ModelChoice]:
-    """Return the models available to the given client.
+async def async_fetch_model_cards(client: Mistral) -> list[Any]:
+    """Return every model card the key can reach, unfiltered.
 
-    `capability` filters to models advertising it, e.g. audio_transcription.
-    Filtering on what the API reports rather than on model names keeps the
-    speech platforms working across a Mistral release: names come and go, the
-    capability flags do not.
-
-    Deprecation is carried through rather than discarded. The API reports a
-    retirement date and a replacement for every model on its way out, and the
-    dropdown used to show those exactly like any other -- so a model could be
-    chosen weeks before it stopped working, with nothing said at any point.
+    Separate from the filtering below because this is the part that costs a
+    round trip and the part that gets cached. Each subentry type filters the
+    same cards differently, so caching a filtered list would mean a fetch per
+    type rather than a fetch per account.
 
     Raises InvalidAuth if the key is rejected, Forbidden if it is accepted but
     the account is not permitted, and CannotConnect for any other failure, so
-    callers can map each onto a form error.
+    callers can map each onto a form error. Raising rather than returning an
+    empty list matters more than it looks: an empty list is a plausible answer
+    and would be cached, leaving every form empty for an hour after one blip.
     """
     try:
         async with asyncio.timeout(TIMEOUT):
@@ -173,21 +168,38 @@ async def async_list_models(
     except (TimeoutError, httpx.HTTPError) as err:
         raise CannotConnect(str(err)) from err
 
-    models = [model for model in (response.data or []) if getattr(model, "id", None)]
+    return [model for model in (response.data or []) if getattr(model, "id", None)]
+
+
+def model_choices(
+    cards: list[Any], *, capability: str | None = None
+) -> list[ModelChoice]:
+    """Turn model cards into dropdown entries, filtered and ordered.
+
+    `capability` filters to models advertising it, e.g. audio_transcription.
+    Filtering on what the API reports rather than on model names keeps the
+    speech platforms working across a Mistral release: names come and go, the
+    capability flags do not.
+
+    Deprecation is carried through rather than discarded. The API reports a
+    retirement date and a replacement for every model on its way out, and the
+    dropdown used to show those exactly like any other -- so a model could be
+    chosen weeks before it stopped working, with nothing said at any point.
+    """
     if capability is not None:
-        models = [
-            model
-            for model in models
-            if getattr(getattr(model, "capabilities", None), capability, False)
+        cards = [
+            card
+            for card in cards
+            if getattr(getattr(card, "capabilities", None), capability, False)
         ]
 
     choices = [
         ModelChoice(
-            id=model.id,
-            deprecation=getattr(model, "deprecation", None),
-            replacement=getattr(model, "deprecation_replacement_model", None),
+            id=card.id,
+            deprecation=getattr(card, "deprecation", None),
+            replacement=getattr(card, "deprecation_replacement_model", None),
         )
-        for model in models
+        for card in cards
     ]
 
     # Live models first, then the ones on their way out, each group by name.
@@ -196,6 +208,18 @@ async def async_list_models(
     return sorted(
         choices, key=lambda choice: (choice.deprecation is not None, choice.id)
     )
+
+
+async def async_list_models(
+    client: Mistral, *, capability: str | None = None
+) -> list[ModelChoice]:
+    """Fetch and filter in one step, for callers with no entry to cache on.
+
+    The config flow's first step and the reauth step both use this: they are
+    validating a key that has no loaded entry behind it yet, so there is
+    nowhere to cache and nothing to reuse.
+    """
+    return model_choices(await async_fetch_model_cards(client), capability=capability)
 
 
 class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -316,14 +340,16 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 entry, self._get_reconfigure_subentry(), data=user_input
             )
 
-        # The entry is loaded, so it already holds a client. Building another
-        # one here would mean a fresh connection pool for every render of this
-        # form, and this form is rendered often.
-        client = entry.runtime_data
+        # The entry is loaded, so it already holds a client and a model list.
+        # Both matter for the same reason: this form is rendered often, and it
+        # used to build a connection pool and spend a round trip on every
+        # render, before showing anything.
+        data = entry.runtime_data
 
         try:
-            models = await async_list_models(
-                client,
+            cards = await data.async_models(async_fetch_model_cards)
+            models = model_choices(
+                cards,
                 capability=SUBENTRY_CAPABILITIES.get(self._subentry_type),
             )
         except InvalidAuth:
@@ -359,7 +385,7 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
         if self._subentry_type == SUBENTRY_TYPE_TTS:
             voices = [
                 SelectOptionDict(label=voice.name, value=voice.voice_id)
-                for voice in await async_list_voices(client)
+                for voice in await async_list_voices(data.client)
             ]
 
             # An empty list means the listing failed, not that there is

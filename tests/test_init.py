@@ -20,7 +20,7 @@ async def test_setup_entry(
 ) -> None:
     """The entry loads and stashes the client on runtime_data."""
     assert init_integration.state is ConfigEntryState.LOADED
-    assert init_integration.runtime_data is mock_client
+    assert init_integration.runtime_data.client is mock_client
     mock_client.models.list_async.assert_awaited_once()
 
 
