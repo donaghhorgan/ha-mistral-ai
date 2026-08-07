@@ -11,6 +11,8 @@ from homeassistant.helpers.httpx_client import get_async_client
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.client import LAZY_RESOURCES
+from custom_components.mistral_ai.config_flow import async_fetch_model_cards
+from custom_components.mistral_ai.data import MODEL_CACHE_SECONDS
 
 from .helpers import make_sdk_error
 
@@ -166,3 +168,64 @@ def test_lazy_resources_cover_what_the_integration_uses() -> None:
     up as a Home Assistant warning and nothing else.
     """
     assert set(LAZY_RESOURCES) == {"models", "chat", "audio", "files"}
+
+
+async def test_setup_seeds_the_model_cache(
+    hass: HomeAssistant, mock_client: MagicMock, mock_config_entry: MockConfigEntry
+) -> None:
+    """The listing setup makes to validate the key is kept, not discarded.
+
+    Setup has to fetch the model list anyway -- it is how a bad key becomes a
+    reauth flow rather than a failure on the first sentence -- and it used to
+    drop the response. The cache then started cold, so the first form opened
+    after a restart paid for a listing the integration had held seconds
+    earlier.
+    """
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    fetched = mock_client.models.list_async.await_count
+    assert fetched == 1
+
+    # A second reader gets the seeded list rather than a second round trip.
+    cards = await mock_config_entry.runtime_data.async_models(async_fetch_model_cards)
+
+    assert mock_client.models.list_async.await_count == fetched
+    assert [card.id for card in cards] == [
+        card.id for card in mock_client.models.list_async.return_value.data
+    ]
+
+
+async def test_seeding_does_not_extend_the_freshness_window(
+    hass: HomeAssistant, mock_client: MagicMock, mock_config_entry: MockConfigEntry
+) -> None:
+    """A seeded list still goes stale on schedule.
+
+    The seed is a head start, not a way to make an old list look new. An entry
+    loaded for longer than the cache window must refetch on the next render,
+    or a long-running Home Assistant would never see a newly released model.
+
+    The clock is controlled across the setup as well as the reads, because the
+    seed is stamped during setup: replacing a single later reading would leave
+    it compared against the real system uptime, which is a much larger number,
+    so the cache would look fresh no matter what value was chosen.
+    """
+    clock = [0.0]
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.mistral_ai.data.monotonic", side_effect=lambda: clock[0]
+    ):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        fetched = mock_client.models.list_async.await_count
+
+        # Inside the window: still the seeded list.
+        await mock_config_entry.runtime_data.async_models(async_fetch_model_cards)
+        assert mock_client.models.list_async.await_count == fetched
+
+        clock[0] = MODEL_CACHE_SECONDS + 1
+        await mock_config_entry.runtime_data.async_models(async_fetch_model_cards)
+
+    assert mock_client.models.list_async.await_count == fetched + 1
