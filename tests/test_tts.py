@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from contextlib import contextmanager
+from contextlib import aclosing, contextmanager
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -357,7 +357,12 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
     response = await entity.async_stream_tts_audio(
         tts.TTSAudioRequest(language="en", options={}, message_gen=_gen(*chunks))
     )
-    return response.extension, b"".join([part async for part in response.data_gen])
+    # Closed even when consuming it raises, which several of these tests do on
+    # purpose. Leaving it to the garbage collector schedules the finalisation
+    # after the test has ended, and Home Assistant reports that as a lingering
+    # task on newer releases.
+    async with aclosing(response.data_gen) as data:
+        return response.extension, b"".join([part async for part in data])
 
 
 @pytest.mark.parametrize(

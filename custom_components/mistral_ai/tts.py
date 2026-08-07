@@ -7,6 +7,7 @@ import binascii
 import json
 import logging
 import re
+from contextlib import aclosing
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
@@ -370,9 +371,20 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                 # reason has already been logged.
                 return
 
-            async for sentence in _sentences(request.message_gen):
-                async for chunk in self._async_stream_speech(sentence, voice):
-                    yield chunk
+            # Closed deterministically rather than left to the garbage
+            # collector's async-generator hook. Each speech stream holds an
+            # open httpx response, so abandoning one part way through -- which
+            # is what happens when any of these raise -- would keep the
+            # connection until finalisation caught up. Home Assistant's
+            # lingering-task check sees that hook running after the test that
+            # caused it, which is how it surfaced.
+            async with aclosing(_sentences(request.message_gen)) as sentences:
+                async for sentence in sentences:
+                    async with aclosing(
+                        self._async_stream_speech(sentence, voice)
+                    ) as speech:
+                        async for chunk in speech:
+                            yield chunk
 
         return tts.TTSAudioResponse(TTS_AUDIO_FORMAT, data_gen())
 
