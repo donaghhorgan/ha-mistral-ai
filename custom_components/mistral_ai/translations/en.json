@@ -131,7 +131,8 @@
             "abort": {
                 "entry_not_loaded": "Cannot add text-to-speech while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
-                "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration."
+                "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration.",
+                "no_voices": "Could not list the voices on your Mistral AI account. A voice is required for text-to-speech, so this cannot be set up until the list loads — please try again in a moment."
             }
         }
     },

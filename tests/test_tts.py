@@ -12,7 +12,7 @@ from homeassistant.components import tts
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import UNDEFINED
 
-from custom_components.mistral_ai.const import VOICE_PAGE_SIZE
+from custom_components.mistral_ai.const import CONF_MODEL, VOICE_PAGE_SIZE
 from custom_components.mistral_ai.helpers import async_list_voices
 
 from .conftest import TTS_MODEL, VOICE_ID
@@ -215,6 +215,49 @@ async def test_entity_has_a_resolvable_name(
     assert entity.name is not UNDEFINED
     assert isinstance(entity.name, str)
     assert entity.name
+
+
+async def test_no_configured_voice_says_so_rather_than_going_quiet(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An entity with no voice says why, rather than failing anonymously.
+
+    Reachable for entities created before the voice field was required, when
+    the form omitted it entirely if the voice listing had failed.
+
+    Home Assistant renders a (None, None) return as "No TTS from <entity>",
+    which says something failed and nothing about what -- the same message as
+    every other reason speech can fail. The log line is the only thing that
+    distinguishes it, and it names the fix.
+
+    Asserted against the entity rather than through async_get_media_source_audio
+    because that path depends on the TTS manager's caching and on when the
+    entity was rebuilt, so it passes or fails on timing rather than on this
+    behaviour. What matters here is ours: no request, and a message that says
+    what to do.
+    """
+    entry = next(
+        subentry
+        for subentry in init_integration.subentries.values()
+        if subentry.subentry_type == "tts"
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, entry, data={CONF_MODEL: TTS_MODEL}
+    )
+    await hass.async_block_till_done()
+
+    entity = hass.data["entity_components"]["tts"].get_entity(ENTITY_ID)
+
+    assert await entity.async_get_tts_audio("hello", "en", {}) == (None, None)
+    assert "requires one" in caplog.text
+
+    # Not sent at all, rather than sent and refused: the endpoint returns 400
+    # without a voice, so the round trip would only confirm what is already
+    # known here.
+    mock_client.audio.speech.complete_async.assert_not_awaited()
 
 
 async def test_every_voice_is_listed_not_just_the_first_page(

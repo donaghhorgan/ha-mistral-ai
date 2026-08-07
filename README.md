@@ -180,9 +180,14 @@ entity ID.
 
 The model dropdown lists only models reporting the `audio_speech` capability.
 The voice dropdown is populated from your account, because custom voices are
-created against it — if the account has none, the field is omitted and the
-API picks a voice itself. Callers can override the configured voice per
-request with the `voice` option.
+created against it, and a voice is required — the API will not choose one,
+and refuses a request without it. Callers can override the configured voice
+per request with the `voice` option.
+
+If the voices cannot be listed, adding the entity is refused rather than
+offered without the field. Preset voices exist on every account, so an empty
+list means the request failed, and an entity saved in that state could never
+speak.
 
 The language is not sent to the API: the voice carries its own language.
 Selecting a French voice and an English pipeline gets you a French voice

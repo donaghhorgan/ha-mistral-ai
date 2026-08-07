@@ -347,6 +347,19 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 for voice in await async_list_voices(client)
             ]
 
+            # An empty list means the listing failed, not that there is
+            # nothing to choose from: preset voices exist on every workspace,
+            # including a brand new empty one, and async_list_voices returns
+            # an empty list for any error rather than raising.
+            #
+            # Aborting is the point. The form used to be shown anyway, minus
+            # the voice field, and produced an entity that could never speak --
+            # the endpoint refuses a request with no voice, and the 400 comes
+            # back as silence. Better to say so now than to hand someone a
+            # working-looking entity that is not.
+            if not voices:
+                return self.async_abort(reason="no_voices")
+
         return self.async_show_form(
             step_id="set_options",
             data_schema=vol.Schema(
@@ -440,12 +453,24 @@ def _subentry_schema(
             )
         )
 
-    # Only offered when the account has voices to choose between. Left out
-    # rather than shown empty, because an empty dropdown reads as a fault when
-    # the endpoint is perfectly happy to pick a voice itself.
-    if subentry_type == SUBENTRY_TYPE_TTS and voices:
+    # Required, because the endpoint will not choose one:
+    #
+    #   400 Either ref_audio or voice must be provided.
+    #
+    # This used to be optional and was left out entirely when no voices could
+    # be listed, on the belief that the API would pick one. It does not. An
+    # entity configured that way stored no voice, sent no voice, and answered
+    # every request with a 400 that async_get_tts_audio turns into silence.
+    #
+    # `is not None` rather than a truthiness test, and the distinction is the
+    # bug. `and voices` silently dropped the field for an empty list, which is
+    # how an entity with no voice came to exist. An empty list cannot reach
+    # here -- the flow aborts on it before building the form -- so this only
+    # narrows the argument's type, and an empty dropdown would be a visible
+    # fault rather than a missing field.
+    if subentry_type == SUBENTRY_TYPE_TTS and voices is not None:
         schema[
-            vol.Optional(
+            vol.Required(
                 CONF_VOICE,
                 description={"suggested_value": options.get(CONF_VOICE)},
             )
