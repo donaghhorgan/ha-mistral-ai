@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -14,6 +17,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import llm
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components.mistral_ai as integration
 from custom_components.mistral_ai.const import (
     CONF_API_KEY,
     CONF_MAX_TOKENS,
@@ -33,7 +37,14 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
-from .conftest import DEPRECATED_MODEL, NON_CHAT_MODEL, ORPHANED_MODEL
+from .conftest import (
+    DEPRECATED_MODEL,
+    NON_CHAT_MODEL,
+    ORPHANED_MODEL,
+    STT_MODEL,
+    TTS_MODEL,
+    VOICE_ID,
+)
 from .helpers import make_sdk_error
 
 
@@ -953,3 +964,88 @@ async def test_reauth_dialog_is_given_the_entry_name(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["description_placeholders"]["name"] == init_integration.title
+
+
+def _abort_strings(subentry_type: str) -> dict[str, str]:
+    """Return the abort messages declared for a subentry type."""
+    path = Path(integration.__file__).parent / "translations" / "en.json"
+    translations = json.loads(path.read_text(encoding="utf-8"))
+    return translations["config_subentries"][subentry_type]["abort"]
+
+
+@pytest.mark.parametrize(
+    ("subentry_type", "options"),
+    [
+        (SUBENTRY_TYPE_CONVERSATION, {CONF_MODEL: DEFAULT_MODEL}),
+        (SUBENTRY_TYPE_AI_TASK_DATA, {CONF_MODEL: DEFAULT_MODEL}),
+        (SUBENTRY_TYPE_STT, {CONF_MODEL: STT_MODEL}),
+        (SUBENTRY_TYPE_TTS, {CONF_MODEL: TTS_MODEL, CONF_VOICE: VOICE_ID}),
+    ],
+)
+async def test_reconfigure_abort_reason_has_a_message(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+    options: dict,
+) -> None:
+    """Saving a subentry ends with a sentence, not a translation key.
+
+    async_update_and_abort picks its own reason -- reconfigure_successful for
+    a reconfigure flow -- so the key is never written down in this repository
+    and no static check could find it. Home Assistant has no default to fall
+    back on either: its strings.json carries only a `common` section, with
+    nothing for config_subentries. So a missing entry renders as the raw key,
+    which is what every save did.
+
+    Driven to completion rather than asserted against the file, because the
+    point is to catch a reason the integration does not name itself.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == subentry_type
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], options
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] in _abort_strings(subentry_type), (
+        f"{subentry_type} aborts with {result['reason']!r}, which has no message "
+        f"in en.json and renders to the user as that literal string"
+    )
+
+
+def test_every_subentry_abort_reason_used_in_code_has_a_message() -> None:
+    """The reasons the flow raises itself are covered too.
+
+    The test above catches the success path, which is the one that was broken.
+    These are the failure paths, which are harder to reach -- each needs the
+    API to fail a particular way -- so they are read from the source instead.
+    """
+    source = (Path(integration.__file__).parent / "config_flow.py").read_text()
+    raised = set(re.findall(r'async_abort\(\s*reason="([^"]+)"', source))
+
+    assert raised, "no abort reasons found -- the pattern may have moved"
+
+    for subentry_type in (
+        SUBENTRY_TYPE_CONVERSATION,
+        SUBENTRY_TYPE_AI_TASK_DATA,
+        SUBENTRY_TYPE_STT,
+        SUBENTRY_TYPE_TTS,
+    ):
+        declared = _abort_strings(subentry_type)
+        # no_voices is only reachable for text-to-speech, so the others are
+        # not expected to declare it.
+        expected = raised - (
+            {"no_voices"} if subentry_type != SUBENTRY_TYPE_TTS else set()
+        )
+        missing = expected - set(declared)
+        assert not missing, f"{subentry_type} is missing messages for {sorted(missing)}"
