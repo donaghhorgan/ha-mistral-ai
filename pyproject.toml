@@ -20,7 +20,7 @@ dev = [
   # If the two drift, `uv run ruff` and CI enforce different rules.
   "ruff>=0.16.1",
   "toml-sort>=0.23.1",
-  "ty>=0.0.24",
+  "ty>=0.0.66",
   "validate-pyproject>=0.20.2",
 ]
 # pytest-homeassistant-custom-component pins Home Assistant to an exact
