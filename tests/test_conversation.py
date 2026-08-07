@@ -520,6 +520,17 @@ async def test_web_search_goes_to_the_conversations_endpoint(
     assert request["instructions"]
     assert all(entry.get("role") != "system" for entry in request["inputs"])
 
+    # handoff_execution is rejected by the endpoint whenever the request
+    # carries a model rather than an agent_id, and this used to send it:
+    #
+    #   422 Conversation with a 'model' can't contain the following fields
+    #       handoff_execution
+    #
+    # So every web search turn failed. Nothing asserted the request shape
+    # beyond the fields above, and a mock accepts any keyword, which is how it
+    # shipped. Asserted as an absence because that is what the API requires.
+    assert "handoff_execution" not in request
+
 
 async def test_web_search_is_off_by_default(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock

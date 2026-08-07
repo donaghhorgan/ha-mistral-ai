@@ -10,7 +10,7 @@ import httpx
 from homeassistant.components.tts import Voice
 from mistralai.client.errors import SDKError
 
-from .const import TIMEOUT
+from .const import TIMEOUT, VOICE_PAGE_SIZE
 
 if TYPE_CHECKING:
     from mistralai.client import Mistral
@@ -35,21 +35,41 @@ async def async_list_voices(client: Mistral) -> list[Voice]:
     usable without it, and the speech endpoint picks a voice when none is
     given, so a listing failure should not take the platform down with it.
     """
+    voices = []
+    offset = 0
+
     try:
         async with asyncio.timeout(TIMEOUT):
-            response = await client.audio.voices.list_async()
+            while True:
+                response = await client.audio.voices.list_async(
+                    limit=VOICE_PAGE_SIZE, offset=offset
+                )
+
+                items = getattr(response, "items", None) or []
+                for voice in items:
+                    # Languages are what make one voice distinguishable from
+                    # twenty others in a dropdown.
+                    name = voice.name
+                    if languages := getattr(voice, "languages", None):
+                        name = f"{name} ({', '.join(languages)})"
+                    voices.append(Voice(voice_id=voice.id, name=name))
+
+                # A short page is the last page. Checked before the total,
+                # because the total is only a hint and a wrong one would either
+                # cut the list short or loop forever.
+                if len(items) < VOICE_PAGE_SIZE:
+                    break
+
+                offset += len(items)
+
+                total = getattr(response, "total", None)
+                if isinstance(total, int) and offset >= total:
+                    break
     except (SDKError, TimeoutError, httpx.HTTPError) as err:
         _LOGGER.debug("Could not list Mistral AI voices: %s", err)
-        return []
-
-    voices = []
-    for voice in getattr(response, "items", None) or []:
-        # Languages are what make one voice distinguishable from twenty others
-        # in a dropdown.
-        name = voice.name
-        if languages := getattr(voice, "languages", None):
-            name = f"{name} ({', '.join(languages)})"
-        voices.append(Voice(voice_id=voice.id, name=name))
+        # Whatever arrived before the failure is still better than nothing,
+        # and an empty list is what a first-page failure gives.
+        return sorted(voices, key=lambda voice: voice.name)
 
     return sorted(voices, key=lambda voice: voice.name)
 
@@ -85,3 +105,31 @@ def outputs_text(outputs: Any) -> str | None:
         if isinstance(text := getattr(chunk, "text", None), str)
     )
     return "".join(parts) or None
+
+
+def clamped_temperature(value: float, maximum: float) -> float:
+    """Return a temperature the endpoint will accept.
+
+    The form used to allow up to 2.0, and every endpoint rejects that, so
+    settings above the real limit are already stored in the wild. Lowering the
+    slider stops new ones being made and does nothing about those -- the value
+    is only re-validated when someone opens the form again, and a conversation
+    agent nobody has reconfigured since would 422 on every sentence.
+
+    Clamping is the lesser of the two evils here: the stored value cannot
+    produce a working request, so honouring it exactly means failing. Logged at
+    warning rather than done quietly, because the form will still show the old
+    number until it is next opened, and that gap is worth being able to find in
+    the log.
+    """
+    if value <= maximum:
+        return value
+
+    _LOGGER.warning(
+        "Temperature %s is above the maximum of %s this endpoint accepts, "
+        "using %s instead -- reconfigure the entity to set it permanently",
+        value,
+        maximum,
+        maximum,
+    )
+    return maximum

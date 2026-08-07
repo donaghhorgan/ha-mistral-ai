@@ -30,10 +30,14 @@ from .const import (
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DOMAIN,
+    MAX_TEMPERATURE,
     MAX_TOOL_ITERATIONS,
+    SUBENTRY_TYPE_AI_TASK_DATA,
+    SUBENTRY_TYPE_CONVERSATION,
     TIMEOUT,
     WEB_SEARCH_TOOLS,
 )
+from .helpers import clamped_temperature
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable
@@ -440,15 +444,33 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                     instructions=instructions,
                     inputs=inputs,
                     tools=tools,
-                    # Home Assistant's own tools come back for us to run;
-                    # connectors are executed by Mistral either way.
-                    handoff_execution="client",
+                    # No handoff_execution. The SDK accepts it and this used to
+                    # send "client", which the endpoint rejects outright when
+                    # the request carries a model rather than an agent_id:
+                    #
+                    #   422 Conversation with a 'model' can't contain the
+                    #       following fields handoff_execution
+                    #
+                    # Every web search request failed on it. The field belongs
+                    # to agent-based conversations, and the OpenAPI schema does
+                    # not show that -- it is declared on the shared request
+                    # base that both variants inherit, and the restriction is a
+                    # cross-field validator rather than anything in the schema.
+                    #
+                    # Nothing is lost by dropping it: a model-based
+                    # conversation hands function tools back to the caller
+                    # anyway. Checked with a real request -- a turn carrying
+                    # both a web_search connector and a Home Assistant function
+                    # returns a function.call entry for us to run, exactly as
+                    # the explicit "client" was meant to ask for.
+                    #
                     # Explicit: this endpoint retains conversations and lists
                     # them afterwards, where chat completions stores nothing.
                     store=False,
                     completion_args={
-                        "temperature": options.get(
-                            CONF_TEMPERATURE, DEFAULT_TEMPERATURE
+                        "temperature": clamped_temperature(
+                            options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+                            MAX_TEMPERATURE[SUBENTRY_TYPE_CONVERSATION],
                         ),
                         "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
                     },
@@ -556,7 +578,13 @@ class MistralBaseLLMEntity(MistralBaseEntity):
 
         model_args: dict[str, Any] = {
             "model": options.get(CONF_MODEL, DEFAULT_MODEL),
-            "temperature": options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+            # The chat completions ceiling, not the conversations one. This
+            # path is only reached with web search off; with it on the request
+            # goes to the other endpoint above, which is stricter.
+            "temperature": clamped_temperature(
+                options.get(CONF_TEMPERATURE, DEFAULT_TEMPERATURE),
+                MAX_TEMPERATURE[SUBENTRY_TYPE_AI_TASK_DATA],
+            ),
             "max_tokens": options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS),
         }
 

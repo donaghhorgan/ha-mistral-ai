@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
@@ -29,8 +30,22 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
-from .conftest import NON_CHAT_MODEL
+from .conftest import DEPRECATED_MODEL, NON_CHAT_MODEL
 from .helpers import make_sdk_error
+
+
+def _model_values(result: dict) -> list[str]:
+    """Return the model IDs a form offers, ignoring their labels.
+
+    The dropdown carries labels as well as values now, because a deprecated
+    model is shown with its retirement date rather than looking like any
+    other. What these tests care about is which models are offered, so the
+    label is stripped here rather than in every assertion.
+    """
+    return [
+        option["value"]
+        for option in result["data_schema"].schema[CONF_MODEL].config["options"]
+    ]
 
 
 async def test_user_flow_creates_entry_and_subentry(
@@ -211,8 +226,7 @@ async def test_subentry_offers_models_from_api(
         context={"source": SOURCE_USER},
     )
 
-    model_selector = result["data_schema"].schema[CONF_MODEL]
-    options = model_selector.config["options"]
+    options = _model_values(result)
 
     assert DEFAULT_MODEL in options
     assert "mistral-large-latest" in options
@@ -238,9 +252,10 @@ async def test_chat_subentries_hide_models_that_cannot_chat(
         context={"source": SOURCE_USER},
     )
 
-    options = result["data_schema"].schema[CONF_MODEL].config["options"]
+    options = _model_values(result)
 
-    assert options == ["mistral-large-latest", DEFAULT_MODEL]
+    # Deprecated last, live models first -- see the ordering test below.
+    assert options == ["mistral-large-latest", DEFAULT_MODEL, DEPRECATED_MODEL]
     for excluded in (NON_CHAT_MODEL, "voxtral-mini-latest", "voxtral-speech-latest"):
         assert excluded not in options
 
@@ -266,7 +281,7 @@ async def test_reconfigure_subentry(
 
     result = await hass.config_entries.subentries.async_configure(
         result["flow_id"],
-        {CONF_MODEL: "mistral-large-latest", CONF_TEMPERATURE: 1.5},
+        {CONF_MODEL: "mistral-large-latest", CONF_TEMPERATURE: 0.9},
     )
     await hass.async_block_till_done()
 
@@ -275,7 +290,7 @@ async def test_reconfigure_subentry(
 
     updated = init_integration.subentries[subentry.subentry_id]
     assert updated.data[CONF_MODEL] == "mistral-large-latest"
-    assert updated.data[CONF_TEMPERATURE] == 1.5
+    assert updated.data[CONF_TEMPERATURE] == 0.9
 
 
 async def test_subentry_aborts_when_entry_not_loaded(
@@ -414,7 +429,7 @@ async def test_stt_subentry_offers_only_transcription_models(
         context={"source": SOURCE_USER},
     )
 
-    options = result["data_schema"].schema[CONF_MODEL].config["options"]
+    options = _model_values(result)
     assert options == ["voxtral-mini-latest"]
     assert DEFAULT_MODEL not in options
 
@@ -433,7 +448,7 @@ async def test_tts_subentry_offers_speech_models_and_voices(
         context={"source": SOURCE_USER},
     )
 
-    models = result["data_schema"].schema[CONF_MODEL].config["options"]
+    models = _model_values(result)
     assert models == ["voxtral-speech-latest"]
 
     voices = result["data_schema"].schema[CONF_VOICE].config["options"]
@@ -441,13 +456,19 @@ async def test_tts_subentry_offers_speech_models_and_voices(
     assert voices == [{"label": "Amelie (fr, en)", "value": "voice-abc"}]
 
 
-async def test_tts_subentry_without_voices_omits_the_field(
+async def test_tts_subentry_aborts_when_voices_cannot_be_listed(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """No voices means no dropdown, rather than an empty one.
+    """No voice list means no entity, rather than an entity that cannot speak.
 
-    An empty dropdown reads as a fault, when in fact the endpoint is happy to
-    choose a voice itself.
+    This asserted the opposite until the endpoint was asked: the form was
+    shown without the voice field, on the belief that the API would choose a
+    voice. It does not -- a request without one is a 400, which
+    async_get_tts_audio turns into silence with nothing in the log.
+
+    An empty list is a failure rather than an empty account, because preset
+    voices exist on every workspace and async_list_voices returns an empty
+    list for any error rather than raising.
     """
     mock_client.audio.voices.list_async.side_effect = make_sdk_error(500)
 
@@ -456,10 +477,24 @@ async def test_tts_subentry_without_voices_omits_the_field(
         context={"source": SOURCE_USER},
     )
 
-    assert result["type"] is FlowResultType.FORM
-    assert not any(
-        marker.schema == CONF_VOICE for marker in result["data_schema"].schema
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_voices"
+
+
+async def test_tts_subentry_requires_a_voice(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The voice field is required, because the endpoint requires one."""
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_TTS),
+        context={"source": SOURCE_USER},
     )
+
+    markers = [
+        marker for marker in result["data_schema"].schema if marker.schema == CONF_VOICE
+    ]
+    assert markers, "the text-to-speech form offers no voice field"
+    assert isinstance(markers[0], vol.Required)
 
 
 def _default(result: dict, key: str) -> object:
@@ -529,3 +564,128 @@ async def test_a_second_entry_can_be_added_with_the_same_key(
         assert result["type"] is FlowResultType.CREATE_ENTRY
 
     assert len(hass.config_entries.async_entries(DOMAIN)) == 2
+
+
+def _model_labels(result: dict) -> dict[str, str]:
+    """Return the label shown for each model ID a form offers."""
+    return {
+        option["value"]: option["label"]
+        for option in result["data_schema"].schema[CONF_MODEL].config["options"]
+    }
+
+
+async def test_a_deprecated_model_says_so_in_the_dropdown(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A model on its way out is labelled with the date and its successor.
+
+    The API reports a retirement date and a replacement for every model being
+    withdrawn, and the dropdown showed those exactly like any other. Six of the
+    models the live API lists are retiring within the month, so somebody could
+    pick one today and lose it before they had finished setting it up.
+
+    Labelled rather than hidden: it still works until the date, and someone
+    with a reason to choose it should be able to.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+
+    labels = _model_labels(result)
+
+    assert labels[DEPRECATED_MODEL] == (
+        f"{DEPRECATED_MODEL} — retires 2026-08-31, replaced by mistral-medium-3-5"
+    )
+    # A model with no end date is shown as its plain name, with nothing added.
+    assert labels[DEFAULT_MODEL] == DEFAULT_MODEL
+
+
+async def test_deprecated_models_sort_below_live_ones(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The warning is worthless at position forty of fifty.
+
+    Sorting purely by name buries a retiring model among the ones that are
+    fine, so they are grouped: everything current first, everything ending
+    after it, each group alphabetical.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+
+    values = _model_values(result)
+
+    assert values[-1] == DEPRECATED_MODEL
+
+
+async def test_a_model_the_api_no_longer_lists_stays_selectable(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A model that has actually been withdrawn must not vanish from the form.
+
+    This is when someone most needs to open it. Dropping the configured value
+    from the options would mean the fix for a retired model is "your model
+    disappeared and the form now says something else".
+    """
+    entry = next(
+        subentry
+        for subentry in init_integration.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, entry, data={CONF_MODEL: "mistral-tiny-2312"}
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+    assert "mistral-tiny-2312" not in _model_values(result)
+
+    reconfigure = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": entry.subentry_id},
+    )
+    assert "mistral-tiny-2312" in _model_values(reconfigure)
+
+
+@pytest.mark.parametrize(
+    ("subentry_type", "maximum"),
+    [
+        (SUBENTRY_TYPE_CONVERSATION, 1.0),
+        (SUBENTRY_TYPE_AI_TASK_DATA, 1.5),
+        (SUBENTRY_TYPE_STT, 1.5),
+    ],
+)
+async def test_temperature_slider_stops_where_the_api_does(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+    maximum: float,
+) -> None:
+    """The slider cannot offer a temperature the endpoint will reject.
+
+    It went to 2.0, and nothing accepts that: chat completions caps at 1.5,
+    transcription at 1.5, and the conversations endpoint at 1.0. So the top of
+    the slider produced a 422 on every request that used it.
+
+    Conversation agents get the lowest of the three because web search moves
+    them to the conversations endpoint, and it is a checkbox on this same
+    form -- a temperature that works until an unrelated setting is switched on
+    is the worse failure.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": SOURCE_USER},
+    )
+
+    for marker, selector in result["data_schema"].schema.items():
+        if marker.schema == CONF_TEMPERATURE:
+            assert selector.config["max"] == maximum
+            break
+    else:
+        pytest.fail(f"{subentry_type} offers no temperature field")

@@ -79,8 +79,10 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
         unable to pick a voice they can hear working.
 
         None rather than an empty list when there are none, which is what the
-        base class returns to mean "no voice list": an empty dropdown reads as
-        a fault, when in fact the endpoint is happy to choose a voice itself.
+        base class returns to mean "no voice list". That is a display choice
+        only -- it does not mean a voice is optional. The endpoint refuses a
+        request without one, so an entity that reaches that state is already
+        broken and the dropdown is not what will tell anyone.
         """
         return self._voices or None
 
@@ -125,8 +127,23 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
             "response_format": TTS_AUDIO_FORMAT,
             "timeout_ms": TIMEOUT * 1000,
         }
-        if voice := options.get(tts.ATTR_VOICE) or self.subentry.data.get(CONF_VOICE):
-            request["voice_id"] = voice
+        voice = options.get(tts.ATTR_VOICE) or self.subentry.data.get(CONF_VOICE)
+        if not voice:
+            # The endpoint refuses a request with no voice, so this would come
+            # back as a 400 and then as silence. Said plainly here instead,
+            # because the entity looks configured and nothing else explains it.
+            #
+            # Reachable only for an entity created before the voice field was
+            # made required -- the form used to omit it entirely whenever the
+            # voice listing failed.
+            _LOGGER.error(
+                "No voice is configured for %s, and Mistral AI requires one. "
+                "Reconfigure the entity and choose a voice",
+                self.entity_id,
+            )
+            return None, None
+
+        request["voice_id"] = voice
 
         try:
             response = await client.audio.speech.complete_async(**request)
