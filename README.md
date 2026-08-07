@@ -427,7 +427,7 @@ uv run --isolated --no-project \
   --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
   --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
   --with pymicro-vad --with pyspeex-noise \
-  --with "mistralai>=2.1.0" --with PyTurboJPEG \
+  --with "mistralai>=2.9.0" --with PyTurboJPEG \
   pytest tests/ -q --no-cov
 ```
 

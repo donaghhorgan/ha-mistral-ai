@@ -45,10 +45,21 @@ _LOGGER = logging.getLogger(__name__)
 # the reply over as the conversation agent writes it, so waiting for the whole
 # message means waiting for the whole model response before any audio starts.
 #
-# Split on terminators followed by whitespace, so "20.5 degrees" and "e.g."
-# are not treated as ends. A minimum length stops every comma-free fragment
-# becoming its own billed request with an audible seam at each join.
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+# Split on terminators followed by whitespace, so "20.5 degrees" is not an
+# end -- the digit fails the \s+. A minimum length stops every comma-free
+# fragment becoming its own billed request with an audible seam at each join.
+#
+# The negative lookbehind covers dotted abbreviations: in "e.g." the final
+# period *is* followed by a space, so the first version of this split there
+# and spoke a fragment ending "e.g." -- exactly what its comment claimed it
+# did not do. Three characters back being dot-letter-dot identifies the shape
+# and rules it out, which catches "e.g.", "i.e." and "U.S." alike.
+#
+# It does not catch titles: "Dr. Smith" still splits, because nothing about
+# "r." distinguishes it from a real sentence end without a list of words.
+# That costs a seam and one extra request, and full sentence segmentation is
+# a rabbit hole this does not need to enter.
+_SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\.\w\.)\s+")
 
 # Below this, keep accumulating rather than issuing a request. Roughly a short
 # clause -- long enough that "Yes." and "OK." join whatever follows them,

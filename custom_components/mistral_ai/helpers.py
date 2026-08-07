@@ -31,9 +31,12 @@ async def async_list_voices(client: Mistral) -> list[Voice]:
     same names, and a voice that reads differently in the two places would look
     like two different voices.
 
-    A failure is not fatal and returns an empty list. The config form is still
-    usable without it, and the speech endpoint picks a voice when none is
-    given, so a listing failure should not take the platform down with it.
+    A failure is not fatal and returns an empty list, but the caller has to
+    decide what that means. The config flow aborts on it, because the speech
+    endpoint does *not* pick a voice when none is given -- it answers "Either
+    ref_audio or voice must be provided", which reaches the user as silence.
+    This docstring used to claim the opposite, which is the belief that
+    produced entities that could never speak.
     """
     voices = []
     offset = 0
