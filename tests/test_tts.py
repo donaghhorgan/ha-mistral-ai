@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -11,14 +12,13 @@ from homeassistant.components import tts
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import UNDEFINED
 
-from custom_components.mistral_ai.const import CONF_MODEL
+from custom_components.mistral_ai.const import CONF_MODEL, VOICE_PAGE_SIZE
+from custom_components.mistral_ai.helpers import async_list_voices
 
 from .conftest import TTS_MODEL, VOICE_ID
 from .helpers import make_sdk_error
 
 if TYPE_CHECKING:
-    from unittest.mock import MagicMock
-
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 ENTITY_ID = "tts.mistral_ai_tts"
@@ -258,3 +258,40 @@ async def test_no_configured_voice_says_so_rather_than_going_quiet(
     # without a voice, so the round trip would only confirm what is already
     # known here.
     mock_client.audio.speech.complete_async.assert_not_awaited()
+async def test_every_voice_is_listed_not_just_the_first_page(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Voices are paged, and all the pages are read.
+
+    The listing endpoint defaults to ten per page, in the API and in the SDK
+    signature both, and this used to call it with no arguments. On the account
+    it was found on that showed 10 of 31 voices -- no error, no warning, just
+    a dropdown missing two thirds of its entries and no way to tell.
+    """
+
+    def _voice(index: int) -> MagicMock:
+        voice = MagicMock()
+        voice.id = f"voice-{index}"
+        voice.name = f"Voice {index:03d}"
+        voice.languages = ["en"]
+        return voice
+
+    # 150 voices over two pages: a full one, then a short one that ends it.
+    pages = [_voice(i) for i in range(150)]
+
+    async def _list(*, limit: int, offset: int, **_: object) -> MagicMock:
+        response = MagicMock()
+        response.items = pages[offset : offset + limit]
+        response.total = len(pages)
+        return response
+
+    mock_client.audio.voices.list_async = AsyncMock(side_effect=_list)
+
+    voices = await async_list_voices(mock_client)
+
+    assert len(voices) == 150
+
+    # And it asked for the biggest page it is allowed, rather than paging 15
+    # times at the default of 10.
+    first = mock_client.audio.voices.list_async.await_args_list[0]
+    assert first.kwargs["limit"] == VOICE_PAGE_SIZE
