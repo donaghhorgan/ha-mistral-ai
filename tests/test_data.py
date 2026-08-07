@@ -40,9 +40,7 @@ async def test_a_stale_list_is_fetched_again(
     missing until Home Assistant restarted.
     """
     now = 1000.0
-    monkeypatch.setattr(
-        "custom_components.mistral_ai.data.monotonic", lambda: now
-    )
+    monkeypatch.setattr("custom_components.mistral_ai.data.monotonic", lambda: now)
 
     calls = []
 
