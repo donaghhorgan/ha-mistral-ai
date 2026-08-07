@@ -20,6 +20,7 @@ from custom_components.mistral_ai.const import (
     CONF_MODEL,
     CONF_PROMPT,
     CONF_TEMPERATURE,
+    CONF_TOP_P,
     CONF_VOICE,
     DEFAULT_MODEL,
     DEFAULT_STT_TEMPERATURE,
@@ -689,3 +690,36 @@ async def test_temperature_slider_stops_where_the_api_does(
             break
     else:
         pytest.fail(f"{subentry_type} offers no temperature field")
+
+
+@pytest.mark.parametrize(
+    ("subentry_type", "offered"),
+    [
+        (SUBENTRY_TYPE_CONVERSATION, True),
+        (SUBENTRY_TYPE_AI_TASK_DATA, True),
+        (SUBENTRY_TYPE_STT, False),
+        (SUBENTRY_TYPE_TTS, False),
+    ],
+)
+async def test_top_p_is_offered_only_where_it_does_something(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+    offered: bool,
+) -> None:
+    """Neither speech endpoint takes top_p, so neither form offers it.
+
+    The same reasoning that keeps temperature off the text-to-speech form: a
+    setting that is stored and then never sent is worse than an absent one,
+    because it looks like it is doing something.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": SOURCE_USER},
+    )
+
+    present = any(
+        marker.schema == CONF_TOP_P for marker in result["data_schema"].schema
+    )
+    assert present is offered
