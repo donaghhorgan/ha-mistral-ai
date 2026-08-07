@@ -75,9 +75,10 @@ class MistralData:
     def invalidate_models(self) -> None:
         """Forget the cached list.
 
-        Nothing calls this yet. It exists so that whatever adds a "refresh the
-        model list" action, or notices a model has been retired, has somewhere
-        obvious to put it rather than reaching into the fields.
+        Used by the tests to reach the uncached path, which setup's seeding
+        otherwise hides, and there for whatever adds a "refresh the model
+        list" action or notices a model has been retired -- so that has
+        somewhere obvious to go rather than reaching into the fields.
         """
         self._models = None
         self._fetched_at = 0.0

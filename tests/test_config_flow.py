@@ -317,7 +317,14 @@ async def test_subentry_aborts_when_entry_not_loaded(
 async def test_subentry_aborts_when_api_unreachable(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """A failure listing models aborts the subentry flow with a reason."""
+    """A failure listing models aborts the subentry flow with a reason.
+
+    The cache has to be dropped first. Setup seeds it, so a form opened
+    straight afterwards is served from memory and never reaches the API --
+    which is the point of the seed, and means this abort is only reachable
+    once the entry has been loaded long enough for the list to go stale.
+    """
+    init_integration.runtime_data.invalidate_models()
     mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(500))
 
     result = await hass.config_entries.subentries.async_init(
@@ -332,7 +339,11 @@ async def test_subentry_aborts_when_api_unreachable(
 async def test_subentry_aborts_with_forbidden(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """A 403 listing models aborts with its own reason, not invalid_auth."""
+    """A 403 listing models aborts with its own reason, not invalid_auth.
+
+    Cache dropped first for the same reason as the test above.
+    """
+    init_integration.runtime_data.invalidate_models()
     mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
 
     result = await hass.config_entries.subentries.async_init(
@@ -749,7 +760,9 @@ async def test_opening_the_form_twice_fetches_the_model_list_once(
             context={"source": SOURCE_USER},
         )
 
-    assert mock_client.models.list_async.await_count - before <= 1
+    # Zero, not one. Setup fetches the list to validate the key and now seeds
+    # the cache with it, so neither render costs a round trip.
+    assert mock_client.models.list_async.await_count == before
 
 
 def _has_field(result: dict, field: str) -> bool:

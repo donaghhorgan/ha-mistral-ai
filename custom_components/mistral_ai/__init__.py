@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-import httpx
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -17,11 +15,15 @@ from homeassistant.exceptions import (
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
-from mistralai.client import Mistral
-from mistralai.client.errors import SDKError
 
 from .client import async_create_client
-from .const import CONF_API_KEY, CONF_MODEL, DOMAIN, TIMEOUT
+from .config_flow import (
+    CannotConnect,
+    Forbidden,
+    InvalidAuth,
+    async_fetch_model_cards,
+)
+from .const import CONF_API_KEY, CONF_MODEL, DOMAIN
 from .data import MistralData
 from .repairs import async_clear_issue, issue_id
 
@@ -40,34 +42,45 @@ type MistralConfigEntry = ConfigEntry[MistralData]
 async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> bool:
     """Set up Mistral AI from a config entry."""
     client = await async_create_client(hass, entry.data[CONF_API_KEY])
+    data = MistralData(client=client)
 
     # Verify credentials during setup so that a bad key surfaces as a reauth
     # flow, rather than as a failure on the user's first sentence.
+    #
+    # Through the cache rather than around it. The listing this makes is the
+    # same one the config flow wants, so going through async_models leaves it
+    # cached and the first form opened after a restart renders without a round
+    # trip. Setup used to call the endpoint directly and drop the response,
+    # which meant paying for the same list twice.
+    #
+    # It is a head start, not an extension: async_models stamps the fetch time
+    # now, so an entry loaded two hours ago still refetches on the next render.
+    #
+    # Reusing async_fetch_model_cards rather than filtering here keeps one
+    # definition of what counts as a usable card. Two copies would drift, and
+    # a seeded list that did not match an uncached one would show up only as a
+    # model missing from a single dropdown.
     try:
-        async with asyncio.timeout(TIMEOUT):
-            models = await client.models.list_async()
-    except SDKError as err:
-        if err.status_code == 401:
-            raise ConfigEntryAuthFailed("Invalid Mistral AI API key") from err
-        if err.status_code == 403:
-            # Permanent rather than not-ready: the key authenticated, so
-            # retrying the same call on the same account will keep getting the
-            # same answer. ConfigEntryError says so and stops, where
-            # ConfigEntryNotReady would retry a failure that cannot resolve
-            # itself, and ConfigEntryAuthFailed -- which is what this was --
-            # would ask for a replacement key that is not the problem.
-            raise ConfigEntryError(
-                f"Mistral AI refused the request, and the API key is valid: {err}"
-            ) from err
-        raise ConfigEntryNotReady(f"Error talking to Mistral AI: {err}") from err
-    except (TimeoutError, httpx.HTTPError) as err:
+        cards = await data.async_models(async_fetch_model_cards)
+    except InvalidAuth as err:
+        raise ConfigEntryAuthFailed("Invalid Mistral AI API key") from err
+    except Forbidden as err:
+        # Permanent rather than not-ready: the key authenticated, so retrying
+        # the same call on the same account will keep getting the same answer.
+        # ConfigEntryError says so and stops, where ConfigEntryNotReady would
+        # retry a failure that cannot resolve itself, and ConfigEntryAuthFailed
+        # -- which is what this was -- would ask for a replacement key that is
+        # not the problem.
+        raise ConfigEntryError(
+            f"Mistral AI refused the request, and the API key is valid: {err}"
+        ) from err
+    except CannotConnect as err:
         raise ConfigEntryNotReady(f"Error talking to Mistral AI: {err}") from err
 
-    entry.runtime_data = MistralData(client=client)
+    entry.runtime_data = data
 
-    # Free: setup already fetched the list to validate the key, and used to
-    # discard it.
-    _async_review_models(hass, entry, models)
+    # Free: the listing above is already in hand.
+    _async_review_models(hass, entry, cards)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
@@ -87,7 +100,7 @@ async def async_update_options(hass: HomeAssistant, entry: MistralConfigEntry) -
 
 @callback
 def _async_review_models(
-    hass: HomeAssistant, entry: MistralConfigEntry, models: Any
+    hass: HomeAssistant, entry: MistralConfigEntry, cards: list[Any]
 ) -> None:
     """Warn about any subentry pointing at a model that is being retired.
 
@@ -100,11 +113,8 @@ def _async_review_models(
     the model, or Mistral cancelling a retirement, clears the warning without
     anything having to notice.
     """
-    retiring = {
-        card.id: card
-        for card in (getattr(models, "data", None) or [])
-        if getattr(card, "id", None) and getattr(card, "deprecation", None)
-    }
+    # Already filtered to cards carrying an id, so only deprecation is checked.
+    retiring = {card.id: card for card in cards if getattr(card, "deprecation", None)}
 
     for subentry_id, subentry in entry.subentries.items():
         card = retiring.get(subentry.data.get(CONF_MODEL))
