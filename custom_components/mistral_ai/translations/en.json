@@ -41,13 +41,15 @@
                         "max_tokens": "Maximum tokens per response",
                         "prompt": "Instructions",
                         "llm_hass_api": "Control Home Assistant",
-                        "web_search": "Web search (beta)"
+                        "web_search": "Web search (beta)",
+                        "top_p": "Top-p"
                     },
                     "data_description": {
                         "temperature": "Higher values make responses more creative, lower values more focused.",
                         "prompt": "Instructions given to the model to tell it how it should behave.",
                         "llm_hass_api": "Allow the agent to control devices in your home.",
-                        "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change."
+                        "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change.",
+                        "top_p": "An alternative to temperature: the model considers only the most likely words whose probabilities add up to this. 1.0 leaves sampling alone. Lower it or the temperature, rather than both at once."
                     }
                 }
             },
@@ -71,10 +73,12 @@
                         "name": "Name",
                         "model": "Model",
                         "temperature": "Temperature",
-                        "max_tokens": "Maximum tokens per response"
+                        "max_tokens": "Maximum tokens per response",
+                        "top_p": "Top-p"
                     },
                     "data_description": {
-                        "temperature": "Higher values make responses more creative, lower values more focused."
+                        "temperature": "Higher values make responses more creative, lower values more focused.",
+                        "top_p": "An alternative to temperature: the model considers only the most likely words whose probabilities add up to this. 1.0 leaves sampling alone. Lower it or the temperature, rather than both at once."
                     }
                 }
             },
@@ -156,6 +160,9 @@
         "attachment_not_found": {
             "message": "The attachment {path} does not exist."
         },
+        "attachment_too_large": {
+            "message": "{path} is {size} MB, and attachments are limited to {limit} MB."
+        },
         "empty_image": {
             "message": "Mistral AI returned an empty image. Please try again."
         },
@@ -184,7 +191,7 @@
             "message": "Unexpected error from Mistral AI: {error}"
         },
         "unsupported_attachment_type": {
-            "message": "Only images can be sent to Mistral AI, and {path} is not an image."
+            "message": "Only images and PDFs can be sent to Mistral AI, and {path} is neither."
         }
     }
 }
