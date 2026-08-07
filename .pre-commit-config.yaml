@@ -57,6 +57,12 @@ repos:
         language: system
         files: ^(pyproject\.toml|uv\.lock)$
         pass_filenames: false
+      - id: dependabot-coverage
+        name: Check Dependabot Coverage
+        entry: python scripts/check_dependabot_coverage.py
+        language: system
+        files: ^(pyproject\.toml|\.github/dependabot\.yml)$
+        pass_filenames: false
       - id: ha-version-consistency
         name: Check HA Version Consistency
         entry: python scripts/check_ha_version_consistency.py
