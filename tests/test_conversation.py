@@ -19,6 +19,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.const import (
     CONF_MODEL,
+    CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_WEB_SEARCH,
@@ -811,3 +812,60 @@ async def test_top_p_is_sent_on_the_conversations_path(
 
     request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
     assert request["completion_args"]["top_p"] == 0.4
+
+
+async def test_reasoning_effort_is_sent_on_the_chat_completions_path(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The configured effort reaches the request, top level on this endpoint."""
+    entry = next(
+        subentry
+        for subentry in init_integration.subentries.values()
+        if subentry.subentry_type == "conversation"
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration, entry, data={**entry.data, CONF_REASONING_EFFORT: "high"}
+    )
+    await hass.async_block_till_done()
+
+    await converse(hass)
+
+    assert mock_client.chat.stream_async.await_args.kwargs["reasoning_effort"] == "high"
+
+
+async def test_reasoning_effort_is_sent_on_the_conversations_path(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """And inside completion_args on the other one.
+
+    Both endpoints accept the same two values, so unlike temperature there is
+    no per-endpoint ceiling -- but they take it in different places, which is
+    the mistake this pair of tests exists to catch.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok")
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_REASONING_EFFORT: "high"})
+    await hass.async_block_till_done()
+
+    await converse(hass)
+
+    request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
+    assert request["completion_args"]["reasoning_effort"] == "high"
+
+
+async def test_reasoning_effort_is_absent_when_unset(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Nothing is sent unless it was chosen, and that is load-bearing.
+
+    Every other generation parameter has a default sent on every request. This
+    one must not: a model that does not advertise the capability rejects the
+    field outright rather than ignoring it, so sending "none" to mean "off"
+    would break every non-reasoning model. Absence is how those keep working.
+    """
+    await converse(hass)
+
+    assert "reasoning_effort" not in mock_client.chat.stream_async.await_args.kwargs

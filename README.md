@@ -142,6 +142,26 @@ To change an existing one, click "Configure" next to it.
   is not offered for speech-to-text or text-to-speech, because neither
   endpoint takes it.
 
+- **Reasoning** (conversation agents and AI tasks): Lets the model think
+  before it answers. Off leaves it answering directly; on gives it room to
+  work a problem through first, which costs tokens and time but helps on
+  anything multi-step.
+
+  Read this together with the maximum tokens setting above, because the two
+  compete. Thinking is spent from the same budget as the answer, so a tight
+  limit can be used up before the answer begins — that is the case the
+  maximum tokens note describes, and turning reasoning on is what makes it
+  easy to hit. If replies start coming back empty, or AI tasks start failing
+  with no structured data, raise the maximum tokens before changing anything
+  else.
+
+  The field only appears for models that support it, because a model that
+  does not rejects the setting outright rather than ignoring it — so an
+  agent configured with it would fail on every request. If you switch a
+  subentry to a model that cannot reason, the setting is dropped when you
+  save. Leave it unset to use whatever the model does by default, which is
+  what every existing agent does today.
+
 - **Instructions** (conversation agents only): Custom instructions for the
   assistant. You can use Home Assistant template variables like
   `{{ ha_name }}`.

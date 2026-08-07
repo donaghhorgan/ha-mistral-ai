@@ -28,6 +28,13 @@ MAX_TOKENS = 8
 # The speech model, which is a different family from the chat one.
 TTS_MODEL = "voxtral-mini-tts-latest"
 
+# A chat model that reports capabilities.reasoning: false, used to prove the
+# flag means what the config flow relies on it meaning. Pinned rather than
+# -latest deliberately: mistral-medium-latest reasons and this pinned build of
+# the same family does not, which is the whole reason the gate is read per
+# model id instead of guessed from the name.
+NON_REASONING_MODEL = "mistral-medium-2508"
+
 
 @pytest.fixture(scope="session")
 def api_key() -> str:

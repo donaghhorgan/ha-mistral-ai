@@ -84,6 +84,7 @@ def _model_card(
             "audio_speech": False,
             "completion_chat": False,
             "function_calling": False,
+            "reasoning": False,
             **capabilities,
         }
     )
@@ -95,7 +96,11 @@ def mock_models_response() -> MagicMock:
     """Return a models.list_async() response covering each capability."""
     response = MagicMock()
     response.data = [
-        _model_card(DEFAULT_MODEL, completion_chat=True, function_calling=True),
+        # Reasoning, like the real mistral-small-latest, so reasoning_effort
+        # is offered on the default model rather than only on an odd one out.
+        _model_card(
+            DEFAULT_MODEL, completion_chat=True, function_calling=True, reasoning=True
+        ),
         _model_card(
             "mistral-large-latest", completion_chat=True, function_calling=True
         ),

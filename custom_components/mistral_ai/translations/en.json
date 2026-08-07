@@ -42,12 +42,14 @@
                         "prompt": "Instructions",
                         "llm_hass_api": "Control Home Assistant",
                         "web_search": "Web search (beta)",
-                        "top_p": "Top-p"
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Reasoning"
                     },
                     "data_description": {
                         "temperature": "Higher values make responses more creative, lower values more focused.",
                         "prompt": "Instructions given to the model to tell it how it should behave.",
                         "llm_hass_api": "Allow the agent to control devices in your home.",
+                        "reasoning_effort": "Let the model think before it answers. Thinking is counted against the maximum tokens below, so a low limit can use the whole reply up before the answer starts — raise it if answers come back empty.\n\nOnly shown for models that support it. Leave unset to use the model's own default.",
                         "web_search": "Let the agent look things up it does not know. Billed per search by Mistral, and the premium tier costs more, so leave it unset to turn it off.\n\nBeta: this runs on Mistral's conversations API, which is in public preview and may change.",
                         "top_p": "An alternative to temperature: the model considers only the most likely words whose probabilities add up to this. 1.0 leaves sampling alone. Lower it or the temperature, rather than both at once."
                     }
@@ -74,11 +76,13 @@
                         "model": "Model",
                         "temperature": "Temperature",
                         "max_tokens": "Maximum tokens per response",
-                        "top_p": "Top-p"
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Reasoning"
                     },
                     "data_description": {
                         "temperature": "Higher values make responses more creative, lower values more focused.",
-                        "top_p": "An alternative to temperature: the model considers only the most likely words whose probabilities add up to this. 1.0 leaves sampling alone. Lower it or the temperature, rather than both at once."
+                        "top_p": "An alternative to temperature: the model considers only the most likely words whose probabilities add up to this. 1.0 leaves sampling alone. Lower it or the temperature, rather than both at once.",
+                        "reasoning_effort": "Let the model think before it answers. Thinking is counted against the maximum tokens above, so a low limit can use the whole reply up before the answer starts — raise it if tasks fail with no structured data.\n\nOnly shown for models that support it. Leave unset to use the model's own default."
                     }
                 }
             },
@@ -150,6 +154,12 @@
             "options": {
                 "web_search": "Standard",
                 "web_search_premium": "Premium (costs more per search)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Off",
+                "high": "On"
             }
         }
     },

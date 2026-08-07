@@ -22,7 +22,7 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-from .conftest import MAX_TOKENS, MODEL, TTS_MODEL
+from .conftest import MAX_TOKENS, MODEL, NON_REASONING_MODEL, TTS_MODEL
 
 HELLO: list[dict[str, str]] = [{"role": "user", "content": "hi"}]
 
@@ -449,3 +449,129 @@ async def test_model_listing_reports_the_capabilities_we_filter_on(
 
     flags = {flag for model in models for flag in (model.get("capabilities") or {})}
     assert {"completion_chat", "audio_transcription", "audio_speech"} <= flags
+
+
+# --------------------------------------------------------------------------
+# Reasoning effort
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("effort", ["none", "high"])
+async def test_reasoning_effort_accepts_the_values_we_offer(
+    post: Callable, effort: str
+) -> None:
+    """The two values the selector offers are the two the API takes.
+
+    The published enum declares six -- none, minimal, low, medium, high,
+    xhigh -- and the 422 body names a seventh, max. The model layer accepts
+    two. A selector built from either list would offer options that fail, so
+    this pins the pair that were measured.
+    """
+    response = await post(
+        "/chat/completions",
+        {
+            "model": MODEL,
+            "messages": HELLO,
+            "max_tokens": MAX_TOKENS,
+            "reasoning_effort": effort,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("effort", ["minimal", "low", "medium", "xhigh", "max"])
+async def test_the_values_we_do_not_offer_are_rejected(
+    post: Callable, effort: str
+) -> None:
+    """The other five fail, which is why the selector is not built from the spec.
+
+    The control half of the pair above. Without it, the test that "none" and
+    "high" work would pass just as happily if the field were being ignored.
+    """
+    response = await post(
+        "/chat/completions",
+        {
+            "model": MODEL,
+            "messages": HELLO,
+            "max_tokens": MAX_TOKENS,
+            "reasoning_effort": effort,
+        },
+    )
+
+    assert response.status_code == 400
+
+
+async def test_a_model_without_the_capability_rejects_even_none(
+    post: Callable,
+) -> None:
+    """The gate exists because "off" is not a safe thing to send.
+
+    This is the measurement the whole design rests on. A model that does not
+    advertise reasoning rejects *every* value, including "none" -- so the
+    field cannot be sent unconditionally with "none" meaning off, and the
+    config flow has to hide it and prune it instead.
+
+    If Mistral ever makes "none" universally accepted this fails, and the
+    capability gate in _subentry_schema and _prune_unsupported can go.
+    """
+    response = await post(
+        "/chat/completions",
+        {
+            "model": NON_REASONING_MODEL,
+            "messages": HELLO,
+            "max_tokens": MAX_TOKENS,
+            "reasoning_effort": "none",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not enabled for this model" in response.text
+
+
+async def test_the_capability_flag_predicts_acceptance(
+    client: httpx.AsyncClient,
+) -> None:
+    """capabilities.reasoning is what the config flow gates on, so it must hold.
+
+    The flag is read off the model card and decides whether the field is
+    offered at all. Asserted against the live listing rather than assumed,
+    because a card that stopped reporting it would silently hide the setting
+    for every model.
+    """
+    listing = await client.get("/models")
+    assert listing.status_code == 200
+
+    cards = {
+        card["id"]: card
+        for card in listing.json()["data"]
+        if card["id"] in (MODEL, NON_REASONING_MODEL)
+    }
+
+    assert cards[MODEL]["capabilities"]["reasoning"] is True
+    assert cards[NON_REASONING_MODEL]["capabilities"]["reasoning"] is False
+
+
+async def test_reasoning_effort_is_accepted_inside_completion_args(
+    post: Callable,
+) -> None:
+    """And on the conversations endpoint, where it nests.
+
+    completion_args rejects unknown keys outright, so a 200 here is proof the
+    field is parsed rather than tolerated -- which is what makes it safe to
+    send from the web search path.
+    """
+    response = await post(
+        "/conversations",
+        {
+            "model": MODEL,
+            "inputs": "hi",
+            "store": False,
+            "completion_args": {
+                "max_tokens": MAX_TOKENS,
+                "reasoning_effort": "high",
+            },
+        },
+    )
+
+    assert response.status_code == 200

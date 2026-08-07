@@ -7,6 +7,7 @@ CONF_API_KEY = "api_key"
 CONF_MAX_TOKENS = "max_tokens"
 CONF_MODEL = "model"
 CONF_PROMPT = "prompt"
+CONF_REASONING_EFFORT = "reasoning_effort"
 CONF_TEMPERATURE = "temperature"
 CONF_TOP_P = "top_p"
 CONF_VOICE = "voice"
@@ -94,6 +95,38 @@ CAPABILITY_AUDIO_SPEECH = "audio_speech"
 # image. It is not proof that it can, which is why the AI task entity still
 # handles an empty result rather than trusting the flag.
 CAPABILITY_FUNCTION_CALLING = "function_calling"
+
+# Whether a model accepts reasoning_effort at all.
+#
+# Not a filter on the dropdown -- a model that cannot reason is a perfectly
+# good conversation agent -- but a gate on whether the field is offered, and on
+# whether a stored value is sent. A model without this rejects *every* value,
+# including "none":
+#
+#   400 reasoning_effort is not enabled for this model
+#
+# so sending it unconditionally would break every non-reasoning model. The flag
+# predicted acceptance exactly across a sample of twelve chat models, and it
+# has to be read per model id: mistral-medium-latest reasons and the pinned
+# mistral-medium-2505 does not, so a name heuristic gets the same family wrong.
+CAPABILITY_REASONING = "reasoning"
+
+# The values the API actually accepts, which is not what it says it accepts.
+#
+# Two validation layers disagree. The schema layer rejects an unknown string
+# with 422 and names seven values -- none, minimal, low, medium, high, xhigh,
+# max -- one more than the published OpenAPI enum, so the spec is behind. The
+# model layer then rejects five of those seven:
+#
+#   400 reasoning_effort='minimal' is not supported for this model.
+#       Must be one of (<ReasoningEffort.none: 'none'>,
+#                       <ReasoningEffort.high: 'high'>)
+#
+# Building this list from either the spec or the 422 message would offer five
+# options that fail. Measured against both /v1/chat/completions and
+# completion_args, which agree -- so unlike temperature there is no
+# per-endpoint ceiling to pick between.
+REASONING_EFFORTS = ("none", "high")
 
 # Asked of the speech endpoint, and handed to Home Assistant as the file
 # extension. mp3 because it is what the media player pipeline handles with the
