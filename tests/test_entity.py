@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -474,6 +474,80 @@ async def test_transform_stream_thinking_content() -> None:
         {"thinking_content": "hmm"},
         {"content": "answer"},
     ]
+
+
+def _thinking(text: str) -> MagicMock:
+    """Build a content part carrying the model's reasoning."""
+    thought = MagicMock()
+    thought.text = text
+    part = MagicMock()
+    part.type = "thinking"
+    part.thinking = [thought]
+    return part
+
+
+async def test_stream_raises_when_cut_off_before_answering() -> None:
+    """A reply that is all thinking and no answer is reported, not returned.
+
+    A reasoning model spends tokens thinking before it answers, and maximum
+    tokens caps the whole response, so a low enough limit produces a
+    successful reply containing only thinking. Reproduced against the live
+    API: reasoning_effort high with max_tokens 12 returns finish_reason
+    "length" and a content list holding one thinking chunk.
+
+    Without this the conversation agent says nothing at all, and a structured
+    AI task reports "did not return valid structured data" -- blaming the
+    model for a length problem.
+    """
+    stream = make_stream(
+        [
+            make_chunk(content=[_thinking("let me work through this")]),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    with pytest.raises(HomeAssistantError) as raised:
+        [delta async for delta in _transform_stream(stream)]
+
+    assert raised.value.translation_key == "truncated_before_answering"
+
+
+async def test_stream_keeps_a_truncated_partial_answer() -> None:
+    """Half an answer is worth more than an error.
+
+    Truncation only raises when the model said nothing at all. Cut off part
+    way through a sentence, the user can see it was cut short and read what
+    arrived, so raising would take away something useful.
+    """
+    stream = make_stream(
+        [
+            make_chunk(content="The kitchen light is"),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    deltas = [delta async for delta in _transform_stream(stream)]
+
+    assert {"content": "The kitchen light is"} in deltas
+
+
+async def test_stream_does_not_raise_when_a_tool_call_was_cut_off() -> None:
+    """A truncated response that produced a tool call still dispatches it.
+
+    The tool call is the answer in that turn -- the model has said what it
+    wants done, and the loop runs it and asks again. Raising here would break
+    the ordinary path of a model that calls a tool and stops.
+    """
+    stream = make_stream(
+        [
+            make_chunk(tool_calls=[make_tool_call("call-1", "turn_on", '{"a": 1}')]),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    deltas = [delta async for delta in _transform_stream(stream)]
+
+    assert any("tool_calls" in delta for delta in deltas)
 
 
 def _sdk_error(status_code: int, body: str) -> SDKError:

@@ -21,10 +21,20 @@ def make_sdk_error(status_code: int) -> SDKError:
     return SDKError("boom", httpx.Response(status_code, text="error"))
 
 
-def make_chunk(content: Any = None, tool_calls: list[Any] | None = None) -> MagicMock:
+def make_chunk(
+    content: Any = None,
+    tool_calls: list[Any] | None = None,
+    finish_reason: str | None = None,
+) -> MagicMock:
     """Build a single Mistral streaming chunk.
 
     Mirrors CompletionEvent, whose payload hangs off ``.data``.
+
+    finish_reason defaults to None rather than being left as an invented
+    MagicMock attribute: every attribute of a MagicMock is truthy, so a chunk
+    built without it would compare unequal to "length" but be truthy, and any
+    future check written as `if chunk.finish_reason:` would fire on every
+    chunk in every test.
     """
     delta = MagicMock()
     delta.content = content
@@ -32,6 +42,7 @@ def make_chunk(content: Any = None, tool_calls: list[Any] | None = None) -> Magi
 
     choice = MagicMock()
     choice.delta = delta
+    choice.finish_reason = finish_reason
 
     data = MagicMock()
     data.choices = [choice]
