@@ -4,27 +4,29 @@ from __future__ import annotations
 
 import base64
 import json
-from typing import TYPE_CHECKING
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
+from mistralai.client.errors import SDKError
 
+from custom_components.mistral_ai.const import MAX_ATTACHMENT_BYTES
 from custom_components.mistral_ai.entity import (
     _async_convert_messages,
     _convert_content,
     _format_tool,
     _parse_arguments,
     _transform_stream,
+    _validation_detail,
 )
 
 from .helpers import make_chunk, make_stream, make_tool_call
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def test_convert_user_content() -> None:
@@ -322,10 +324,84 @@ async def test_convert_messages_with_image_attachment(
     )
 
 
-async def test_convert_messages_rejects_non_image(
+async def test_convert_messages_with_pdf_attachment(
     hass: HomeAssistant, tmp_path: Path
 ) -> None:
-    """A non-image attachment is rejected rather than silently dropped."""
+    """A PDF goes as a document chunk, not an image one.
+
+    The integration used to refuse anything that was not an image, with a
+    message saying so, which read as a limit of the API. It is not one: a
+    chat completion carrying a document_url returns 200 and the model answers
+    from the contents.
+
+    Deliberately not gated on a model capability. `vision` is the obvious
+    candidate and is wrong -- a model without it read a PDF back correctly, so
+    extraction happens server side and gating would have hidden the feature
+    from most of the model list.
+    """
+    document = tmp_path / "bill.pdf"
+    document.write_bytes(b"%PDF-1.4 fake")
+
+    content = conversation.UserContent(
+        content="what is due?",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media",
+                mime_type="application/pdf",
+                path=document,
+            )
+        ],
+    )
+
+    messages = await _async_convert_messages(hass, [content])
+
+    _, chunk = messages[0]["content"]
+    assert chunk["type"] == "document_url"
+    assert chunk["document_url"] == (
+        "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4 fake").decode()
+    )
+
+
+async def test_convert_messages_rejects_an_oversized_attachment(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """A file past the limit is refused before it is read.
+
+    Not the endpoint's limit -- it accepted a 30 MB PDF without complaint.
+    This is about the Home Assistant process: an attachment is inlined as
+    base64, so the bytes and a string a third larger are resident together.
+
+    Asserted on the size check happening before the read, because a limit that
+    only applies after loading the file protects nothing.
+    """
+    big = tmp_path / "huge.pdf"
+    big.write_bytes(b"%PDF-1.4")
+
+    content = conversation.UserContent(
+        content="read this",
+        attachments=[
+            conversation.Attachment(
+                media_content_id="media", mime_type="application/pdf", path=big
+            )
+        ],
+    )
+
+    with (
+        patch.object(Path, "stat") as stat,
+        patch.object(Path, "read_bytes") as read_bytes,
+    ):
+        stat.return_value.st_size = MAX_ATTACHMENT_BYTES + 1
+        with pytest.raises(HomeAssistantError) as raised:
+            await _async_convert_messages(hass, [content])
+
+    assert raised.value.translation_key == "attachment_too_large"
+    read_bytes.assert_not_called()
+
+
+async def test_convert_messages_rejects_an_unsupported_type(
+    hass: HomeAssistant, tmp_path: Path
+) -> None:
+    """Anything that is neither an image nor a PDF is rejected."""
     doc = tmp_path / "notes.txt"
     doc.write_bytes(b"hello")
 
@@ -398,3 +474,137 @@ async def test_transform_stream_thinking_content() -> None:
         {"thinking_content": "hmm"},
         {"content": "answer"},
     ]
+
+
+def _thinking(text: str) -> MagicMock:
+    """Build a content part carrying the model's reasoning."""
+    thought = MagicMock()
+    thought.text = text
+    part = MagicMock()
+    part.type = "thinking"
+    part.thinking = [thought]
+    return part
+
+
+async def test_stream_raises_when_cut_off_before_answering() -> None:
+    """A reply that is all thinking and no answer is reported, not returned.
+
+    A reasoning model spends tokens thinking before it answers, and maximum
+    tokens caps the whole response, so a low enough limit produces a
+    successful reply containing only thinking. Reproduced against the live
+    API: reasoning_effort high with max_tokens 12 returns finish_reason
+    "length" and a content list holding one thinking chunk.
+
+    Without this the conversation agent says nothing at all, and a structured
+    AI task reports "did not return valid structured data" -- blaming the
+    model for a length problem.
+    """
+    stream = make_stream(
+        [
+            make_chunk(content=[_thinking("let me work through this")]),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    with pytest.raises(HomeAssistantError) as raised:
+        [delta async for delta in _transform_stream(stream)]
+
+    assert raised.value.translation_key == "truncated_before_answering"
+
+
+async def test_stream_keeps_a_truncated_partial_answer() -> None:
+    """Half an answer is worth more than an error.
+
+    Truncation only raises when the model said nothing at all. Cut off part
+    way through a sentence, the user can see it was cut short and read what
+    arrived, so raising would take away something useful.
+    """
+    stream = make_stream(
+        [
+            make_chunk(content="The kitchen light is"),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    deltas = [delta async for delta in _transform_stream(stream)]
+
+    assert {"content": "The kitchen light is"} in deltas
+
+
+async def test_stream_does_not_raise_when_a_tool_call_was_cut_off() -> None:
+    """A truncated response that produced a tool call still dispatches it.
+
+    The tool call is the answer in that turn -- the model has said what it
+    wants done, and the loop runs it and asks again. Raising here would break
+    the ordinary path of a model that calls a tool and stops.
+    """
+    stream = make_stream(
+        [
+            make_chunk(tool_calls=[make_tool_call("call-1", "turn_on", '{"a": 1}')]),
+            make_chunk(finish_reason="length"),
+        ]
+    )
+
+    deltas = [delta async for delta in _transform_stream(stream)]
+
+    assert any("tool_calls" in delta for delta in deltas)
+
+
+def _sdk_error(status_code: int, body: str) -> SDKError:
+    """Build an SDKError carrying a real response body."""
+    return SDKError("boom", httpx.Response(status_code, text=body), body)
+
+
+def test_validation_detail_drops_the_branch_we_did_not_send() -> None:
+    """A union validation error is reduced to the part that is about us.
+
+    The conversations endpoint validates against two request shapes and
+    reports failures against both, so one wrong field arrives as four errors
+    and about 1.8 kB. Three of them are about the agent-based request this
+    integration never sends, and the first of those -- "Field required:
+    agent_id" -- sends the reader looking for a setting that does not exist.
+
+    Built from a body captured from the live endpoint rather than written by
+    hand, so the shape being parsed is the shape that actually arrives.
+    """
+    body = (Path(__file__).parent / "fixtures" / "conversations_422.json").read_text()
+
+    detail = _validation_detail(_sdk_error(422, body))
+
+    assert (
+        detail == "completion_args.temperature: Input should be less than or equal to 1"
+    )
+    assert "agent_id" not in detail
+    assert len(detail) < len(body) / 10
+
+
+def test_validation_detail_keeps_everything_when_nothing_matches() -> None:
+    """An unfamiliar shape degrades to all of it rather than to none of it.
+
+    The filter drops entries belonging to the other branch of the union. If a
+    body ever contains only those -- a different endpoint, or a shape that has
+    moved -- dropping them all would leave an empty message, which is worse
+    than a long one.
+    """
+    body = json.dumps(
+        {
+            "detail": [
+                {
+                    "loc": ["body", "AgentConversationRequest", "agent_id"],
+                    "msg": "Field required",
+                }
+            ]
+        }
+    )
+
+    assert _validation_detail(_sdk_error(422, body)) == "agent_id: Field required"
+
+
+@pytest.mark.parametrize("body", ["", "not json at all", '{"detail": "a string"}'])
+def test_validation_detail_gives_up_quietly(body: str) -> None:
+    """An unparseable body returns empty, and the caller falls back.
+
+    Asserted because the alternative is an exception raised while building an
+    error message, which would replace a bad message with a worse traceback.
+    """
+    assert _validation_detail(_sdk_error(422, body)) == ""

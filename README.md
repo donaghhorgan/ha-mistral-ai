@@ -117,11 +117,14 @@ To change an existing one, click "Configure" next to it.
     requests to an endpoint that caps at 1.0, and that is a setting on the
     same page.
 
-- **Maximum tokens**: Maximum length of responses. The default is 3000,
-  matching Home Assistant's own OpenAI and Google integrations. A structured
-  AI task that needs more than this comes back as truncated JSON, which
-  surfaces as `Mistral AI did not return valid structured data` — a parse
-  failure that reads like a model problem but is a length one.
+- **Maximum tokens**: Maximum length of responses. If a reply runs out of room
+  before the model has said anything — which happens with reasoning models,
+  since thinking is spent from the same budget — the request reports that
+  rather than returning nothing. A reply cut off part way through is kept, so
+  you see what arrived.
+
+  The default is 3000,
+  matching Home Assistant's own OpenAI and Google integrations.
 
 - **Top-p** (conversation agents and AI tasks): An alternative to
   temperature. The model considers only the most likely words whose
@@ -212,6 +215,16 @@ generate data for automations and dashboards rather than holding a
 conversation. Add one with "Add AI task", then call
 `ai_task.generate_data` with its entity ID. Passing a structure returns
 validated JSON, using Mistral's native structured output.
+
+Conversation agents and AI tasks both accept attachments: images, and PDFs.
+A PDF is sent as a document rather than a picture, and the model answers from
+its contents — asked what a bill was for, it reads the amount and the date off
+the page. No model capability gates this; extraction happens on Mistral's side
+and any chat model can do it.
+
+Attachments are inlined into the request, so they are capped at 20 MB. That is
+not the API's limit — it accepts considerably more — it is to avoid reading an
+unbounded file into memory on a machine that may not have it to spare.
 
 The same entity also generates images via `ai_task.generate_image`, on the
 model already configured on the subentry — there is no second model to pick.

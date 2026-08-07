@@ -160,6 +160,9 @@
         "attachment_not_found": {
             "message": "The attachment {path} does not exist."
         },
+        "attachment_too_large": {
+            "message": "{path} is {size} MB, and attachments are limited to {limit} MB."
+        },
         "empty_image": {
             "message": "Mistral AI returned an empty image. Please try again."
         },
@@ -172,6 +175,9 @@
         "invalid_api_key": {
             "message": "The Mistral AI API key was rejected. Please reconfigure the integration."
         },
+        "invalid_request": {
+            "message": "Mistral AI rejected the request: {detail}"
+        },
         "invalid_structured_response": {
             "message": "Mistral AI did not return valid structured data. Try simplifying the structure, or asking again."
         },
@@ -181,11 +187,14 @@
         "rate_limited": {
             "message": "Rate limited by Mistral AI. Please try again in a moment."
         },
+        "truncated_before_answering": {
+            "message": "Mistral AI ran out of room before answering. Raise the maximum tokens setting, or lower the reasoning effort if it is set."
+        },
         "unexpected_error": {
             "message": "Unexpected error from Mistral AI: {error}"
         },
         "unsupported_attachment_type": {
-            "message": "Only images can be sent to Mistral AI, and {path} is not an image."
+            "message": "Only images and PDFs can be sent to Mistral AI, and {path} is neither."
         }
     }
 }

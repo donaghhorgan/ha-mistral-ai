@@ -100,6 +100,22 @@ CAPABILITY_FUNCTION_CALLING = "function_calling"
 # least ceremony; the API also offers pcm, wav, flac and opus.
 TTS_AUDIO_FORMAT = "mp3"
 
+# What an attachment may be, and how big.
+#
+# Documents are not gated on a model capability. The obvious candidate is the
+# `vision` flag, and it is the wrong one -- a chat model without it read a PDF
+# back correctly, so extraction happens server side and any chat model can do
+# it. Checked rather than assumed, because gating on `vision` would have hidden
+# the feature from most of the model list for no reason.
+ATTACHMENT_DOCUMENT_TYPE = "application/pdf"
+
+# Not the API's limit. It accepted a 30 MB PDF without complaint, so this is
+# about the Home Assistant process rather than the endpoint: an attachment is
+# read whole and base64 encoded, so the bytes and a string a third larger are
+# both resident at once, and Home Assistant frequently runs on a machine where
+# that matters. Far above any real photo or scanned bill.
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
 # Voices are paged, and the page defaults to 10 -- both in the API and in the
 # SDK signature. Listing without asking for a page size showed the first ten
 # of an account's voices and silently dropped the rest, which on the account

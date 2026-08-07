@@ -23,6 +23,7 @@ from mistralai.client.errors import SDKError
 from voluptuous_openapi import convert
 
 from .const import (
+    ATTACHMENT_DOCUMENT_TYPE,
     CONF_MAX_TOKENS,
     CONF_MODEL,
     CONF_TEMPERATURE,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DOMAIN,
+    MAX_ATTACHMENT_BYTES,
     MAX_TEMPERATURE,
     MAX_TOOL_ITERATIONS,
     SUBENTRY_TYPE_AI_TASK_DATA,
@@ -86,6 +88,62 @@ def _parse_arguments(arguments: Any) -> dict[str, Any]:
             f"Mistral AI returned non-object tool arguments: {arguments!r}"
         )
     return parsed
+
+
+def _validation_detail(err: SDKError) -> str:
+    """Return the readable part of a 422, or an empty string.
+
+    The conversations endpoint validates a request against a union of two
+    shapes -- one keyed by `model`, one by `agent_id` -- and reports failures
+    against **both**. This integration only ever sends the first, so one wrong
+    field arrives as four errors, three of them about a request that was never
+    made:
+
+        completion_args.temperature  Input should be less than or equal to 1
+        agent_id                     Field required
+        model                        Extra inputs are not permitted
+        completion_args              Extra inputs are not permitted
+
+    Roughly 2.5 kB of it, led by `Field required: agent_id` -- which sends the
+    reader looking for an agent ID setting this integration does not have, and
+    buries the one line that says what is actually wrong.
+
+    So the entries for the branch we did not use are dropped. If none match --
+    a different endpoint, or a shape that has changed -- everything is kept
+    rather than nothing, because a wall of text still beats an empty message.
+
+    Returns an empty string when the body cannot be parsed at all, which the
+    caller treats as "fall back to the generic error".
+    """
+    try:
+        body = json.loads(err.body or err.raw_response.text)
+    except (ValueError, AttributeError):
+        return ""
+
+    entries = body.get("detail")
+    if not isinstance(entries, list):
+        return ""
+
+    def _is_ours(entry: Any) -> bool:
+        return "AgentConversationRequest" not in str(entry.get("loc", ""))
+
+    ours = [entry for entry in entries if isinstance(entry, dict) and _is_ours(entry)]
+    chosen = ours or [entry for entry in entries if isinstance(entry, dict)]
+
+    messages = []
+    for entry in chosen:
+        # The field name, without the union machinery wrapped around it.
+        parts = [
+            str(part)
+            for part in entry.get("loc", [])
+            if isinstance(part, str) and "ConversationRequest" not in part
+        ]
+        field = ".".join(part for part in parts if part != "body")
+        message = str(entry.get("msg", "")).strip()
+        if message:
+            messages.append(f"{field}: {message}" if field else message)
+
+    return "; ".join(dict.fromkeys(messages))
 
 
 def _convert_content(content: conversation.Content) -> dict[str, Any]:
@@ -147,18 +205,42 @@ async def _async_attachment_chunks(
                 )
 
             mime_type = attachment.mime_type or guess_file_type(path)[0]
-            if not mime_type or not mime_type.startswith("image/"):
+
+            # Images go as image_url, PDFs as document_url. Anything else is
+            # refused -- the message names what is accepted rather than saying
+            # "only images", which read as a limit of the API and was not one.
+            if mime_type and mime_type.startswith("image/"):
+                chunk_type = "image_url"
+            elif mime_type == ATTACHMENT_DOCUMENT_TYPE:
+                chunk_type = "document_url"
+            else:
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
                     translation_key="unsupported_attachment_type",
                     translation_placeholders={"path": str(path)},
                 )
 
+            # Checked before reading, so an oversized file is never loaded at
+            # all. The endpoint is not what this protects: it accepted a 30 MB
+            # PDF happily. Attachments are inlined as base64, so the bytes and
+            # a string a third larger are resident together, and Home Assistant
+            # often runs somewhere that cannot spare it.
+            if (size := path.stat().st_size) > MAX_ATTACHMENT_BYTES:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="attachment_too_large",
+                    translation_placeholders={
+                        "path": str(path),
+                        "size": f"{size / 1024 / 1024:.1f}",
+                        "limit": f"{MAX_ATTACHMENT_BYTES // 1024 // 1024}",
+                    },
+                )
+
             encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
             chunks.append(
                 {
-                    "type": "image_url",
-                    "image_url": f"data:{mime_type};base64,{encoded}",
+                    "type": chunk_type,
+                    chunk_type: f"data:{mime_type};base64,{encoded}",
                 }
             )
         return chunks
@@ -204,10 +286,19 @@ async def _transform_stream(
     # one response do not overwrite each other.
     tool_calls: dict[int, dict[str, Any]] = {}
 
+    # Whether the model ever said anything, as opposed to only thinking, and
+    # whether the response was cut off. Together they identify a reply that
+    # ran out of room before it began -- see the check after the loop.
+    said_something = False
+    truncated = False
+
     async for chunk in stream:
         data = getattr(chunk, "data", None)
         if data is None or not data.choices:
             continue
+
+        if data.choices[0].finish_reason == "length":
+            truncated = True
 
         delta = data.choices[0].delta
 
@@ -219,6 +310,7 @@ async def _transform_stream(
             # Content is usually a plain string, but reasoning models return a
             # list of chunks, mixing text with the model's thinking.
             if isinstance(delta.content, str):
+                said_something = True
                 yield {"content": delta.content}
             else:
                 for part in delta.content:
@@ -227,6 +319,7 @@ async def _transform_stream(
                             if text := getattr(thought, "text", None):
                                 yield {"thinking_content": text}
                     elif text := getattr(part, "text", None):
+                        said_something = True
                         yield {"content": text}
 
         for index, tool_call in enumerate(delta.tool_calls or []):
@@ -257,6 +350,27 @@ async def _transform_stream(
                 for call in complete
             ]
         }
+        return
+
+    # Cut off before the model said anything. A reasoning model spends tokens
+    # thinking before it answers, and maximum tokens caps the whole response,
+    # so a low enough limit produces a successful reply containing only
+    # thinking -- no error anywhere, and nothing for the user.
+    #
+    # Left alone when there is partial text: half an answer is worth more than
+    # an error, and the user can see it was cut short. Only the case with
+    # nothing at all is worth raising over, because it is indistinguishable
+    # from the model having ignored the question.
+    #
+    # Also catches ordinary truncation with no reasoning involved, which is
+    # the same failure with a different cause: an AI task whose structured
+    # output was cut off used to arrive as "did not return valid structured
+    # data", blaming the model for a length problem.
+    if truncated and not said_something:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="truncated_before_answering",
+        )
 
 
 async def _transform_conversation_stream(
@@ -701,6 +815,13 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             return HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="rate_limited",
+            )
+        if err.status_code == 422 and (detail := _validation_detail(err)):
+            _LOGGER.error("Mistral AI rejected the request: %s", err)
+            return HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_request",
+                translation_placeholders={"detail": detail},
             )
         _LOGGER.error("Mistral AI API error: %s", err)
         return HomeAssistantError(
