@@ -103,7 +103,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         """
         model = self.subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
         try:
-            card = await self.entry.runtime_data.models.retrieve_async(
+            card = await self.entry.runtime_data.client.models.retrieve_async(
                 model_id=model, timeout_ms=TIMEOUT * 1000
             )
         except (SDKError, TimeoutError, httpx.HTTPError) as err:
@@ -155,7 +155,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         chat_log: conversation.ChatLog,
     ) -> ai_task.GenImageTaskResult:
         """Handle a generate image task."""
-        client = self.entry.runtime_data
+        client = self.entry.runtime_data.client
         model = self.subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
 
         # Built from the chat log rather than from task.instructions alone.
@@ -257,7 +257,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
         is not a thing they can act on from a notification.
         """
         try:
-            await self.entry.runtime_data.files.delete_async(
+            await self.entry.runtime_data.client.files.delete_async(
                 file_id=file_id, timeout_ms=TIMEOUT * 1000
             )
         except (SDKError, TimeoutError, httpx.HTTPError) as err:

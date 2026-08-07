@@ -20,6 +20,7 @@ from mistralai.client.errors import SDKError
 
 from .client import async_create_client
 from .const import CONF_API_KEY, DOMAIN, TIMEOUT
+from .data import MistralData
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -30,7 +31,7 @@ PLATFORMS: tuple[Platform, ...] = (
     Platform.TTS,
 )
 
-type MistralConfigEntry = ConfigEntry[Mistral]
+type MistralConfigEntry = ConfigEntry[MistralData]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> bool:
@@ -59,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MistralConfigEntry) -> b
     except (TimeoutError, httpx.HTTPError) as err:
         raise ConfigEntryNotReady(f"Error talking to Mistral AI: {err}") from err
 
-    entry.runtime_data = client
+    entry.runtime_data = MistralData(client=client)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_update_options))

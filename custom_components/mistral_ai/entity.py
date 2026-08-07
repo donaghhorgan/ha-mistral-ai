@@ -463,7 +463,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         _transform_conversation_stream.
         """
         options = self.subentry.data
-        client = self.entry.runtime_data
+        client = self.entry.runtime_data.client
 
         tools: list[dict[str, Any]] = []
         if chat_log.llm_api:
@@ -592,7 +592,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
     ) -> None:
         """Generate an answer for the chat log."""
         options = self.subentry.data
-        client = self.entry.runtime_data
+        client = self.entry.runtime_data.client
 
         # Connectors only run on the conversations endpoint, so an agent with
         # web search on takes an entirely different path -- see

@@ -129,7 +129,7 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
             _LOGGER.debug("Empty audio stream, nothing to transcribe")
             return stt.SpeechResult(None, stt.SpeechResultState.ERROR)
 
-        client = self.entry.runtime_data
+        client = self.entry.runtime_data.client
         try:
             response = await client.audio.transcriptions.complete_async(
                 model=self.subentry.data[CONF_MODEL],
