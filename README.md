@@ -210,6 +210,14 @@ consequences worth knowing:
 - The request sets `store: false`, so the conversation is not retained by
   Mistral. That endpoint would otherwise keep it and list it afterwards,
   where chat completions stores nothing.
+- `store: false` covers the conversation and not the image. The connector
+  writes the image as a file on your account and hands back a reference to
+  it, so the integration downloads the bytes and then deletes the remote
+  copy. Home Assistant has its own copy in the media source by that point.
+
+  Earlier versions did not delete it, so an account used for image generation
+  before this may have images still sitting on it. They are listed under
+  Files in the Mistral console.
 - The conversations API is in public preview, so image generation rests on a
   less stable footing than the rest of the integration.
 
