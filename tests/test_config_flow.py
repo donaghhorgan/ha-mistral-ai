@@ -723,3 +723,22 @@ async def test_top_p_is_offered_only_where_it_does_something(
         marker.schema == CONF_TOP_P for marker in result["data_schema"].schema
     )
     assert present is offered
+
+
+async def test_opening_the_form_twice_fetches_the_model_list_once(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The end-to-end half: rendering the form again reuses the list.
+
+    Setup fetches once to validate the key. Opening the subentry form twice
+    used to add two more round trips, each one delaying the form appearing.
+    """
+    before = mock_client.models.list_async.await_count
+
+    for _ in range(2):
+        await hass.config_entries.subentries.async_init(
+            (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+            context={"source": SOURCE_USER},
+        )
+
+    assert mock_client.models.list_async.await_count - before <= 1
