@@ -79,16 +79,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-# Applied to conversation subentries when they are created, matching the
-# official Home Assistant LLM integrations -- openai_conversation, anthropic
-# and google_generative_ai_conversation all enable the Assist API on a new
-# conversation agent. Ollama is the exception, and local models being poor at
-# tool calling is the reason, which does not apply here.
-#
-# Leaving it unset produces an agent that answers questions and cannot control
-# anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
-# Home Assistant will not offer it where control is required -- which reads as
-# the integration being broken rather than as a setting being off.
 # Which model capability each subentry type needs. Asked of the API rather
 # than written down, so the lists stay right as Mistral ships and retires
 # models -- a key can reach transcription, OCR, embedding and coding models
@@ -107,6 +97,16 @@ DEFAULT_SUBENTRY_NAMES = {
     SUBENTRY_TYPE_TTS: DEFAULT_TTS_NAME,
 }
 
+# Applied to conversation subentries when they are created, matching the
+# official Home Assistant LLM integrations -- openai_conversation, anthropic
+# and google_generative_ai_conversation all enable the Assist API on a new
+# conversation agent. Ollama is the exception, and local models being poor at
+# tool calling is the reason, which does not apply here.
+#
+# Leaving it unset produces an agent that answers questions and cannot control
+# anything. Worse, it does not advertise ConversationEntityFeature.CONTROL, so
+# Home Assistant will not offer it where control is required -- which reads as
+# the integration being broken rather than as a setting being off.
 RECOMMENDED_CONVERSATION_OPTIONS = {
     CONF_LLM_HASS_API: [llm.LLM_API_ASSIST],
     CONF_PROMPT: llm.DEFAULT_INSTRUCTIONS_PROMPT,

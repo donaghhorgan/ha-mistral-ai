@@ -122,6 +122,11 @@ jobs:
       INTENTS_VERSION: 2025.7.30
       # Current pycares releases break aiodns on this Home Assistant version.
       PYCARES_VERSION: 4.9.0
+      # The floor declared in manifest.json and pyproject.toml. Restated here
+      # because an isolated run has no project to read it from, and it drifted
+      # to >=2.1.0 once already -- check_manifest_consistency.py now compares
+      # the two.
+      MISTRALAI_SPEC: "mistralai>=2.9.0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -149,7 +154,7 @@ jobs:
             --with "hassil==${HASSIL_VERSION}" \
             --with "home-assistant-intents==${INTENTS_VERSION}" \
             --with "pycares==${PYCARES_VERSION}" \
-            --with "mistralai>=2.1.0" \
+            --with "${MISTRALAI_SPEC}" \
             --with PyTurboJPEG \
             --with ha-ffmpeg \
             --with mutagen \
@@ -178,6 +183,9 @@ jobs:
       # a stable Home Assistant pin. Dependabot does not manage this, so it
       # needs bumping by hand every so often.
       PHCC_VERSION: 0.13.348 # Home Assistant 2026.7.4
+      # As above: the declared floor, kept honest by
+      # check_manifest_consistency.py.
+      MISTRALAI_SPEC: "mistralai>=2.9.0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -203,7 +211,7 @@ jobs:
         run: |
           uv run --isolated --no-project --python 3.14 \
             --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
-            --with "mistralai>=2.1.0" \
+            --with "${MISTRALAI_SPEC}" \
             --with PyTurboJPEG \
             --with hassil \
             --with home-assistant-intents \
