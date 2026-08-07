@@ -144,24 +144,24 @@ async def async_list_models(
 ) -> list[ModelChoice]:
     """Return the models available to the given client.
 
-    `capability` filters to models advertising it, e.g. audio_transcription.
-    Filtering on what the API reports rather than on model names keeps the
-    speech platforms working across a Mistral release: names come and go, the
-    capability flags do not.
+        `capability` filters to models advertising it, e.g. audio_transcription.
+        Filtering on what the API reports rather than on model names keeps the
+        speech platforms working across a Mistral release: names come and go, the
+        capability flags do not.
 
-<<<<<<< HEAD
-    Raises InvalidAuth if the key is rejected, Forbidden if it is accepted but
-    the account is not permitted, and CannotConnect for any other failure, so
-    callers can map each onto a form error.
-=======
-    Deprecation is carried through rather than discarded. The API reports a
-    retirement date and a replacement for every model on its way out, and the
-    dropdown used to show those exactly like any other -- so a model could be
-    chosen weeks before it stopped working, with nothing said at any point.
+    <<<<<<< HEAD
+        Raises InvalidAuth if the key is rejected, Forbidden if it is accepted but
+        the account is not permitted, and CannotConnect for any other failure, so
+        callers can map each onto a form error.
+    =======
+        Deprecation is carried through rather than discarded. The API reports a
+        retirement date and a replacement for every model on its way out, and the
+        dropdown used to show those exactly like any other -- so a model could be
+        chosen weeks before it stopped working, with nothing said at any point.
 
-    Raises InvalidAuth if the key is rejected and CannotConnect for any other
-    failure, so callers can map both onto a form error.
->>>>>>> origin/main
+        Raises InvalidAuth if the key is rejected and CannotConnect for any other
+        failure, so callers can map both onto a form error.
+    >>>>>>> origin/main
     """
     try:
         async with asyncio.timeout(TIMEOUT):
