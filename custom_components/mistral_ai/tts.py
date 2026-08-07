@@ -80,26 +80,37 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     """
     buffer = ""
 
-    async for chunk in message_gen:
-        buffer += chunk
+    # Closed with this generator rather than left to the garbage collector.
+    # Home Assistant owns message_gen, but we are the ones who stop consuming
+    # it early -- when a speech request fails, _sentences is closed while
+    # suspended right here, and dropping the reference schedules the
+    # finalisation as a task instead of awaiting it.
+    #
+    # The last of five generators in this chain to be closed properly, and the
+    # one that kept the leak alive after the other four were fixed. It only
+    # showed intermittently, because whether the collector had run by the time
+    # the check looked depended on test ordering.
+    async with aclosing(message_gen) as chunks:
+        async for chunk in chunks:
+            buffer += chunk
 
-        while True:
-            # The first boundary with enough text before it to be worth a
-            # request. Earlier ones are left in place, so a short reply keeps
-            # accumulating instead of going out a clause at a time.
-            boundary = next(
-                (
-                    match
-                    for match in _SENTENCE_END.finditer(buffer)
-                    if match.start() >= MIN_SPEECH_CHARS
-                ),
-                None,
-            )
-            if boundary is None:
-                break
+            while True:
+                # The first boundary with enough text before it to be worth
+                # a request. Earlier ones are left in place, so a short reply
+                # keeps accumulating instead of going out a clause at a time.
+                boundary = next(
+                    (
+                        match
+                        for match in _SENTENCE_END.finditer(buffer)
+                        if match.start() >= MIN_SPEECH_CHARS
+                    ),
+                    None,
+                )
+                if boundary is None:
+                    break
 
-            yield buffer[: boundary.start()].strip()
-            buffer = buffer[boundary.end() :]
+                yield buffer[: boundary.start()].strip()
+                buffer = buffer[boundary.end() :]
 
     if final := buffer.strip():
         yield final
