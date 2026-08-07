@@ -31,7 +31,7 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
-from .conftest import DEPRECATED_MODEL, NON_CHAT_MODEL
+from .conftest import DEPRECATED_MODEL, NON_CHAT_MODEL, ORPHANED_MODEL
 from .helpers import make_sdk_error
 
 
@@ -256,7 +256,12 @@ async def test_chat_subentries_hide_models_that_cannot_chat(
     options = _model_values(result)
 
     # Deprecated last, live models first -- see the ordering test below.
-    assert options == ["mistral-large-latest", DEFAULT_MODEL, DEPRECATED_MODEL]
+    assert options == [
+        "mistral-large-latest",
+        DEFAULT_MODEL,
+        DEPRECATED_MODEL,
+        ORPHANED_MODEL,
+    ]
     for excluded in (NON_CHAT_MODEL, "voxtral-mini-latest", "voxtral-speech-latest"):
         assert excluded not in options
 
@@ -618,7 +623,8 @@ async def test_deprecated_models_sort_below_live_ones(
 
     values = _model_values(result)
 
-    assert values[-1] == DEPRECATED_MODEL
+    # Both retiring models sit at the end, in name order among themselves.
+    assert values[-2:] == [DEPRECATED_MODEL, ORPHANED_MODEL]
 
 
 async def test_a_model_the_api_no_longer_lists_stays_selectable(
