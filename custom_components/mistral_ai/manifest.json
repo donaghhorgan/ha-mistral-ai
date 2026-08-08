@@ -24,7 +24,7 @@
     ],
     "requirements": [
         "mistralai>=2.9.0",
-        "sentence-stream>=1.3.0"
+        "sentence-stream>=1.1.0"
     ],
     "version": "1.0.0"
 }
