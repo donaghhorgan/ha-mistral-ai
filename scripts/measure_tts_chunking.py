@@ -501,7 +501,9 @@ def _report_lookbehind(cells: list[Cell]) -> None:
             print(f"  {case:<16}no difference -- same {shipped.requests} chunk(s)")
             continue
 
-        print(f"  {case:<16}{naive.requests} chunks without it, {shipped.requests} with")
+        print(
+            f"  {case:<16}{naive.requests} chunks without it, {shipped.requests} with"
+        )
         for chunk in naive.chunks:
             if chunk not in shipped.chunks:
                 print(f'    only without: "{chunk[:70]}"')
