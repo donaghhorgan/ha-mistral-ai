@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import base64
+import gc
 import json
 import logging
 from contextlib import aclosing, contextmanager
@@ -741,3 +743,65 @@ def test_every_generator_in_the_speech_chain_is_closed() -> None:
         "these async iterations are not wrapped in aclosing, so the generator "
         f"is left to the garbage collector: {unclosed}"
     )
+
+
+@respx.mock
+async def test_abandoning_the_speech_stream_leaves_no_finaliser_tasks(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Stopping part way through leaves nothing for the garbage collector.
+
+    An async generator abandoned rather than closed is finalised by asyncio's
+    hook, which schedules the close as a *task*. Home Assistant reports that
+    as a lingering task, and it holds the HTTP response open until it runs.
+
+    Three attempts at this closed our own generators and none of them fixed
+    it, because the abandonment is inside httpx: `aiter_lines` iterates
+    `aiter_text`, which iterates `aiter_bytes`, both with bare `async for`
+    loops. Closing the outer one does not close the inner two, and nothing we
+    close on our side reaches them.
+
+    Measured on a streamed response, per iterator: abandoning after one line
+    leaves one finaliser task, draining to the end leaves none -- and that
+    holds for `aiter_bytes` as well, so choosing a different iterator does
+    not help. Consuming the rest is the only thing that does, which is what
+    _async_stream_speech now does in a finally.
+
+    Counting tasks reproduces here, unlike the Home Assistant check that
+    found it, which needs Python 3.14.2 and a collector that has already run.
+    That is the point of this test: the earlier fixes were called verified on
+    the strength of one green CI run each.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=_sse(*([_delta(b"chunk")] * 20), DONE),
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    response = await _entity(hass).async_stream_tts_audio(
+        tts.TTSAudioRequest(
+            language="en",
+            options={},
+            message_gen=_gen("The kitchen light is on and the hall light is off."),
+        )
+    )
+
+    before = asyncio.all_tasks()
+
+    # Take one chunk and walk away, which is what an error part way through
+    # amounts to.
+    async with aclosing(response.data_gen) as data:
+        async for _chunk in data:
+            break
+
+    gc.collect()
+    await asyncio.sleep(0)
+
+    lingering = [
+        task
+        for task in asyncio.all_tasks() - before
+        if "athrow" in repr(task.get_coro()) or "aclose" in repr(task.get_coro())
+    ]
+    assert not lingering, f"generator finalisers left pending: {lingering}"

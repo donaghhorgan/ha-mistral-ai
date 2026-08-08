@@ -344,25 +344,50 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                 # this generator is what left an async_generator_athrow task
                 # pending after the test that caused it.
                 async with aclosing(_speech_events(response)) as events:
-                    async for event in events:
-                        if not (encoded := event.get("audio_data")):
-                            # The terminating speech.audio.done carries no
-                            # audio.
-                            continue
+                    # Drained rather than abandoned, in the finally below.
+                    # Walking away from a partly-read response leaves httpx's
+                    # own generators for the garbage collector: aiter_lines
+                    # iterates aiter_text, which iterates aiter_bytes, both
+                    # with bare `async for` loops, so closing the outer one
+                    # does not close the inner two. Nothing we close on our
+                    # side reaches them.
+                    #
+                    # Measured on a streamed response: abandoning after one
+                    # line leaves one finaliser task, draining to the end
+                    # leaves none -- and that holds for aiter_bytes too, so
+                    # picking a different iterator does not help. Consuming
+                    # the rest is the only thing that does.
+                    #
+                    # Cheap in practice: this only runs when a request is cut
+                    # short, and the remainder is at most one sentence of
+                    # audio.
+                    try:
+                        async for event in events:
+                            if not (encoded := event.get("audio_data")):
+                                # The terminating speech.audio.done carries no
+                                # audio.
+                                continue
 
-                        # Decoded strictly. Handing Home Assistant the wrong
-                        # bytes produces silence at playback rather than an
-                        # error here, which is a miserable thing to debug.
-                        try:
-                            chunk = base64.b64decode(encoded, validate=True)
-                        except (TypeError, binascii.Error) as err:
-                            raise HomeAssistantError(
-                                translation_domain=DOMAIN,
-                                translation_key="speech_not_base64",
-                            ) from err
+                            # Decoded strictly. Handing Home Assistant the wrong
+                            # bytes produces silence at playback rather than an
+                            # error here, which is a miserable thing to debug.
+                            try:
+                                chunk = base64.b64decode(encoded, validate=True)
+                            except (TypeError, binascii.Error) as err:
+                                raise HomeAssistantError(
+                                    translation_domain=DOMAIN,
+                                    translation_key="speech_not_base64",
+                                ) from err
 
-                        spoke = True
-                        yield chunk
+                            spoke = True
+                            yield chunk
+                    finally:
+                        # However this loop ends -- normally, on the
+                        # decode error above, or because the caller
+                        # stopped consuming -- the rest of the response
+                        # is read before letting go of it.
+                        async for _ in events:
+                            pass
 
         except (TimeoutError, httpx.HTTPError) as err:
             # The non-streaming path catches these and this did not, so a
