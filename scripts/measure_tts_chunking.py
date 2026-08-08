@@ -355,14 +355,20 @@ def _audio_from_payload(payload: str) -> bytes:
     return base64.b64decode(encoded, validate=True) if encoded else b""
 
 
-def _mp3_seconds(parts: Sequence[bytes]) -> float | None:
+def _mp3_seconds(replies: Sequence[bytes]) -> float | None:
     """Return the total duration of the audio, or None if it cannot be read.
 
-    Each chunk is measured separately and the durations summed, rather than
-    concatenating first and measuring once. Concatenated MP3s carry one Xing
-    header per part and a reader trusts the first, so measuring the join would
-    report the first chunk's length for the whole thing -- which would look
-    like the split losing audio when nothing had been lost.
+    One entry per *request*, each already joined from its stream deltas. The
+    distinction matters: a delta is not a file. Only the first of a reply's
+    deltas carries the header, so handing this the deltas individually makes
+    every reply past a second or so unreadable, and the whole measurement
+    comes back empty.
+
+    Each reply is then measured separately and the durations summed, rather
+    than concatenating first and measuring once. Concatenated MP3s carry one
+    Xing header per part and a reader trusts the first, so measuring the join
+    would report the first reply's length for the whole thing -- which would
+    look like the split losing audio when nothing had been lost.
 
     Summing is also the right comparison for the question being asked: whether
     more boundaries change how much audio a reply produces.
@@ -373,9 +379,9 @@ def _mp3_seconds(parts: Sequence[bytes]) -> float | None:
         return None
 
     total = 0.0
-    for part in parts:
+    for reply in replies:
         try:
-            info = MP3(io.BytesIO(part)).info
+            info = MP3(io.BytesIO(reply)).info
         except Exception:  # noqa: BLE001  # mutagen raises its own error tree
             return None
         # `info` is typed as optional, and a file mutagen cannot parse is
@@ -398,13 +404,21 @@ async def run_trial(
     concurrently would measure a design nothing implements.
 
     The clock starts here, immediately before the first request of *this* cell.
+
+    Audio is collected one list per request rather than one flat list, because
+    that is the unit `_mp3_seconds` can measure. A request's stream arrives as
+    several `speech.audio.delta` events, and only the first carries the file
+    header -- the rest are frame fragments that no reader can open alone. A
+    flat list therefore made every multi-delta reply unmeasurable, which is
+    every reply long enough to be interesting.
     """
-    parts: list[bytes] = []
+    replies: list[list[bytes]] = []
     ttfb: float | None = None
 
     start = time.perf_counter()
 
     for chunk in cell.chunks:
+        deltas: list[bytes] = []
         async with http.stream(
             "POST", SPEECH_URL, json=_speech_payload(chunk, voice, model)
         ) as response:
@@ -418,7 +432,8 @@ async def run_trial(
             async for audio in _audio_from_stream(response):
                 if ttfb is None:
                     ttfb = time.perf_counter() - start
-                parts.append(audio)
+                deltas.append(audio)
+        replies.append(deltas)
 
     total = time.perf_counter() - start
 
@@ -428,8 +443,8 @@ async def run_trial(
     return Trial(
         ttfb=ttfb,
         total=total,
-        audio_bytes=sum(len(part) for part in parts),
-        audio_seconds=_mp3_seconds(parts),
+        audio_bytes=sum(len(delta) for deltas in replies for delta in deltas),
+        audio_seconds=_mp3_seconds([b"".join(deltas) for deltas in replies]),
     )
 
 
