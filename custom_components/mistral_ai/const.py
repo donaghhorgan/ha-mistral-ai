@@ -242,16 +242,40 @@ DEFAULT_WEB_SEARCH_CITATIONS = True
 # not emit -- URLs, links and footnote markers, all of which are noise in
 # print and unlistenable aloud -- and picks between the rest itself.
 #
-# It is an instruction, not a mechanism. openai_conversation's own comment
-# records that models ignore its equivalent, and the tool_reference chunks
-# _content_deltas drops carry the same information structurally if this turns
-# out not to hold.
+# The closing example is the part that earns its place. Told only what not to
+# emit, the model reads out "World-Weather.info", "citypopulationdata.com" and
+# "weather25.com" -- a domain is not a URL, so it satisfies the letter of the
+# instruction and is exactly the thing that speaks badly. Shown one example of
+# right and wrong, it names the publication instead: four domain-shaped
+# sources in fifteen replies became one, with the attribution rate unchanged.
+# Measured on mistral-small-latest, the default model and the weakest at this.
+#
+# Two things tried and rejected, both in #171:
+#
+#   Rewriting the instruction to ask for a spoken-language name rather than
+#   appending an example. It halved the domains instead of removing them, and
+#   scored lower on attribution than the wording it replaced. Describing the
+#   rule abstractly is weaker than showing it once.
+#
+#   Shortening it. One sentence plus the example produced six domain-shaped
+#   sources in fifteen, the worst of any wording tested. The clause about
+#   URLs, links and footnote markers is doing real work, and "this prompt is
+#   long, trim it" is the wrong instinct here.
+#
+# It is an instruction, not a mechanism. Around a third of searched replies
+# still say nothing, concentrated in questions with one obvious answer -- the
+# latest version of something, say -- and no wording tried has fixed that
+# without making the domain problem worse. The tool_reference chunks
+# _content_deltas drops carry the same information structurally, and remain
+# the answer if attribution ever has to be guaranteed rather than likely.
 WEB_SEARCH_CITATIONS_PROMPT = (
     "When your answer comes from a web search, say so in the reply and name "
     "where it came from -- the publication or organisation, in your own "
     "words. Where a source has no name worth saying, give the number of "
     "sources instead. Keep it to one short phrase, and never write out a URL, "
-    "a link or a footnote marker: this reply may be read aloud."
+    "a link or a footnote marker: this reply may be read aloud. For example, "
+    'say "according to the Irish Times" or "based on three web sources", '
+    'never "according to irishtimes.ie".'
 )
 
 # Max number of back and forth with the LLM to generate a response
