@@ -30,10 +30,12 @@ from .const import (
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_WEB_SEARCH,
+    CONF_WEB_SEARCH_CITATIONS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
+    DEFAULT_WEB_SEARCH_CITATIONS,
     DOMAIN,
     MAX_ATTACHMENT_BYTES,
     MAX_TEMPERATURE,
@@ -41,6 +43,7 @@ from .const import (
     SUBENTRY_TYPE_AI_TASK_DATA,
     SUBENTRY_TYPE_CONVERSATION,
     TIMEOUT,
+    WEB_SEARCH_CITATIONS_PROMPT,
     WEB_SEARCH_TOOLS,
 )
 from .helpers import clamped_temperature
@@ -758,6 +761,14 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # store is off, so the history is re-sent instead -- exactly as
             # the chat completions path re-sends its messages.
             instructions, inputs = await self._async_conversation_inputs(chat_log)
+
+            # Read here rather than baked into the stored prompt, so that
+            # turning it on reaches every agent rather than only ones created
+            # afterwards -- see WEB_SEARCH_CITATIONS_PROMPT.
+            if options.get(CONF_WEB_SEARCH_CITATIONS, DEFAULT_WEB_SEARCH_CITATIONS):
+                instructions = "\n\n".join(
+                    part for part in (instructions, WEB_SEARCH_CITATIONS_PROMPT) if part
+                )
 
             async with self._translating_errors():
                 stream = await client.beta.conversations.start_stream_async(

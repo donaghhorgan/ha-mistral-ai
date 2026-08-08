@@ -27,6 +27,8 @@ from custom_components.mistral_ai.const import (
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_VOICE,
+    CONF_WEB_SEARCH,
+    CONF_WEB_SEARCH_CITATIONS,
     DEFAULT_MODEL,
     DEFAULT_STT_TEMPERATURE,
     DOMAIN,
@@ -933,6 +935,106 @@ async def test_reasoning_effort_kept_for_an_unlisted_model(
 
     updated = init_integration.subentries[subentry.subentry_id]
     assert updated.data[CONF_REASONING_EFFORT] == "high"
+
+
+def _default_for(result: dict, field: str) -> object:
+    """Return the default a form offers for a named field."""
+    marker = next(m for m in result["data_schema"].schema if m.schema == field)
+    return marker.default()
+
+
+async def test_citations_hidden_until_web_search_is_on(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A new agent is not asked about attributing searches it cannot make.
+
+    Same reasoning as reasoning effort: a setting that cannot do anything on
+    the configuration it is shown beside reads as broken rather than as
+    inapplicable.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+
+    assert _has_field(result, CONF_WEB_SEARCH)
+    assert not _has_field(result, CONF_WEB_SEARCH_CITATIONS)
+
+
+async def test_citations_offered_and_default_on_with_web_search(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Once a tier is stored the checkbox appears, already ticked.
+
+    On by default because the reply is only affected when a search actually
+    ran, and knowing an answer was fetched seconds ago rather than recalled is
+    most of what says how far to trust it.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_WEB_SEARCH: "web_search"},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+
+    assert _has_field(result, CONF_WEB_SEARCH_CITATIONS)
+    assert _default_for(result, CONF_WEB_SEARCH_CITATIONS) is True
+
+
+async def test_citations_can_be_saved_off(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Clearing the box is stored, and shown cleared next time.
+
+    Worth asserting on the second render as well as on the stored value: a
+    default applied unconditionally would tick the box again on every visit,
+    and quietly turn the setting back on for anyone who saved from that form.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_WEB_SEARCH: "web_search"},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_MODEL: DEFAULT_MODEL,
+            CONF_TEMPERATURE: 0.5,
+            CONF_WEB_SEARCH: "web_search",
+            CONF_WEB_SEARCH_CITATIONS: False,
+        },
+    )
+    await hass.async_block_till_done()
+
+    updated = init_integration.subentries[subentry.subentry_id]
+    assert updated.data[CONF_WEB_SEARCH_CITATIONS] is False
+
+    again = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    assert _default_for(again, CONF_WEB_SEARCH_CITATIONS) is False
 
 
 def test_reasoning_effort_offers_only_the_values_the_api_accepts() -> None:

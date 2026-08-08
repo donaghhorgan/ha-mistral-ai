@@ -235,6 +235,58 @@ async def test_web_search_connector_is_accepted(post: Callable) -> None:
     assert response.status_code == 200
 
 
+async def test_the_citation_instruction_does_not_break_a_search(
+    post: Callable,
+) -> None:
+    """Appending the attribution instruction leaves the request working.
+
+    What this proves and what it does not is worth being exact about, because
+    the interesting question is out of scope for this suite by its own rule at
+    the top of the file: it asserts what the endpoint accepts, never what a
+    model said.
+
+    So this covers the mechanical half -- the longer instructions are accepted,
+    a search still runs, and the response still carries the tool_reference
+    chunks the sources would come from. Whether the model actually obeys and
+    names a source is a judgement about generated text, and belongs to a human
+    reading real replies rather than to an assertion that would fail on
+    sampling drift.
+
+    That reading has not happened. The instruction shipped unverified because
+    no working key was available when it was written, and openai_conversation
+    carries a comment saying models ignore its equivalent -- so treat "the
+    model attributes its answers" as an open question until somebody with a
+    key has looked. See #158.
+    """
+    response = await post(
+        "/conversations",
+        _conversation(
+            inputs=[
+                {
+                    "role": "user",
+                    "content": "How much onshore wind generation does Ireland have?",
+                }
+            ],
+            instructions=(
+                "You are a voice assistant for a smart home.\n\n"
+                "When your answer comes from a web search, say so in the reply "
+                "and name where it came from."
+            ),
+            tools=[{"type": "web_search"}],
+            # Larger than MAX_TOKENS, because a truncated reply proves nothing
+            # about a sentence the model was asked to add at the end of one.
+            completion_args={"max_tokens": 400},
+        ),
+    )
+
+    assert response.status_code == 200
+
+    # Matched against the raw body rather than a walked structure: the shape
+    # these arrive in is the thing being checked, so navigating to where they
+    # are assumed to be would assume the answer.
+    assert "tool_reference" in response.text
+
+
 async def test_a_function_tool_is_handed_back_by_a_model_conversation(
     post: Callable,
 ) -> None:

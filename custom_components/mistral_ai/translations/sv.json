@@ -42,6 +42,7 @@
                         "prompt": "Instruktioner",
                         "llm_hass_api": "Styra Home Assistant",
                         "web_search": "Webbsökning (beta)",
+                        "web_search_citations": "Namnge källorna från webbsökningen",
                         "top_p": "Top-p",
                         "reasoning_effort": "Resonemang"
                     },
@@ -51,6 +52,7 @@
                         "llm_hass_api": "Låt agenten styra enheterna i ditt hem.",
                         "reasoning_effort": "Låter modellen tänka innan den svarar. Tänkandet räknas mot det högsta antalet tokens nedan, så en låg gräns kan förbruka hela svaret innan det börjar — höj den om svaren kommer tillbaka tomma.\n\nVisas bara för modeller som stöder det. Lämna oangivet för att använda modellens eget standardvärde.",
                         "web_search": "Låter agenten slå upp det den inte vet. Mistral debiterar per sökning, och premiumnivån kostar mer, så lämna oangivet för att stänga av det.\n\nBeta: detta bygger på Mistrals conversations-API, som är i offentlig förhandsvisning och kan ändras.",
+                        "web_search_citations": "Ber agenten berätta varifrån ett uppslaget svar kommer, så att du kan skilja det från ett svar ur minnet. Påverkar bara svar där en sökning faktiskt gjordes.\n\nDet är en instruktion till modellen och ingen garanti, så den kan ignoreras. Källorna namnges i själva svaret, som en röstassistent läser upp, så stäng av det om du hellre slipper höra dem.",
                         "top_p": "Ett alternativ till temperatur: modellen överväger bara de mest sannolika orden vars sannolikheter summerar till detta värde. 1.0 lämnar urvalet orört. Sänk antingen detta värde eller temperaturen, inte båda samtidigt."
                     }
                 }

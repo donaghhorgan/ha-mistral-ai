@@ -42,6 +42,7 @@
                         "prompt": "Anweisungen",
                         "llm_hass_api": "Home Assistant steuern",
                         "web_search": "Websuche (Beta)",
+                        "web_search_citations": "Quellen der Websuche nennen",
                         "top_p": "Top-p",
                         "reasoning_effort": "Schlussfolgern"
                     },
@@ -51,6 +52,7 @@
                         "llm_hass_api": "Erlaubt dem Agenten, Geräte in Ihrem Zuhause zu steuern.",
                         "reasoning_effort": "Lässt das Modell nachdenken, bevor es antwortet. Das Nachdenken wird auf die maximalen Tokens unten angerechnet, sodass ein niedriges Limit die ganze Antwort aufbrauchen kann, bevor sie beginnt — erhöhen Sie es, wenn Antworten leer zurückkommen.\n\nWird nur bei Modellen angezeigt, die das unterstützen. Nicht gesetzt lassen, um den Standard des Modells zu verwenden.",
                         "web_search": "Lässt den Agenten nachschlagen, was er nicht weiß. Wird von Mistral pro Suche abgerechnet, und die Premium-Stufe kostet mehr — nicht gesetzt lassen, um es auszuschalten.\n\nBeta: Dies läuft über die Conversations-API von Mistral, die sich in der öffentlichen Vorschau befindet und sich ändern kann.",
+                        "web_search_citations": "Bittet den Agenten anzugeben, woher eine nachgeschlagene Antwort stammt, damit Sie sie von einer aus dem Gedächtnis unterscheiden können. Betrifft nur Antworten, bei denen tatsächlich gesucht wurde.\n\nDas ist eine Anweisung an das Modell und keine Garantie, sie kann also ignoriert werden. Die Quellen werden in der Antwort selbst genannt, die ein Sprachassistent vorliest — schalten Sie es aus, wenn Sie das nicht hören möchten.",
                         "top_p": "Eine Alternative zur Temperatur: Das Modell berücksichtigt nur die wahrscheinlichsten Wörter, deren Wahrscheinlichkeiten sich hierauf summieren. 1.0 lässt die Auswahl unverändert. Senken Sie entweder diesen Wert oder die Temperatur, nicht beides zugleich."
                     }
                 }

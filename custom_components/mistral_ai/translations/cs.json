@@ -42,6 +42,7 @@
                         "prompt": "Pokyny",
                         "llm_hass_api": "Ovládat Home Assistant",
                         "web_search": "Vyhledávání na webu (beta)",
+                        "web_search_citations": "Uvádět zdroje z webu",
                         "top_p": "Top-p",
                         "reasoning_effort": "Uvažování"
                     },
@@ -51,6 +52,7 @@
                         "llm_hass_api": "Umožnit agentovi ovládat zařízení ve vaší domácnosti.",
                         "reasoning_effort": "Nechá model přemýšlet, než odpoví. Přemýšlení se započítává do maximálního počtu tokenů níže, takže nízký limit může spotřebovat celou odpověď dřív, než začne — zvyšte ho, pokud se odpovědi vracejí prázdné.\n\nZobrazuje se jen u modelů, které to podporují. Ponechte nenastavené, chcete-li použít výchozí hodnotu modelu.",
                         "web_search": "Nechá agenta vyhledat, co neví. Mistral to účtuje za každé vyhledání a prémiová úroveň stojí víc, takže ponechte nenastavené, chcete-li to vypnout.\n\nBeta: běží to na konverzačním API Mistralu, které je ve veřejném náhledu a může se změnit.",
+                        "web_search_citations": "Požádá agenta, aby uvedl, odkud vyhledaná odpověď pochází, abyste ji odlišili od odpovědi z paměti. Týká se jen odpovědí, u kterých vyhledávání skutečně proběhlo.\n\nJe to pokyn pro model, nikoli záruka, takže jej model může ignorovat. Zdroje se uvádějí přímo v odpovědi, kterou hlasový asistent přečte nahlas, takže to vypněte, pokud je slyšet nechcete.",
                         "top_p": "Alternativa k teplotě: model bere v úvahu jen nejpravděpodobnější slova, jejichž pravděpodobnosti dají dohromady tuto hodnotu. 1.0 nechává výběr beze změny. Snižte buď tuto hodnotu, nebo teplotu, ne obojí naráz."
                     }
                 }

@@ -42,6 +42,7 @@
                         "prompt": "Instruções",
                         "llm_hass_api": "Controlar o Home Assistant",
                         "web_search": "Pesquisa na web (beta)",
+                        "web_search_citations": "Nomear as fontes da pesquisa na web",
                         "top_p": "Top-p",
                         "reasoning_effort": "Raciocínio"
                     },
@@ -51,6 +52,7 @@
                         "llm_hass_api": "Permitir que o agente controle os dispositivos da sua casa.",
                         "reasoning_effort": "Deixa o modelo pensar antes de responder. O pensamento é descontado do máximo de tokens abaixo, por isso um limite baixo pode consumir a resposta toda antes de ela começar — aumente-o se as respostas voltarem vazias.\n\nSó aparece nos modelos que o suportam. Deixe por definir para usar a predefinição do próprio modelo.",
                         "web_search": "Deixa o agente procurar aquilo que não sabe. É faturado por pesquisa pela Mistral, e o nível premium custa mais, por isso deixe por definir para o desligar.\n\nBeta: isto assenta na API de conversações da Mistral, que está em pré-visualização pública e pode mudar.",
+                        "web_search_citations": "Pede ao agente que diga de onde vem uma resposta pesquisada, para a poder distinguir de uma respondida de memória. Só afeta as respostas em que a pesquisa foi mesmo feita.\n\nÉ uma instrução ao modelo e não uma garantia, por isso pode ser ignorada. As fontes são nomeadas na própria resposta, que um assistente de voz lê em voz alta, por isso desligue se preferir não as ouvir.",
                         "top_p": "Uma alternativa à temperatura: o modelo considera apenas as palavras mais prováveis cujas probabilidades somam este valor. 1.0 deixa a amostragem inalterada. Baixe este valor ou a temperatura, mas não os dois ao mesmo tempo."
                     }
                 }
