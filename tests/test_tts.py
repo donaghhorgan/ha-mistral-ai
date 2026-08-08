@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import ast
+import asyncio
 import base64
+import gc
 import json
 import logging
 from contextlib import aclosing, contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import UNDEFINED
 
+from custom_components.mistral_ai import tts as tts_module
 from custom_components.mistral_ai.const import CONF_MODEL, VOICE_PAGE_SIZE
 from custom_components.mistral_ai.helpers import async_list_voices
 from custom_components.mistral_ai.tts import _sentences
@@ -691,3 +696,112 @@ async def test_an_unreadable_event_is_skipped_loudly(
 
     assert audio == b"ID3 good"
     assert any("Could not read" in message for message in records)
+
+
+def test_every_generator_in_the_speech_chain_is_closed() -> None:
+    """No async generator in tts.py is left to the garbage collector.
+
+    The speech path is five generators deep -- message_gen, _sentences,
+    _async_stream_speech, _speech_events, aiter_lines -- and any one of them
+    abandoned mid-iteration is finalised by the collector's hook, which
+    schedules the close as a task and holds an HTTP response open until it
+    runs. Home Assistant reports that as a lingering task.
+
+    Asserted structurally because the runtime symptom is not reachable here:
+    it needs Python 3.14 with the newest Home Assistant, and even there it
+    only appears when the collector happens to run late, which made it
+    intermittent. Two rounds of fixing this closed four of the five, and a
+    green run was mistaken for proof each time.
+
+    Every `async for` in this module must therefore iterate a name bound by an
+    `async with aclosing(...)`, which is checkable without running anything.
+    """
+    source = Path(tts_module.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    closed: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AsyncWith):
+            continue
+        for item in node.items:
+            call = item.context_expr
+            if (
+                isinstance(call, ast.Call)
+                and getattr(call.func, "id", None) == "aclosing"
+                and isinstance(item.optional_vars, ast.Name)
+            ):
+                closed.add(item.optional_vars.id)
+
+    unclosed = [
+        ast.unparse(node.iter)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFor)
+        and not (isinstance(node.iter, ast.Name) and node.iter.id in closed)
+    ]
+
+    assert not unclosed, (
+        "these async iterations are not wrapped in aclosing, so the generator "
+        f"is left to the garbage collector: {unclosed}"
+    )
+
+
+@respx.mock
+async def test_abandoning_the_speech_stream_leaves_no_finaliser_tasks(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Stopping part way through leaves nothing for the garbage collector.
+
+    An async generator abandoned rather than closed is finalised by asyncio's
+    hook, which schedules the close as a *task*. Home Assistant reports that
+    as a lingering task, and it holds the HTTP response open until it runs.
+
+    Three attempts at this closed our own generators and none of them fixed
+    it, because the abandonment is inside httpx: `aiter_lines` iterates
+    `aiter_text`, which iterates `aiter_bytes`, both with bare `async for`
+    loops. Closing the outer one does not close the inner two, and nothing we
+    close on our side reaches them.
+
+    Measured on a streamed response, per iterator: abandoning after one line
+    leaves one finaliser task, draining to the end leaves none -- and that
+    holds for `aiter_bytes` as well, so choosing a different iterator does
+    not help. Consuming the rest is the only thing that does, which is what
+    _async_stream_speech now does in a finally.
+
+    Counting tasks reproduces here, unlike the Home Assistant check that
+    found it, which needs Python 3.14.2 and a collector that has already run.
+    That is the point of this test: the earlier fixes were called verified on
+    the strength of one green CI run each.
+    """
+    respx.post("https://api.mistral.ai/v1/audio/speech").mock(
+        return_value=httpx.Response(
+            200,
+            content=_sse(*([_delta(b"chunk")] * 20), DONE),
+            headers={"content-type": "text/event-stream"},
+        )
+    )
+
+    response = await _entity(hass).async_stream_tts_audio(
+        tts.TTSAudioRequest(
+            language="en",
+            options={},
+            message_gen=_gen("The kitchen light is on and the hall light is off."),
+        )
+    )
+
+    before = asyncio.all_tasks()
+
+    # Take one chunk and walk away, which is what an error part way through
+    # amounts to.
+    async with aclosing(response.data_gen) as data:
+        async for _chunk in data:
+            break
+
+    gc.collect()
+    await asyncio.sleep(0)
+
+    lingering = [
+        task
+        for task in asyncio.all_tasks() - before
+        if "athrow" in repr(task.get_coro()) or "aclose" in repr(task.get_coro())
+    ]
+    assert not lingering, f"generator finalisers left pending: {lingering}"

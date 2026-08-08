@@ -80,26 +80,37 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     """
     buffer = ""
 
-    async for chunk in message_gen:
-        buffer += chunk
+    # Closed with this generator rather than left to the garbage collector.
+    # Home Assistant owns message_gen, but we are the ones who stop consuming
+    # it early -- when a speech request fails, _sentences is closed while
+    # suspended right here, and dropping the reference schedules the
+    # finalisation as a task instead of awaiting it.
+    #
+    # The last of five generators in this chain to be closed properly, and the
+    # one that kept the leak alive after the other four were fixed. It only
+    # showed intermittently, because whether the collector had run by the time
+    # the check looked depended on test ordering.
+    async with aclosing(message_gen) as chunks:
+        async for chunk in chunks:
+            buffer += chunk
 
-        while True:
-            # The first boundary with enough text before it to be worth a
-            # request. Earlier ones are left in place, so a short reply keeps
-            # accumulating instead of going out a clause at a time.
-            boundary = next(
-                (
-                    match
-                    for match in _SENTENCE_END.finditer(buffer)
-                    if match.start() >= MIN_SPEECH_CHARS
-                ),
-                None,
-            )
-            if boundary is None:
-                break
+            while True:
+                # The first boundary with enough text before it to be worth
+                # a request. Earlier ones are left in place, so a short reply
+                # keeps accumulating instead of going out a clause at a time.
+                boundary = next(
+                    (
+                        match
+                        for match in _SENTENCE_END.finditer(buffer)
+                        if match.start() >= MIN_SPEECH_CHARS
+                    ),
+                    None,
+                )
+                if boundary is None:
+                    break
 
-            yield buffer[: boundary.start()].strip()
-            buffer = buffer[boundary.end() :]
+                yield buffer[: boundary.start()].strip()
+                buffer = buffer[boundary.end() :]
 
     if final := buffer.strip():
         yield final
@@ -333,25 +344,50 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                 # this generator is what left an async_generator_athrow task
                 # pending after the test that caused it.
                 async with aclosing(_speech_events(response)) as events:
-                    async for event in events:
-                        if not (encoded := event.get("audio_data")):
-                            # The terminating speech.audio.done carries no
-                            # audio.
-                            continue
+                    # Drained rather than abandoned, in the finally below.
+                    # Walking away from a partly-read response leaves httpx's
+                    # own generators for the garbage collector: aiter_lines
+                    # iterates aiter_text, which iterates aiter_bytes, both
+                    # with bare `async for` loops, so closing the outer one
+                    # does not close the inner two. Nothing we close on our
+                    # side reaches them.
+                    #
+                    # Measured on a streamed response: abandoning after one
+                    # line leaves one finaliser task, draining to the end
+                    # leaves none -- and that holds for aiter_bytes too, so
+                    # picking a different iterator does not help. Consuming
+                    # the rest is the only thing that does.
+                    #
+                    # Cheap in practice: this only runs when a request is cut
+                    # short, and the remainder is at most one sentence of
+                    # audio.
+                    try:
+                        async for event in events:
+                            if not (encoded := event.get("audio_data")):
+                                # The terminating speech.audio.done carries no
+                                # audio.
+                                continue
 
-                        # Decoded strictly. Handing Home Assistant the wrong
-                        # bytes produces silence at playback rather than an
-                        # error here, which is a miserable thing to debug.
-                        try:
-                            chunk = base64.b64decode(encoded, validate=True)
-                        except (TypeError, binascii.Error) as err:
-                            raise HomeAssistantError(
-                                translation_domain=DOMAIN,
-                                translation_key="speech_not_base64",
-                            ) from err
+                            # Decoded strictly. Handing Home Assistant the wrong
+                            # bytes produces silence at playback rather than an
+                            # error here, which is a miserable thing to debug.
+                            try:
+                                chunk = base64.b64decode(encoded, validate=True)
+                            except (TypeError, binascii.Error) as err:
+                                raise HomeAssistantError(
+                                    translation_domain=DOMAIN,
+                                    translation_key="speech_not_base64",
+                                ) from err
 
-                        spoke = True
-                        yield chunk
+                            spoke = True
+                            yield chunk
+                    finally:
+                        # However this loop ends -- normally, on the
+                        # decode error above, or because the caller
+                        # stopped consuming -- the rest of the response
+                        # is read before letting go of it.
+                        async for _ in events:
+                            pass
 
         except (TimeoutError, httpx.HTTPError) as err:
             # The non-streaming path catches these and this did not, so a
