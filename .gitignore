@@ -267,3 +267,10 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,python,visualstudiocode
+
+### Project ###
+
+# Agent worktrees. Ephemeral checkouts created when work is farmed out to
+# run in parallel, and removed again afterwards -- a full copy of the tree
+# that would otherwise show up as thousands of untracked files.
+/.claude/worktrees/
