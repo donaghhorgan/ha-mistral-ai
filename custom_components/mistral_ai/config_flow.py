@@ -236,6 +236,32 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    async def _async_key_error(self, api_key: str) -> str | None:
+        """Return the form error a key produces, or None if it works.
+
+        Every step that takes a key does the same thing with it -- build a
+        client, list the models, and turn each failure into one of the four
+        errors the form renders. Written once because the three steps have to
+        agree: a 403 that reads as "invalid key" in one of them and as a
+        refusal in another sends the user somewhere different for the same
+        cause.
+        """
+        try:
+            client = await async_create_client(self.hass, api_key)
+            await async_list_models(client)
+        except InvalidAuth:
+            return "invalid_auth"
+        except Forbidden:
+            _LOGGER.exception("Mistral AI refused the request")
+            return "forbidden"
+        except CannotConnect:
+            return "cannot_connect"
+        except Exception:
+            _LOGGER.exception("Unexpected exception")
+            return "unknown"
+
+        return None
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -243,19 +269,8 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                client = await async_create_client(self.hass, user_input[CONF_API_KEY])
-                await async_list_models(client)
-            except InvalidAuth:
-                errors["base"] = "invalid_auth"
-            except Forbidden:
-                _LOGGER.exception("Mistral AI refused the request")
-                errors["base"] = "forbidden"
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            if error := await self._async_key_error(user_input[CONF_API_KEY]):
+                errors["base"] = error
             else:
                 return self.async_create_entry(
                     title="Mistral AI",
@@ -287,19 +302,8 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                client = await async_create_client(self.hass, user_input[CONF_API_KEY])
-                await async_list_models(client)
-            except InvalidAuth:
-                errors["base"] = "invalid_auth"
-            except Forbidden:
-                _LOGGER.exception("Mistral AI refused the request")
-                errors["base"] = "forbidden"
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
+            if error := await self._async_key_error(user_input[CONF_API_KEY]):
+                errors["base"] = error
             else:
                 return self.async_update_reload_and_abort(
                     self._get_reauth_entry(), data_updates=user_input
@@ -307,6 +311,42 @@ class MistralConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Replace the API key without waiting for it to stop working.
+
+        Reauth is the same form, and it only opens when the API answers 401 --
+        so rotating a key deliberately meant revoking the working one upstream
+        first, or deleting the entry, which takes every conversation agent, AI
+        task and speech entity underneath it. A 403 had no route at all: the
+        key is valid, so `_error_for_status` correctly does not start a reauth
+        flow, and nothing else offered the field.
+
+        The subentry handler has an `async_step_reconfigure` of its own. That
+        one covers the agents and tasks; this one covers the key they share.
+
+        The field is deliberately left empty rather than seeded with the stored
+        key. It is a password field, so a suggested value would be echoed back
+        into the browser to be read out of the DOM, and there is nothing to
+        edit in a secret anyway -- a replacement is typed whole.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if error := await self._async_key_error(user_input[CONF_API_KEY]):
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(
+                    self._get_reconfigure_entry(), data_updates=user_input
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
         )
