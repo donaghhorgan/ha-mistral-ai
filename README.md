@@ -24,7 +24,8 @@ and dashboards, and speech-to-text and text-to-speech for the assist pipeline.
   being written
 - 🎛️ **Multiple agents**: Run several agents and tasks off one API key, each
   with its own model, prompt and parameters
-- 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models
+- 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models,
+  and the setup screens themselves are translated into fourteen more
 - ⚙️ **Easy setup**: Configured entirely through the Home Assistant UI
 
 ## Requirements
@@ -406,6 +407,20 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
+
+#### Translations
+
+The setup screens are available in Czech, Danish, Dutch, French, German,
+Italian, Japanese, Norwegian Bokmål, Polish, Portuguese, Russian, Simplified
+Chinese, Spanish and Swedish. Only the English is written by a speaker of the
+language; the rest are machine-translated and have not been reviewed, so
+expect the occasional wrong word or stiff phrasing.
+
+Corrections are welcome and need no ceremony — open an issue quoting the text
+you saw, or edit the file under `custom_components/mistral_ai/translations/`
+directly. English is the source: every other file mirrors its keys exactly,
+and `scripts/check_translation_consistency.py` will tell you if an edit breaks
+that.
 
 ### Local Development
 
