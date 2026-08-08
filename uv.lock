@@ -1258,7 +1258,7 @@ ha-current = [
 [package.metadata]
 requires-dist = [
     { name = "homeassistant", specifier = ">=2025.8.0" },
-    { name = "mistralai", specifier = ">=2.9.1" },
+    { name = "mistralai", specifier = ">=2.9.0" },
     { name = "voluptuous", specifier = ">=0.13.1" },
 ]
 
