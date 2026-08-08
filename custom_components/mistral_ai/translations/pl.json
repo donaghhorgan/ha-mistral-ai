@@ -1,0 +1,243 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Podaj swój klucz API Mistral AI, aby skonfigurować agenta konwersacyjnego.",
+                "data": {
+                    "api_key": "Klucz API"
+                }
+            },
+            "reauth_confirm": {
+                "description": "Klucz API Mistral AI dla {name} przestał działać. Podaj nowy.",
+                "data": {
+                    "api_key": "Klucz API"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Nie udało się połączyć z API Mistral AI. Sprawdź połączenie z internetem i spróbuj ponownie.",
+            "invalid_auth": "Nieprawidłowy klucz API. Sprawdź swój klucz API Mistral AI i spróbuj ponownie.",
+            "unknown": "Wystąpił nieoczekiwany błąd. Spróbuj ponownie.",
+            "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp."
+        },
+        "abort": {
+            "reauth_successful": "Ponowne uwierzytelnienie powiodło się."
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Dodaj agenta konwersacyjnego",
+                "reconfigure": "Skonfiguruj ponownie agenta konwersacyjnego"
+            },
+            "entry_type": "Agent konwersacyjny",
+            "step": {
+                "set_options": {
+                    "description": "Skonfiguruj agenta konwersacyjnego Mistral AI.",
+                    "data": {
+                        "name": "Nazwa",
+                        "model": "Model",
+                        "temperature": "Temperatura",
+                        "max_tokens": "Maksymalna liczba tokenów na odpowiedź",
+                        "prompt": "Instrukcje",
+                        "llm_hass_api": "Sterowanie Home Assistant",
+                        "web_search": "Wyszukiwanie w sieci (beta)",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Rozumowanie"
+                    },
+                    "data_description": {
+                        "temperature": "Wyższe wartości sprawiają, że odpowiedzi są bardziej kreatywne, niższe — bardziej skupione.",
+                        "prompt": "Instrukcje przekazywane modelowi, mówiące mu, jak ma się zachowywać.",
+                        "llm_hass_api": "Pozwól agentowi sterować urządzeniami w Twoim domu.",
+                        "reasoning_effort": "Pozwala modelowi pomyśleć, zanim odpowie. Myślenie jest wliczane do maksymalnej liczby tokenów poniżej, więc niski limit może zużyć całą odpowiedź, zanim się zacznie — zwiększ go, jeśli odpowiedzi wracają puste.\n\nWidoczne tylko dla modeli, które to obsługują. Pozostaw nieustawione, aby użyć wartości domyślnej modelu.",
+                        "web_search": "Pozwala agentowi wyszukać to, czego nie wie. Mistral nalicza opłatę za każde wyszukiwanie, a poziom premium kosztuje więcej, więc pozostaw nieustawione, aby to wyłączyć.\n\nBeta: działa na API conversations firmy Mistral, które jest w publicznej wersji zapoznawczej i może się zmienić.",
+                        "top_p": "Alternatywa dla temperatury: model bierze pod uwagę tylko najbardziej prawdopodobne słowa, których prawdopodobieństwa sumują się do tej wartości. 1.0 pozostawia losowanie bez zmian. Obniż tę wartość albo temperaturę, ale nie obie naraz."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Zapisano ustawienia agenta konwersacyjnego.",
+                "entry_not_loaded": "Nie można dodać agenta konwersacyjnego, dopóki integracja nie jest wczytana.",
+                "cannot_connect": "Nie udało się połączyć z API Mistral AI.",
+                "invalid_auth": "Zapisany klucz API Mistral AI został odrzucony. Skonfiguruj integrację ponownie.",
+                "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp."
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "Dodaj zadanie AI",
+                "reconfigure": "Skonfiguruj ponownie zadanie AI"
+            },
+            "entry_type": "Zadanie AI",
+            "step": {
+                "set_options": {
+                    "description": "Skonfiguruj zadanie Mistral AI.",
+                    "data": {
+                        "name": "Nazwa",
+                        "model": "Model",
+                        "temperature": "Temperatura",
+                        "max_tokens": "Maksymalna liczba tokenów na odpowiedź",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Rozumowanie"
+                    },
+                    "data_description": {
+                        "temperature": "Wyższe wartości sprawiają, że odpowiedzi są bardziej kreatywne, niższe — bardziej skupione.",
+                        "top_p": "Alternatywa dla temperatury: model bierze pod uwagę tylko najbardziej prawdopodobne słowa, których prawdopodobieństwa sumują się do tej wartości. 1.0 pozostawia losowanie bez zmian. Obniż tę wartość albo temperaturę, ale nie obie naraz.",
+                        "reasoning_effort": "Pozwala modelowi pomyśleć, zanim odpowie. Myślenie jest wliczane do maksymalnej liczby tokenów powyżej, więc niski limit może zużyć całą odpowiedź, zanim się zacznie — zwiększ go, jeśli zadania kończą się niepowodzeniem bez danych strukturalnych.\n\nWidoczne tylko dla modeli, które to obsługują. Pozostaw nieustawione, aby użyć wartości domyślnej modelu."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Zapisano ustawienia zadania AI.",
+                "entry_not_loaded": "Nie można dodać zadania AI, dopóki integracja nie jest wczytana.",
+                "cannot_connect": "Nie udało się połączyć z API Mistral AI.",
+                "invalid_auth": "Zapisany klucz API Mistral AI został odrzucony. Skonfiguruj integrację ponownie.",
+                "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp."
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "Dodaj zamianę mowy na tekst",
+                "reconfigure": "Skonfiguruj ponownie zamianę mowy na tekst"
+            },
+            "entry_type": "Zamiana mowy na tekst",
+            "step": {
+                "set_options": {
+                    "description": "Skonfiguruj zamianę mowy na tekst Mistral AI.",
+                    "data": {
+                        "name": "Nazwa",
+                        "model": "Model",
+                        "temperature": "Temperatura"
+                    },
+                    "data_description": {
+                        "model": "Wyświetlane są tylko modele, które potrafią transkrybować dźwięk.",
+                        "temperature": "Wyższe wartości pozwalają modelowi swobodniej zgadywać przy niewyraźnym dźwięku."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Zapisano ustawienia zamiany mowy na tekst.",
+                "entry_not_loaded": "Nie można dodać zamiany mowy na tekst, dopóki integracja nie jest wczytana.",
+                "cannot_connect": "Nie udało się połączyć z API Mistral AI.",
+                "invalid_auth": "Zapisany klucz API Mistral AI został odrzucony. Skonfiguruj integrację ponownie.",
+                "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp."
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Dodaj syntezę mowy",
+                "reconfigure": "Skonfiguruj ponownie syntezę mowy"
+            },
+            "entry_type": "Synteza mowy",
+            "step": {
+                "set_options": {
+                    "description": "Skonfiguruj syntezę mowy Mistral AI.",
+                    "data": {
+                        "name": "Nazwa",
+                        "model": "Model",
+                        "voice": "Głos"
+                    },
+                    "data_description": {
+                        "model": "Wyświetlane są tylko modele, które potrafią generować mowę.",
+                        "voice": "Głos używany, gdy wywołujący nie poprosi o konkretny."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Zapisano ustawienia syntezy mowy.",
+                "entry_not_loaded": "Nie można dodać syntezy mowy, dopóki integracja nie jest wczytana.",
+                "cannot_connect": "Nie udało się połączyć z API Mistral AI.",
+                "invalid_auth": "Zapisany klucz API Mistral AI został odrzucony. Skonfiguruj integrację ponownie.",
+                "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp.",
+                "no_voices": "Nie udało się pobrać listy głosów z Twojego konta Mistral AI. Synteza mowy wymaga głosu, więc nie da się jej skonfigurować, dopóki lista się nie wczyta — spróbuj ponownie za chwilę."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standardowe",
+                "web_search_premium": "Premium (kosztuje więcej za wyszukiwanie)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Wyłączone",
+                "high": "Włączone"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Błąd komunikacji z Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "Załącznik {path} nie istnieje."
+        },
+        "attachment_too_large": {
+            "message": "{path} ma {size} MB, a załączniki są ograniczone do {limit} MB."
+        },
+        "empty_image": {
+            "message": "Mistral AI zwrócił pusty obraz. Spróbuj ponownie."
+        },
+        "forbidden": {
+            "message": "Mistral AI odrzucił żądanie. Twoje konto może nie mieć dostępu do tego modelu lub tej funkcji."
+        },
+        "image_download_error": {
+            "message": "Błąd podczas pobierania wygenerowanego obrazu: {error}"
+        },
+        "invalid_api_key": {
+            "message": "Klucz API Mistral AI został odrzucony. Skonfiguruj integrację ponownie."
+        },
+        "invalid_request": {
+            "message": "Mistral AI odrzucił żądanie: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI nie zwrócił prawidłowych danych strukturalnych. Spróbuj uprościć strukturę albo zapytać ponownie."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI nie zwrócił żadnego obrazu. Model {model} może nie potrafić generować obrazów."
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI wciąż prosił o narzędzia i nie zakończył pracy w ciągu {limit} rund. Spróbuj przeformułować żądanie albo podzielić je na mniejsze kroki."
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI nie zwrócił dźwięku dla tej odpowiedzi. Spróbuj ponownie."
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI zwrócił dźwięk, którego nie udało się zdekodować. Spróbuj ponownie."
+        },
+        "speech_transport_error": {
+            "message": "Utracono połączenie z Mistral AI podczas generowania mowy: {error}"
+        },
+        "rate_limited": {
+            "message": "Mistral AI ograniczył liczbę żądań. Spróbuj ponownie za chwilę."
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI zabrakło miejsca, zanim udzielił odpowiedzi. Zwiększ ustawienie maksymalnej liczby tokenów albo obniż rozumowanie, jeśli jest ustawione."
+        },
+        "unexpected_error": {
+            "message": "Nieoczekiwany błąd z Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Do Mistral AI można wysyłać tylko obrazy i pliki PDF, a {path} nie jest ani jednym, ani drugim."
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} używa modelu, który jest wycofywany",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Przełącz {name} na {replacement}",
+                        "description": "{name} jest ustawiony na model {model}, który Mistral AI wycofuje {date}. Po tej dacie przestanie odpowiadać.\n\nMistral AI wskazuje {replacement} jako następcę. Zatwierdź, aby przełączyć {name} na ten model.\n\nNic innego w {name} się nie zmienia, a w każdej chwili możesz sam wybrać inny model, konfigurując go ponownie."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} używa modelu, który jest wycofywany",
+            "description": "{name} jest ustawiony na model {model}, który Mistral AI wycofuje {date}. Po tej dacie przestanie odpowiadać.\n\nMistral AI nie wskazał dla niego następcy, więc nie ma na co przełączyć automatycznie. Skonfiguruj {name} ponownie i wybierz inny model — lista rozwijana oznacza wszystko, co również jest wycofywane, więc nie natrafisz dwa razy na ten sam problem."
+        }
+    }
+}

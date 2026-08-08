@@ -63,6 +63,12 @@ repos:
         language: system
         files: ^(pyproject\.toml|\.github/dependabot\.yml)$
         pass_filenames: false
+      - id: translation-consistency
+        name: Check Translation Consistency
+        entry: python scripts/check_translation_consistency.py
+        language: system
+        files: ^custom_components/.*/translations/.*\.json$
+        pass_filenames: false
       - id: ha-version-consistency
         name: Check HA Version Consistency
         entry: python scripts/check_ha_version_consistency.py

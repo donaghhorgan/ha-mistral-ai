@@ -7,6 +7,8 @@ import json
 import re
 from pathlib import Path
 
+from homeassistant.generated.languages import LANGUAGES
+
 import custom_components.mistral_ai as integration
 
 
@@ -149,3 +151,26 @@ def test_every_placeholder_is_supplied_by_the_code() -> None:
     missing = _placeholders_in_translations() - _supplied_placeholders()
 
     assert not missing, f"never supplied by any code path: {sorted(missing)}"
+
+
+def test_every_translation_is_named_for_a_language_home_assistant_knows() -> None:
+    """A translation file is only ever loaded if its name is a language code.
+
+    Home Assistant looks up `translations/<code>.json` for the code the user
+    picked, so a file named for a code it does not offer -- `pt-PT.json`, or
+    `zh_Hans.json` with an underscore -- is never read by anything. Nothing
+    reports that: the user simply keeps seeing English, and the file sits
+    there looking translated.
+
+    `scripts/check_translation_consistency.py` cannot catch this. It is
+    deliberately free of any Home Assistant import so that it runs as a bare
+    pre-commit hook, which leaves it no list of real codes to check against.
+    Here there is one.
+    """
+    directory = _integration_path() / "translations"
+
+    for path in sorted(directory.glob("*.json")):
+        assert path.stem in LANGUAGES, (
+            f"{path.name} is not named for a language Home Assistant offers, "
+            f"so it will never be loaded"
+        )

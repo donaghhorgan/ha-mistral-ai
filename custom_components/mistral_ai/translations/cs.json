@@ -1,0 +1,243 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Zadejte svůj klíč API Mistral AI a nastavte konverzačního agenta.",
+                "data": {
+                    "api_key": "Klíč API"
+                }
+            },
+            "reauth_confirm": {
+                "description": "Klíč API Mistral AI pro {name} přestal fungovat. Zadejte nový.",
+                "data": {
+                    "api_key": "Klíč API"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Nepodařilo se připojit k API Mistral AI. Zkontrolujte připojení k internetu a zkuste to znovu.",
+            "invalid_auth": "Neplatný klíč API. Zkontrolujte svůj klíč API Mistral AI a zkuste to znovu.",
+            "unknown": "Došlo k neočekávané chybě. Zkuste to prosím znovu.",
+            "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup."
+        },
+        "abort": {
+            "reauth_successful": "Opětovné ověření proběhlo úspěšně."
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Přidat konverzačního agenta",
+                "reconfigure": "Znovu nastavit konverzačního agenta"
+            },
+            "entry_type": "Konverzační agent",
+            "step": {
+                "set_options": {
+                    "description": "Nastavte konverzačního agenta Mistral AI.",
+                    "data": {
+                        "name": "Název",
+                        "model": "Model",
+                        "temperature": "Teplota",
+                        "max_tokens": "Maximální počet tokenů na odpověď",
+                        "prompt": "Pokyny",
+                        "llm_hass_api": "Ovládat Home Assistant",
+                        "web_search": "Vyhledávání na webu (beta)",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Uvažování"
+                    },
+                    "data_description": {
+                        "temperature": "Vyšší hodnoty činí odpovědi kreativnějšími, nižší soustředěnějšími.",
+                        "prompt": "Pokyny předané modelu, které mu říkají, jak se má chovat.",
+                        "llm_hass_api": "Umožnit agentovi ovládat zařízení ve vaší domácnosti.",
+                        "reasoning_effort": "Nechá model přemýšlet, než odpoví. Přemýšlení se započítává do maximálního počtu tokenů níže, takže nízký limit může spotřebovat celou odpověď dřív, než začne — zvyšte ho, pokud se odpovědi vracejí prázdné.\n\nZobrazuje se jen u modelů, které to podporují. Ponechte nenastavené, chcete-li použít výchozí hodnotu modelu.",
+                        "web_search": "Nechá agenta vyhledat, co neví. Mistral to účtuje za každé vyhledání a prémiová úroveň stojí víc, takže ponechte nenastavené, chcete-li to vypnout.\n\nBeta: běží to na konverzačním API Mistralu, které je ve veřejném náhledu a může se změnit.",
+                        "top_p": "Alternativa k teplotě: model bere v úvahu jen nejpravděpodobnější slova, jejichž pravděpodobnosti dají dohromady tuto hodnotu. 1.0 nechává výběr beze změny. Snižte buď tuto hodnotu, nebo teplotu, ne obojí naráz."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Nastavení konverzačního agenta uloženo.",
+                "entry_not_loaded": "Konverzačního agenta nelze přidat, dokud integrace není načtena.",
+                "cannot_connect": "Nepodařilo se připojit k API Mistral AI.",
+                "invalid_auth": "Uložený klíč API Mistral AI byl odmítnut. Nastavte integraci znovu.",
+                "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup."
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "Přidat úlohu AI",
+                "reconfigure": "Znovu nastavit úlohu AI"
+            },
+            "entry_type": "Úloha AI",
+            "step": {
+                "set_options": {
+                    "description": "Nastavte úlohu Mistral AI.",
+                    "data": {
+                        "name": "Název",
+                        "model": "Model",
+                        "temperature": "Teplota",
+                        "max_tokens": "Maximální počet tokenů na odpověď",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Uvažování"
+                    },
+                    "data_description": {
+                        "temperature": "Vyšší hodnoty činí odpovědi kreativnějšími, nižší soustředěnějšími.",
+                        "top_p": "Alternativa k teplotě: model bere v úvahu jen nejpravděpodobnější slova, jejichž pravděpodobnosti dají dohromady tuto hodnotu. 1.0 nechává výběr beze změny. Snižte buď tuto hodnotu, nebo teplotu, ne obojí naráz.",
+                        "reasoning_effort": "Nechá model přemýšlet, než odpoví. Přemýšlení se započítává do maximálního počtu tokenů výše, takže nízký limit může spotřebovat celou odpověď dřív, než začne — zvyšte ho, pokud úlohy selhávají bez strukturovaných dat.\n\nZobrazuje se jen u modelů, které to podporují. Ponechte nenastavené, chcete-li použít výchozí hodnotu modelu."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Nastavení úlohy AI uloženo.",
+                "entry_not_loaded": "Úlohu AI nelze přidat, dokud integrace není načtena.",
+                "cannot_connect": "Nepodařilo se připojit k API Mistral AI.",
+                "invalid_auth": "Uložený klíč API Mistral AI byl odmítnut. Nastavte integraci znovu.",
+                "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup."
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "Přidat převod řeči na text",
+                "reconfigure": "Znovu nastavit převod řeči na text"
+            },
+            "entry_type": "Převod řeči na text",
+            "step": {
+                "set_options": {
+                    "description": "Nastavte převod řeči na text Mistral AI.",
+                    "data": {
+                        "name": "Název",
+                        "model": "Model",
+                        "temperature": "Teplota"
+                    },
+                    "data_description": {
+                        "model": "Uvedeny jsou jen modely, které umí přepisovat zvuk.",
+                        "temperature": "Vyšší hodnoty nechají model volněji hádat u nezřetelného zvuku."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Nastavení převodu řeči na text uloženo.",
+                "entry_not_loaded": "Převod řeči na text nelze přidat, dokud integrace není načtena.",
+                "cannot_connect": "Nepodařilo se připojit k API Mistral AI.",
+                "invalid_auth": "Uložený klíč API Mistral AI byl odmítnut. Nastavte integraci znovu.",
+                "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup."
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Přidat převod textu na řeč",
+                "reconfigure": "Znovu nastavit převod textu na řeč"
+            },
+            "entry_type": "Převod textu na řeč",
+            "step": {
+                "set_options": {
+                    "description": "Nastavte převod textu na řeč Mistral AI.",
+                    "data": {
+                        "name": "Název",
+                        "model": "Model",
+                        "voice": "Hlas"
+                    },
+                    "data_description": {
+                        "model": "Uvedeny jsou jen modely, které umí generovat řeč.",
+                        "voice": "Hlas použitý, když volající nepožádá o konkrétní."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Nastavení převodu textu na řeč uloženo.",
+                "entry_not_loaded": "Převod textu na řeč nelze přidat, dokud integrace není načtena.",
+                "cannot_connect": "Nepodařilo se připojit k API Mistral AI.",
+                "invalid_auth": "Uložený klíč API Mistral AI byl odmítnut. Nastavte integraci znovu.",
+                "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup.",
+                "no_voices": "Nepodařilo se načíst hlasy vašeho účtu Mistral AI. Převod textu na řeč vyžaduje hlas, takže jej nelze nastavit, dokud se seznam nenačte — zkuste to prosím za chvíli znovu."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standardní",
+                "web_search_premium": "Prémiové (stojí víc za vyhledání)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Vypnuto",
+                "high": "Zapnuto"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Chyba při komunikaci s Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "Příloha {path} neexistuje."
+        },
+        "attachment_too_large": {
+            "message": "{path} má {size} MB a přílohy jsou omezeny na {limit} MB."
+        },
+        "empty_image": {
+            "message": "Mistral AI vrátil prázdný obrázek. Zkuste to prosím znovu."
+        },
+        "forbidden": {
+            "message": "Mistral AI požadavek odmítl. Váš účet možná nemá přístup k tomuto modelu nebo funkci."
+        },
+        "image_download_error": {
+            "message": "Chyba při stahování vygenerovaného obrázku: {error}"
+        },
+        "invalid_api_key": {
+            "message": "Klíč API Mistral AI byl odmítnut. Nastavte integraci znovu."
+        },
+        "invalid_request": {
+            "message": "Mistral AI požadavek odmítl: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI nevrátil platná strukturovaná data. Zkuste strukturu zjednodušit nebo se zeptat znovu."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI nevrátil žádný obrázek. Model {model} možná neumí generovat obrázky."
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI stále žádal o nástroje a nedokončil práci během {limit} kol. Zkuste požadavek přeformulovat nebo jej rozdělit na menší kroky."
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI pro tuto odpověď nevrátil žádný zvuk. Zkuste to prosím znovu."
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI vrátil zvuk, který se nepodařilo dekódovat. Zkuste to prosím znovu."
+        },
+        "speech_transport_error": {
+            "message": "Během generování řeči se ztratilo spojení s Mistral AI: {error}"
+        },
+        "rate_limited": {
+            "message": "Mistral AI omezil počet požadavků. Zkuste to prosím za chvíli znovu."
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI došlo místo dřív, než stihl odpovědět. Zvyšte nastavení maximálního počtu tokenů, nebo snižte míru uvažování, pokud je nastavená."
+        },
+        "unexpected_error": {
+            "message": "Neočekávaná chyba z Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Do Mistral AI lze posílat jen obrázky a PDF, a {path} není ani jedno."
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} používá model, který se vyřazuje",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Přepnout {name} na {replacement}",
+                        "description": "{name} je nastaven na model {model}, který Mistral AI vyřazuje {date}. Po tomto datu přestane odpovídat.\n\nMistral AI uvádí jako náhradu {replacement}. Potvrzením přepnete {name} na něj.\n\nNic jiného se u {name} nemění a kdykoli si můžete sami zvolit jiný model tím, že jej znovu nastavíte."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} používá model, který se vyřazuje",
+            "description": "{name} je nastaven na model {model}, který Mistral AI vyřazuje {date}. Po tomto datu přestane odpovídat.\n\nMistral AI pro něj neuvedl žádnou náhradu, takže není na co automaticky přepnout. Nastavte {name} znovu a zvolte jiný model — rozbalovací seznam označuje vše ostatní, co se také vyřazuje, takže na stejný problém nenarazíte podruhé."
+        }
+    }
+}

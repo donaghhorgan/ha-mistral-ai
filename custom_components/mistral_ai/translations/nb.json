@@ -1,0 +1,243 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Skriv inn API-nøkkelen din for Mistral AI for å sette opp samtaleagenten.",
+                "data": {
+                    "api_key": "API-nøkkel"
+                }
+            },
+            "reauth_confirm": {
+                "description": "API-nøkkelen for Mistral AI for {name} virker ikke lenger. Skriv inn en ny.",
+                "data": {
+                    "api_key": "API-nøkkel"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Klarte ikke å koble til API-et til Mistral AI. Sjekk internettforbindelsen din og prøv igjen.",
+            "invalid_auth": "Ugyldig API-nøkkel. Sjekk API-nøkkelen din for Mistral AI og prøv igjen.",
+            "unknown": "Det oppsto en uventet feil. Prøv igjen.",
+            "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang."
+        },
+        "abort": {
+            "reauth_successful": "Ny autentisering var vellykket."
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Legg til samtaleagent",
+                "reconfigure": "Konfigurer samtaleagenten på nytt"
+            },
+            "entry_type": "Samtaleagent",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurer samtaleagenten til Mistral AI.",
+                    "data": {
+                        "name": "Navn",
+                        "model": "Modell",
+                        "temperature": "Temperatur",
+                        "max_tokens": "Maksimalt antall tokens per svar",
+                        "prompt": "Instruksjoner",
+                        "llm_hass_api": "Styre Home Assistant",
+                        "web_search": "Nettsøk (beta)",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Resonnering"
+                    },
+                    "data_description": {
+                        "temperature": "Høyere verdier gjør svarene mer kreative, lavere verdier mer fokuserte.",
+                        "prompt": "Instruksjoner til modellen om hvordan den skal oppføre seg.",
+                        "llm_hass_api": "La agenten styre enhetene i hjemmet ditt.",
+                        "reasoning_effort": "Lar modellen tenke før den svarer. Tenkingen regnes med i det maksimale antallet tokens nedenfor, så en lav grense kan bruke opp hele svaret før det begynner — øk den hvis svarene kommer tomme tilbake.\n\nVises bare for modeller som støtter det. La stå tom for å bruke modellens egen standardverdi.",
+                        "web_search": "Lar agenten slå opp det den ikke vet. Mistral fakturerer per søk, og premiumnivået koster mer, så la stå tom for å slå det av.\n\nBeta: dette går via conversations-API-et til Mistral, som er i offentlig forhåndsvisning og kan endre seg.",
+                        "top_p": "Et alternativ til temperatur: modellen ser bare på de mest sannsynlige ordene der sannsynlighetene summerer seg til denne verdien. 1.0 lar utvalget være urørt. Senk enten denne verdien eller temperaturen, ikke begge samtidig."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Innstillingene for samtaleagenten ble lagret.",
+                "entry_not_loaded": "Kan ikke legge til en samtaleagent mens integrasjonen ikke er lastet inn.",
+                "cannot_connect": "Klarte ikke å koble til API-et til Mistral AI.",
+                "invalid_auth": "Den lagrede API-nøkkelen for Mistral AI ble avvist. Konfigurer integrasjonen på nytt.",
+                "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang."
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "Legg til KI-oppgave",
+                "reconfigure": "Konfigurer KI-oppgaven på nytt"
+            },
+            "entry_type": "KI-oppgave",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurer Mistral AI-oppgaven.",
+                    "data": {
+                        "name": "Navn",
+                        "model": "Modell",
+                        "temperature": "Temperatur",
+                        "max_tokens": "Maksimalt antall tokens per svar",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Resonnering"
+                    },
+                    "data_description": {
+                        "temperature": "Høyere verdier gjør svarene mer kreative, lavere verdier mer fokuserte.",
+                        "top_p": "Et alternativ til temperatur: modellen ser bare på de mest sannsynlige ordene der sannsynlighetene summerer seg til denne verdien. 1.0 lar utvalget være urørt. Senk enten denne verdien eller temperaturen, ikke begge samtidig.",
+                        "reasoning_effort": "Lar modellen tenke før den svarer. Tenkingen regnes med i det maksimale antallet tokens ovenfor, så en lav grense kan bruke opp hele svaret før det begynner — øk den hvis oppgaver feiler uten strukturerte data.\n\nVises bare for modeller som støtter det. La stå tom for å bruke modellens egen standardverdi."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Innstillingene for KI-oppgaven ble lagret.",
+                "entry_not_loaded": "Kan ikke legge til en KI-oppgave mens integrasjonen ikke er lastet inn.",
+                "cannot_connect": "Klarte ikke å koble til API-et til Mistral AI.",
+                "invalid_auth": "Den lagrede API-nøkkelen for Mistral AI ble avvist. Konfigurer integrasjonen på nytt.",
+                "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang."
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "Legg til tale til tekst",
+                "reconfigure": "Konfigurer tale til tekst på nytt"
+            },
+            "entry_type": "Tale til tekst",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurer tale til tekst for Mistral AI.",
+                    "data": {
+                        "name": "Navn",
+                        "model": "Modell",
+                        "temperature": "Temperatur"
+                    },
+                    "data_description": {
+                        "model": "Bare modeller som kan transkribere lyd, vises.",
+                        "temperature": "Høyere verdier lar modellen gjette friere på utydelig lyd."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Innstillingene for tale til tekst ble lagret.",
+                "entry_not_loaded": "Kan ikke legge til tale til tekst mens integrasjonen ikke er lastet inn.",
+                "cannot_connect": "Klarte ikke å koble til API-et til Mistral AI.",
+                "invalid_auth": "Den lagrede API-nøkkelen for Mistral AI ble avvist. Konfigurer integrasjonen på nytt.",
+                "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang."
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Legg til tekst til tale",
+                "reconfigure": "Konfigurer tekst til tale på nytt"
+            },
+            "entry_type": "Tekst til tale",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurer tekst til tale for Mistral AI.",
+                    "data": {
+                        "name": "Navn",
+                        "model": "Modell",
+                        "voice": "Stemme"
+                    },
+                    "data_description": {
+                        "model": "Bare modeller som kan generere tale, vises.",
+                        "voice": "Stemmen som brukes når den som kaller, ikke ber om en bestemt."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Innstillingene for tekst til tale ble lagret.",
+                "entry_not_loaded": "Kan ikke legge til tekst til tale mens integrasjonen ikke er lastet inn.",
+                "cannot_connect": "Klarte ikke å koble til API-et til Mistral AI.",
+                "invalid_auth": "Den lagrede API-nøkkelen for Mistral AI ble avvist. Konfigurer integrasjonen på nytt.",
+                "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang.",
+                "no_voices": "Klarte ikke å hente stemmene på Mistral AI-kontoen din. Tekst til tale krever en stemme, så den kan ikke settes opp før listen er lastet inn — prøv igjen om et øyeblikk."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standard",
+                "web_search_premium": "Premium (koster mer per søk)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Av",
+                "high": "På"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Feil i kommunikasjonen med Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "Vedlegget {path} finnes ikke."
+        },
+        "attachment_too_large": {
+            "message": "{path} er på {size} MB, og vedlegg er begrenset til {limit} MB."
+        },
+        "empty_image": {
+            "message": "Mistral AI returnerte et tomt bilde. Prøv igjen."
+        },
+        "forbidden": {
+            "message": "Mistral AI avviste forespørselen. Kontoen din har kanskje ikke tilgang til denne modellen eller funksjonen."
+        },
+        "image_download_error": {
+            "message": "Feil ved nedlasting av det genererte bildet: {error}"
+        },
+        "invalid_api_key": {
+            "message": "API-nøkkelen for Mistral AI ble avvist. Konfigurer integrasjonen på nytt."
+        },
+        "invalid_request": {
+            "message": "Mistral AI avviste forespørselen: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI returnerte ikke gyldige strukturerte data. Prøv å forenkle strukturen, eller spør på nytt."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI returnerte ingen bilder. {model} kan kanskje ikke generere bilder."
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI fortsatte å be om verktøy og ble ikke ferdig innen {limit} runder. Prøv å formulere forespørselen på nytt, eller del den opp i mindre trinn."
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI returnerte ingen lyd for dette svaret. Prøv igjen."
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI returnerte lyd som ikke kunne dekodes. Prøv igjen."
+        },
+        "speech_transport_error": {
+            "message": "Mistet forbindelsen til Mistral AI under talegenereringen: {error}"
+        },
+        "rate_limited": {
+            "message": "Begrenset av Mistral AI. Prøv igjen om et øyeblikk."
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI gikk tom for plass før den rakk å svare. Øk innstillingen for maksimalt antall tokens, eller senk resonneringen hvis den er satt."
+        },
+        "unexpected_error": {
+            "message": "Uventet feil fra Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Bare bilder og PDF-filer kan sendes til Mistral AI, og {path} er ingen av delene."
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} bruker en modell som fases ut",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Bytt {name} til {replacement}",
+                        "description": "{name} er satt opp til å bruke {model}, som Mistral AI faser ut {date}. Etter den datoen slutter den å svare.\n\nMistral AI oppgir {replacement} som erstatter. Bekreft for å bytte {name} over til den.\n\nIngenting annet ved {name} endres, og du kan når som helst velge en annen modell selv ved å konfigurere den på nytt."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} bruker en modell som fases ut",
+            "description": "{name} er satt opp til å bruke {model}, som Mistral AI faser ut {date}. Etter den datoen slutter den å svare.\n\nMistral AI har ikke oppgitt noen erstatter for denne, så det finnes ingenting å bytte automatisk til. Konfigurer {name} på nytt og velg en annen modell — nedtrekkslisten merker alt annet som også fases ut, slik at du ikke havner i samme problem to ganger."
+        }
+    }
+}
