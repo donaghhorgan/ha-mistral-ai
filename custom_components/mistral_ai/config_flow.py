@@ -20,6 +20,7 @@ from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -49,6 +50,7 @@ from .const import (
     CONF_TOP_P,
     CONF_VOICE,
     CONF_WEB_SEARCH,
+    CONF_WEB_SEARCH_CITATIONS,
     DEFAULT_AI_TASK_NAME,
     DEFAULT_CONVERSATION_NAME,
     DEFAULT_MAX_TOKENS,
@@ -58,6 +60,7 @@ from .const import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DEFAULT_TTS_NAME,
+    DEFAULT_WEB_SEARCH_CITATIONS,
     DOMAIN,
     MAX_TEMPERATURE,
     MAX_TOP_P,
@@ -690,6 +693,27 @@ def _subentry_schema(
                 ),
             }
         )
+
+        # Offered only once web search is on, because with it off the setting
+        # has nothing to describe -- the request never reaches the endpoint
+        # that searches. Keyed on the stored tier for the same reason
+        # reasoning effort is keyed on the stored model: a config flow cannot
+        # re-render when a dropdown changes, so the checkbox appears the next
+        # time the form is opened.
+        #
+        # That ordering is why the default is applied at request time rather
+        # than only here. The turn that switches search on submits no value
+        # for this at all, and those agents must still attribute their
+        # answers.
+        if options.get(CONF_WEB_SEARCH) in WEB_SEARCH_TOOLS:
+            schema[
+                vol.Optional(
+                    CONF_WEB_SEARCH_CITATIONS,
+                    default=options.get(
+                        CONF_WEB_SEARCH_CITATIONS, DEFAULT_WEB_SEARCH_CITATIONS
+                    ),
+                )
+            ] = BooleanSelector()
 
     return schema
 

@@ -49,6 +49,7 @@
                         "prompt": "Instrukcje",
                         "llm_hass_api": "Sterowanie Home Assistant",
                         "web_search": "Wyszukiwanie w sieci (beta)",
+                        "web_search_citations": "Podawaj źródła z wyszukiwania",
                         "top_p": "Top-p",
                         "reasoning_effort": "Rozumowanie"
                     },
@@ -58,6 +59,7 @@
                         "llm_hass_api": "Pozwól agentowi sterować urządzeniami w Twoim domu.",
                         "reasoning_effort": "Pozwala modelowi pomyśleć, zanim odpowie. Myślenie jest wliczane do maksymalnej liczby tokenów poniżej, więc niski limit może zużyć całą odpowiedź, zanim się zacznie — zwiększ go, jeśli odpowiedzi wracają puste.\n\nWidoczne tylko dla modeli, które to obsługują. Pozostaw nieustawione, aby użyć wartości domyślnej modelu.",
                         "web_search": "Pozwala agentowi wyszukać to, czego nie wie. Mistral nalicza opłatę za każde wyszukiwanie, a poziom premium kosztuje więcej, więc pozostaw nieustawione, aby to wyłączyć.\n\nBeta: działa na API conversations firmy Mistral, które jest w publicznej wersji zapoznawczej i może się zmienić.",
+                        "web_search_citations": "Prosi agenta, aby podał, skąd pochodzi wyszukana odpowiedź, dzięki czemu odróżnisz ją od odpowiedzi z pamięci. Dotyczy tylko odpowiedzi, przy których wyszukiwanie faktycznie się odbyło.\n\nTo instrukcja dla modelu, a nie gwarancja, więc może zostać zignorowana. Źródła są wymieniane w samej odpowiedzi, którą asystent głosowy czyta na głos, więc wyłącz to, jeśli wolisz ich nie słyszeć.",
                         "top_p": "Alternatywa dla temperatury: model bierze pod uwagę tylko najbardziej prawdopodobne słowa, których prawdopodobieństwa sumują się do tej wartości. 1.0 pozostawia losowanie bez zmian. Obniż tę wartość albo temperaturę, ale nie obie naraz."
                     }
                 }

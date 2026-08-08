@@ -206,6 +206,21 @@ It works alongside device control: Mistral runs the search itself and hands
 back any Home Assistant tool calls for the integration to run, so one turn can
 both check the forecast and turn on a light.
 
+**Name web search sources** asks the agent to say where a looked-up answer came
+from, so a reply fetched seconds ago can be told apart from one recalled from
+training. It appears once a tier is chosen and is on by default; nothing is
+added to replies where no search ran. The phrasing is left to the model
+because the same text is displayed and read aloud, and there is no wording
+that suits both — a publication name reads and speaks well but cannot be
+derived from every domain, a bare domain speaks badly, and a count of sources
+says little. What the model is told is to attribute without writing URLs,
+links or footnote markers.
+
+It is an instruction rather than a mechanism, so a model may ignore it — Home
+Assistant's own OpenAI integration records exactly that about its equivalent,
+and how reliable this is here has not yet been measured against a live model.
+Turn it off if you would rather not hear sources read out.
+
 Marked beta for one reason, worth knowing before turning it on:
 
 - Web search is a built-in connector, and connectors only run on Mistral's

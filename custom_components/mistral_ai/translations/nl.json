@@ -49,6 +49,7 @@
                         "prompt": "Instructies",
                         "llm_hass_api": "Home Assistant bedienen",
                         "web_search": "Zoeken op het web (bèta)",
+                        "web_search_citations": "Bronnen van de zoekopdracht noemen",
                         "top_p": "Top-p",
                         "reasoning_effort": "Redeneren"
                     },
@@ -58,6 +59,7 @@
                         "llm_hass_api": "Sta de agent toe apparaten in je huis te bedienen.",
                         "reasoning_effort": "Laat het model nadenken voordat het antwoordt. Het nadenken telt mee voor het maximum aantal tokens hieronder, dus een lage limiet kan het hele antwoord opsouperen voordat het begint — verhoog hem als antwoorden leeg terugkomen.\n\nAlleen zichtbaar bij modellen die dit ondersteunen. Laat leeg om de standaardwaarde van het model te gebruiken.",
                         "web_search": "Laat de agent opzoeken wat hij niet weet. Mistral rekent per zoekopdracht af, en het premiumniveau kost meer, dus laat leeg om het uit te zetten.\n\nBèta: dit draait op Mistrals conversations-API, die in publieke preview is en kan veranderen.",
+                        "web_search_citations": "Vraagt de agent te vertellen waar een opgezocht antwoord vandaan komt, zodat je het kunt onderscheiden van een antwoord uit het geheugen. Heeft alleen effect op antwoorden waarbij daadwerkelijk is gezocht.\n\nDit is een instructie aan het model en geen garantie, dus die kan genegeerd worden. De bronnen worden in het antwoord zelf genoemd, dat een spraakassistent hardop voorleest, dus zet het uit als je ze liever niet hoort.",
                         "top_p": "Een alternatief voor temperatuur: het model kijkt alleen naar de waarschijnlijkste woorden waarvan de kansen tot deze waarde optellen. 1.0 laat de selectie ongemoeid. Verlaag deze waarde óf de temperatuur, niet allebei tegelijk."
                     }
                 }

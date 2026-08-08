@@ -49,6 +49,7 @@
                         "prompt": "Instructions",
                         "llm_hass_api": "Contrôler Home Assistant",
                         "web_search": "Recherche web (bêta)",
+                        "web_search_citations": "Nommer les sources des recherches web",
                         "top_p": "Top-p",
                         "reasoning_effort": "Raisonnement"
                     },
@@ -58,6 +59,7 @@
                         "llm_hass_api": "Autoriser l'agent à contrôler les appareils de votre domicile.",
                         "reasoning_effort": "Laisse le modèle réfléchir avant de répondre. La réflexion est décomptée du nombre maximal de jetons ci-dessous, donc une limite basse peut consommer toute la réponse avant qu'elle ne commence — augmentez-la si les réponses reviennent vides.\n\nAffiché uniquement pour les modèles qui le prennent en charge. Laissez vide pour utiliser la valeur par défaut du modèle.",
                         "web_search": "Permet à l'agent de chercher ce qu'il ne sait pas. Facturé par recherche par Mistral, et le niveau premium coûte plus cher : laissez vide pour le désactiver.\n\nBêta : ceci utilise l'API Conversations de Mistral, en préversion publique et susceptible d'évoluer.",
+                        "web_search_citations": "Demande à l'agent d'indiquer d'où provient une réponse issue d'une recherche, afin de la distinguer d'une réponse de mémoire. N'affecte que les réponses pour lesquelles une recherche a réellement eu lieu.\n\nC'est une instruction donnée au modèle, pas une garantie : il peut l'ignorer. Les sources sont nommées dans la réponse elle-même, qu'un assistant vocal lit à voix haute — désactivez si vous préférez ne pas les entendre.",
                         "top_p": "Une alternative à la température : le modèle ne considère que les mots les plus probables dont les probabilités atteignent cette somme. 1.0 laisse l'échantillonnage inchangé. Baissez cette valeur ou la température, mais pas les deux à la fois."
                     }
                 }

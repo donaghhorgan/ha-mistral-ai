@@ -20,12 +20,15 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.mistral_ai.const import (
     CONF_MAX_TOKENS,
     CONF_MODEL,
+    CONF_PROMPT,
     CONF_REASONING_EFFORT,
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_WEB_SEARCH,
+    CONF_WEB_SEARCH_CITATIONS,
     MAX_TOOL_ITERATIONS,
     SUBENTRY_TYPE_CONVERSATION,
+    WEB_SEARCH_CITATIONS_PROMPT,
 )
 
 from .helpers import make_chunk, make_sdk_error, make_tool_call, stream_of
@@ -767,6 +770,144 @@ async def test_web_search_citations_do_not_break_the_reply(
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "weather")) == "It is 21 degrees in Dublin."
+
+
+async def test_web_search_asks_the_model_to_name_its_sources(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The attribution instruction rides along on the system prompt.
+
+    Default on, and asserted on a subentry that stores no value for it: the
+    turn that switches web search on cannot have submitted one, because the
+    checkbox is not on the form until the next time it is opened. Those agents
+    still have to attribute, so the default is applied at request time rather
+    than only in the form.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok")
+        )
+    )
+    _enable_web_search(hass, init_integration)
+    await hass.async_block_till_done()
+
+    await converse(hass, "weather")
+
+    request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
+    assert WEB_SEARCH_CITATIONS_PROMPT in request["instructions"]
+
+
+async def test_web_search_citations_can_be_turned_off(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Nothing is appended once the option is cleared.
+
+    The whole reason this is an option rather than a default prompt edit: a
+    phrase on every searched reply is useful to some people and grating to
+    others, and there has to be a way off it that does not mean rewriting the
+    instructions.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok")
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_WEB_SEARCH_CITATIONS: False})
+    await hass.async_block_till_done()
+
+    await converse(hass, "weather")
+
+    request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
+    assert WEB_SEARCH_CITATIONS_PROMPT not in (request["instructions"] or "")
+
+
+async def test_web_search_citations_keep_the_configured_prompt(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The instruction is added to the user's prompt, not put in place of it.
+
+    Appending to a string that the endpoint takes as one block is easy to get
+    wrong in the direction that loses the original, and losing it is silent --
+    the agent simply stops behaving as configured.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="ok")
+        )
+    )
+    _enable_web_search(hass, init_integration, **{CONF_PROMPT: "Answer like a pirate."})
+    await hass.async_block_till_done()
+
+    await converse(hass, "weather")
+
+    instructions = mock_client.beta.conversations.start_stream_async.await_args.kwargs[
+        "instructions"
+    ]
+    assert "Answer like a pirate." in instructions
+    assert WEB_SEARCH_CITATIONS_PROMPT in instructions
+
+
+async def test_web_search_citations_are_not_appended_twice(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A second tool-calling pass carries one copy, not two.
+
+    The instructions are rebuilt from the chat log on every pass of the loop,
+    so an implementation that appended to the stored prompt instead would
+    accumulate a copy per round trip.
+    """
+    streams = [
+        _conversation_stream(
+            _event(
+                type="function.call.delta",
+                tool_call_id="call-1",
+                name="test_tool",
+                arguments="{}",
+            )
+        ),
+        _conversation_stream(_event(type="message.output.delta", content="Done.")),
+    ]
+
+    async def _next_stream(*args: object, **kwargs: object):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_next_stream
+    )
+    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    await hass.async_block_till_done()
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        await converse(hass, "turn on the light and check the weather")
+
+    second = mock_client.beta.conversations.start_stream_async.await_args_list[1].kwargs
+    assert second["instructions"].count(WEB_SEARCH_CITATIONS_PROMPT) == 1
+
+
+async def test_no_citation_instruction_without_web_search(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """An agent that cannot search is not told to cite anything.
+
+    It has nothing to cite, and the instruction would spend tokens on every
+    request asking for attribution the model could only invent.
+    """
+    await converse(hass)
+
+    messages = mock_client.chat.stream_async.await_args.kwargs["messages"]
+    assert not any(
+        WEB_SEARCH_CITATIONS_PROMPT in str(message.get("content", ""))
+        for message in messages
+    )
 
 
 async def test_a_validation_error_reaches_the_user_readably(

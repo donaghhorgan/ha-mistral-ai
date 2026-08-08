@@ -49,6 +49,7 @@
                         "prompt": "Istruzioni",
                         "llm_hass_api": "Controlla Home Assistant",
                         "web_search": "Ricerca web (beta)",
+                        "web_search_citations": "Cita le fonti della ricerca web",
                         "top_p": "Top-p",
                         "reasoning_effort": "Ragionamento"
                     },
@@ -58,6 +59,7 @@
                         "llm_hass_api": "Consenti all'agente di controllare i dispositivi di casa tua.",
                         "reasoning_effort": "Lascia che il modello pensi prima di rispondere. Il pensiero viene conteggiato nel numero massimo di token qui sotto, quindi un limite basso può consumare l'intera risposta prima che inizi — alzalo se le risposte tornano vuote.\n\nMostrato solo per i modelli che lo supportano. Lascia non impostato per usare il valore predefinito del modello.",
                         "web_search": "Consente all'agente di cercare ciò che non sa. Mistral lo fattura a ricerca, e il livello premium costa di più: lascia non impostato per disattivarlo.\n\nBeta: si basa sull'API Conversations di Mistral, in anteprima pubblica e soggetta a modifiche.",
+                        "web_search_citations": "Chiede all'agente di indicare da dove proviene una risposta cercata, così da distinguerla da una risposta a memoria. Riguarda solo le risposte in cui una ricerca è stata effettivamente eseguita.\n\nÈ un'istruzione al modello, non una garanzia: può essere ignorata. Le fonti vengono citate nella risposta stessa, che un assistente vocale legge ad alta voce, quindi disattivalo se preferisci non sentirle.",
                         "top_p": "Un'alternativa alla temperatura: il modello considera solo le parole più probabili le cui probabilità sommano a questo valore. 1.0 lascia il campionamento invariato. Abbassa questo valore oppure la temperatura, non entrambi insieme."
                     }
                 }
