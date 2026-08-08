@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "Chiave API"
                 }
+            },
+            "reconfigure": {
+                "description": "Inserisci la chiave API di Mistral AI da usare d'ora in poi. La chiave salvata non viene mostrata, quindi inserisci per intero quella nuova. I tuoi agenti conversazionali, le attività IA e le entità vocali restano invariati.",
+                "data": {
+                    "api_key": "Chiave API"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI ha rifiutato la richiesta. La chiave API è valida, quindi una nuova non servirà — verifica su console.mistral.ai che il tuo account abbia accesso."
         },
         "abort": {
-            "reauth_successful": "La nuova autenticazione è riuscita."
+            "reauth_successful": "La nuova autenticazione è riuscita.",
+            "reconfigure_successful": "La chiave API di Mistral AI è stata aggiornata."
         }
     },
     "config_subentries": {

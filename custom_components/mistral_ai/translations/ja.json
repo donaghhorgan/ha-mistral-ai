@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API キー"
                 }
+            },
+            "reconfigure": {
+                "description": "これから使用する Mistral AI の API キーを入力してください。保存済みのキーは表示されないため、新しいキーを最初から入力してください。会話エージェント、AI タスク、音声エンティティはそのまま維持されます。",
+                "data": {
+                    "api_key": "API キー"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。"
         },
         "abort": {
-            "reauth_successful": "再認証に成功しました。"
+            "reauth_successful": "再認証に成功しました。",
+            "reconfigure_successful": "Mistral AI の API キーを更新しました。"
         }
     },
     "config_subentries": {
