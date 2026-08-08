@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API 密钥"
                 }
+            },
+            "reconfigure": {
+                "description": "请输入今后要使用的 Mistral AI API 密钥。已保存的密钥不会显示，请完整输入新的密钥。你的对话代理、AI 任务和语音实体将保持不变。",
+                "data": {
+                    "api_key": "API 密钥"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。"
         },
         "abort": {
-            "reauth_successful": "重新认证成功。"
+            "reauth_successful": "重新认证成功。",
+            "reconfigure_successful": "Mistral AI API 密钥已更新。"
         }
     },
     "config_subentries": {

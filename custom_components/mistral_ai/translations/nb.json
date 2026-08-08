@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API-nøkkel"
                 }
+            },
+            "reconfigure": {
+                "description": "Skriv inn API-nøkkelen for Mistral AI som skal brukes fra nå av. Den lagrede nøkkelen vises ikke, så skriv inn den nye i sin helhet. Samtaleagentene, AI-oppgavene og taleenhetene dine beholdes som de er.",
+                "data": {
+                    "api_key": "API-nøkkel"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI avviste forespørselen. API-nøkkelen er gyldig, så en ny hjelper ikke — sjekk på console.mistral.ai om kontoen din har tilgang."
         },
         "abort": {
-            "reauth_successful": "Ny autentisering var vellykket."
+            "reauth_successful": "Ny autentisering var vellykket.",
+            "reconfigure_successful": "API-nøkkelen for Mistral AI ble oppdatert."
         }
     },
     "config_subentries": {

@@ -97,6 +97,17 @@ models and prompts against the same key.
 
 To change an existing one, click "Configure" next to it.
 
+### Changing the API key
+
+1. Go to Settings → Devices & Services → Mistral AI
+2. Open the three-dot menu on the Mistral AI entry itself and choose
+   "Reconfigure"
+3. Enter the new key, then click "Submit"
+
+The key is checked against the API before it is saved, and everything set up
+underneath it is kept — deleting the entry to change the key would take every
+agent, task and speech entity with it.
+
 ### Configuration options
 
 - **Model**: Chosen from the models your API key can actually reach — the
