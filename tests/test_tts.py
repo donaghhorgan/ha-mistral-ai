@@ -9,6 +9,7 @@ import gc
 import json
 import logging
 from contextlib import aclosing, contextmanager
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
@@ -20,6 +21,7 @@ from homeassistant.components import tts
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.typing import UNDEFINED
+from packaging.version import Version
 
 from custom_components.mistral_ai import tts as tts_module
 from custom_components.mistral_ai.const import CONF_MODEL, VOICE_PAGE_SIZE
@@ -419,6 +421,33 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
             ["The kit", "chen ligh", "t is on and the hallway light is off."],
             ["The kitchen light is on and the hallway light is off."],
         ),
+        # A title is not a sentence end. The regex this replaced split here,
+        # because nothing about "r." tells a lookbehind it is part of a name,
+        # and request two began "Seuss." with no idea what preceded it.
+        (
+            [
+                "The author published under the pen name Dr. Seuss for most "
+                "of his career."
+            ],
+            [
+                "The author published under the pen name Dr. Seuss for most "
+                "of his career."
+            ],
+        ),
+        # Chinese has no space after its full stop, so the old regex found no
+        # boundary at all and spoke a whole reply as one request. The
+        # integration ships a zh-Hans translation and an agent answers in
+        # whatever language it is asked in, so this was reachable.
+        (
+            ["天气很好。明天会下雨。后天转晴，气温回升到二十度左右。"],
+            ["天气很好。明天会下雨。后天转晴，气温回升到二十度左右。"],
+        ),
+        # Markdown is written, not spoken. The model emits it and the library
+        # strips it, so the asterisks never reach the speech endpoint.
+        (
+            ["The hallway light is **on** and the porch light is *off* now."],
+            ["The hallway light is on and the porch light is off now."],
+        ),
         # Nothing said means nothing spoken.
         ([], []),
     ],
@@ -468,6 +497,18 @@ async def test_streaming_yields_audio_as_it_arrives(
     assert "Bearer" in route.calls.last.request.headers["authorization"]
 
 
+@pytest.mark.skipif(
+    Version(version("sentence-stream")) < Version("1.3"),
+    reason=(
+        "sentence_stream 1.1.0, which Home Assistant 2025.8.0 pins exactly, "
+        "holds a boundary that lands at the end of a streamed chunk until "
+        "more text arrives, so this reply goes out as one request rather "
+        "than two. Speech still works and nothing is lost -- the first audio "
+        "just starts later, which is the whole point of splitting. Skipped "
+        "rather than loosened, so the assertion keeps its teeth on every "
+        "version that can honour it."
+    ),
+)
 @respx.mock
 async def test_each_sentence_is_spoken_as_it_is_written(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
