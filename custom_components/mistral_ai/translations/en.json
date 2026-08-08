@@ -56,6 +56,7 @@
                 }
             },
             "abort": {
+                "reconfigure_successful": "Conversation agent settings saved.",
                 "entry_not_loaded": "Cannot add a conversation agent while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration.",
@@ -87,6 +88,7 @@
                 }
             },
             "abort": {
+                "reconfigure_successful": "AI task settings saved.",
                 "entry_not_loaded": "Cannot add an AI task while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration.",
@@ -114,6 +116,7 @@
                 }
             },
             "abort": {
+                "reconfigure_successful": "Speech-to-text settings saved.",
                 "entry_not_loaded": "Cannot add speech-to-text while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration.",
@@ -141,6 +144,7 @@
                 }
             },
             "abort": {
+                "reconfigure_successful": "Text-to-speech settings saved.",
                 "entry_not_loaded": "Cannot add text-to-speech while the integration is not loaded.",
                 "cannot_connect": "Failed to connect to the Mistral AI API.",
                 "invalid_auth": "The stored Mistral AI API key was rejected. Please reconfigure the integration.",
