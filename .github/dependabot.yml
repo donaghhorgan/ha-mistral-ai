@@ -4,6 +4,41 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Update uv.lock and leave every floor alone.
+    #
+    # The default for a direct dependency is `increase`, which rewrites the
+    # lower bound in pyproject.toml as well. That conflates two separate
+    # decisions. The lock records what this was tested against; a floor
+    # asserts that anything older will not work, which is a claim about what
+    # the integration supports rather than an upgrade -- exactly the reason
+    # homeassistant is kept off the allowlist below.
+    #
+    # It also arrived broken every time. The mistralai floor is restated in
+    # six places, and Dependabot knows about one of them, so
+    # check_manifest_consistency.py failed and every mistralai bump landed
+    # with lint red and needed a hand-written follow-up commit before it
+    # could merge. That was #164, and it would have been every release after
+    # it.
+    #
+    # Two documented limitations of this strategy, neither of which reaches
+    # this repository:
+    #
+    #   Transitive dependencies are not updated under lockfile-only for uv
+    #   (dependabot-core#14073, open). The allowlist below already restricts
+    #   this to named direct dependencies, so nothing transitive was in
+    #   scope to lose.
+    #
+    #   A capped dependency can stop receiving security updates. The three
+    #   pinned requirements here -- hassil, home-assistant-intents and
+    #   pytest-homeassistant-custom-component -- are on the ignore list or
+    #   deliberately absent already, so none of them is Dependabot's to
+    #   raise either way.
+    #
+    # Support for versioning-strategy on the uv ecosystem was added in
+    # dependabot-core#12162. Worth confirming on the Dependabot run page
+    # after any change here: a rejected config fails silently, which is the
+    # same failure mode the allowlist comments warn about below.
+    versioning-strategy: lockfile-only
     # An allowlist, not a blocklist, because the blocklist below can never be
     # complete. Home Assistant 2026.2.3 pins 46 packages exactly and its
     # dependencies pin more beneath that, so the set of things that cannot
