@@ -419,6 +419,33 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
             ["The kit", "chen ligh", "t is on and the hallway light is off."],
             ["The kitchen light is on and the hallway light is off."],
         ),
+        # A title is not a sentence end. The regex this replaced split here,
+        # because nothing about "r." tells a lookbehind it is part of a name,
+        # and request two began "Seuss." with no idea what preceded it.
+        (
+            [
+                "The author published under the pen name Dr. Seuss for most "
+                "of his career."
+            ],
+            [
+                "The author published under the pen name Dr. Seuss for most "
+                "of his career."
+            ],
+        ),
+        # Chinese has no space after its full stop, so the old regex found no
+        # boundary at all and spoke a whole reply as one request. The
+        # integration ships a zh-Hans translation and an agent answers in
+        # whatever language it is asked in, so this was reachable.
+        (
+            ["天气很好。明天会下雨。后天转晴，气温回升到二十度左右。"],
+            ["天气很好。明天会下雨。后天转晴，气温回升到二十度左右。"],
+        ),
+        # Markdown is written, not spoken. The model emits it and the library
+        # strips it, so the asterisks never reach the speech endpoint.
+        (
+            ["The hallway light is **on** and the porch light is *off* now."],
+            ["The hallway light is on and the porch light is off now."],
+        ),
         # Nothing said means nothing spoken.
         ([], []),
     ],

@@ -98,7 +98,6 @@ from custom_components.mistral_ai.const import (  # noqa: E402
     TTS_AUDIO_FORMAT,
 )
 from custom_components.mistral_ai.tts import (  # noqa: E402
-    _SENTENCE_END,
     MIN_SPEECH_CHARS,
     _sentences,
 )
@@ -120,10 +119,18 @@ STREAM_PIECE = 12
 
 # Boundary patterns to compare against the shipped one.
 #
-# _SENTENCE_END is the shipped split: a terminator followed by whitespace,
-# with a negative lookbehind ruling out dotted abbreviations ("e.g.", "U.S.").
-# NAIVE_END is the same thing without the lookbehind, so the difference
-# between the two rows is exactly what the lookbehind buys.
+# The shipped split is no longer a pattern: sentence boundaries come from
+# `sentence_stream`, the library `elevenlabs` uses, so there is nothing here
+# to point a regex at. SENTENCE_END stands in for it -- a terminator followed
+# by whitespace, which is what this integration used before -- and its rows
+# measure what the old rule would have done. NAIVE_END drops the abbreviation
+# lookbehind that rule carried, so the gap between those two rows is what the
+# lookbehind bought when it existed.
+#
+# Neither can split Chinese or Japanese, where "。" is not followed by
+# whitespace. That is the gap the library closed, and it does not show up in
+# these cases because they are all English.
+SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\.\w\.)\s+")
 NAIVE_END = re.compile(r"(?<=[.!?])\s+")
 
 # Paragraphs only: a blank line. The coarsest split that still starts audio
@@ -143,18 +150,25 @@ class Strategy:
     note: str
 
 
+# `shipped` is the real thing: its chunks come from calling `_sentences`, not
+# from re-deriving them here. Everything else is a comparison built from a
+# pattern, which is why only this one can be trusted to describe what runs in
+# production.
+SHIPPED = "shipped"
+
 STRATEGIES: tuple[Strategy, ...] = (
+    Strategy(SHIPPED, None, MIN_SPEECH_CHARS, "sentence_stream, what ships today"),
     Strategy("whole", None, 0, "one request for the whole reply"),
-    Strategy("sentences-0", _SENTENCE_END, 0, "every boundary, no minimum length"),
-    Strategy("sentences-40", _SENTENCE_END, MIN_SPEECH_CHARS, "the shipped split"),
+    Strategy("sentences-0", SENTENCE_END, 0, "every boundary, no minimum length"),
+    Strategy("sentences-40", SENTENCE_END, MIN_SPEECH_CHARS, "the pre-library split"),
     Strategy(
         "naive-40",
         NAIVE_END,
         MIN_SPEECH_CHARS,
         "the shipped split without the abbreviation lookbehind",
     ),
-    Strategy("sentences-120", _SENTENCE_END, 120, "sentences grouped to ~a clause set"),
-    Strategy("sentences-300", _SENTENCE_END, 300, "sentences grouped to ~a paragraph"),
+    Strategy("sentences-120", SENTENCE_END, 120, "sentences grouped to ~a clause set"),
+    Strategy("sentences-300", SENTENCE_END, 300, "sentences grouped to ~a paragraph"),
     Strategy("paragraphs", PARAGRAPH_END, 0, "split on blank lines only"),
 )
 
@@ -212,11 +226,10 @@ CASES: dict[str, str] = {
 def regroup(text: str, strategy: Strategy, piece: int = STREAM_PIECE) -> list[str]:
     """Return the chunks a strategy would issue requests for.
 
-    A mirror of `_sentences`, parameterised by pattern and floor rather than
-    hard-coded to the shipped ones, and synchronous so it can be used without
-    an event loop. `verify_mirror` below asserts the two agree on every case at
-    the shipped settings, so this is a measurement of the real behaviour rather
-    than of a reimplementation that drifted.
+    Comparisons only. The shipped split is `sentence_stream` and is measured
+    by calling `_sentences` directly -- see SHIPPED above -- because a
+    reimplementation of a library is a reimplementation that will drift.
+    What this builds is the alternatives: a pattern plus a floor.
 
     Fed in `piece`-sized fragments for the same reason the real one is: the
     stream arrives mid-word, and a splitter handed the whole string never sees
@@ -258,25 +271,15 @@ async def _pieces(text: str, piece: int = STREAM_PIECE) -> AsyncGenerator[str]:
         yield text[start : start + piece]
 
 
-async def verify_mirror() -> None:
-    """Fail loudly if `regroup` and the shipped `_sentences` disagree.
+async def shipped_chunks(text: str) -> list[str]:
+    """Return the chunks the integration itself would request, for real.
 
-    The whole measurement rests on the "sentences-40" row being what the
-    integration does. If this reimplementation drifts from `tts.py` -- because
-    the split changes there and not here -- every number below would still look
-    perfectly plausible while describing code that does not exist.
+    Calls `_sentences`, so the "shipped" row cannot drift from `tts.py` the
+    way a reimplementation would. The regex strategies beside it are
+    deliberately *not* the shipped split -- they are what it is being
+    compared against.
     """
-    shipped = next(s for s in STRATEGIES if s.name == "sentences-40")
-
-    for name, text in CASES.items():
-        expected = [chunk async for chunk in _sentences(_pieces(text))]
-        actual = regroup(text, shipped)
-        if actual != expected:
-            raise SystemExit(
-                f"regroup() no longer matches _sentences() on case {name!r}:\n"
-                f"  _sentences: {expected}\n"
-                f"  regroup:    {actual}"
-            )
+    return [chunk async for chunk in _sentences(_pieces(text))]
 
 
 @dataclass
@@ -600,11 +603,17 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
-    await verify_mirror()
-
     wanted = args.case or list(CASES)
     cells = [
-        Cell(case=case, strategy=strategy, chunks=regroup(CASES[case], strategy))
+        Cell(
+            case=case,
+            strategy=strategy,
+            chunks=(
+                await shipped_chunks(CASES[case])
+                if strategy.name == SHIPPED
+                else regroup(CASES[case], strategy)
+            ),
+        )
         for case in wanted
         for strategy in STRATEGIES
     ]

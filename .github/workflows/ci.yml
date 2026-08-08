@@ -127,6 +127,11 @@ jobs:
       # to >=2.1.0 once already -- check_manifest_consistency.py now compares
       # the two.
       MISTRALAI_SPEC: "mistralai>=2.9.0"
+      # Same reasoning as MISTRALAI_SPEC: a runtime requirement declared in
+      # manifest.json, restated because an isolated run has no project to read
+      # it from, and compared against the manifest by
+      # check_manifest_consistency.py.
+      SENTENCE_STREAM_SPEC: "sentence-stream>=1.3.0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,6 +160,7 @@ jobs:
             --with "home-assistant-intents==${INTENTS_VERSION}" \
             --with "pycares==${PYCARES_VERSION}" \
             --with "${MISTRALAI_SPEC}" \
+            --with "${SENTENCE_STREAM_SPEC}" \
             --with PyTurboJPEG \
             --with ha-ffmpeg \
             --with mutagen \
@@ -186,6 +192,11 @@ jobs:
       # As above: the declared floor, kept honest by
       # check_manifest_consistency.py.
       MISTRALAI_SPEC: "mistralai>=2.9.0"
+      # Same reasoning as MISTRALAI_SPEC: a runtime requirement declared in
+      # manifest.json, restated because an isolated run has no project to read
+      # it from, and compared against the manifest by
+      # check_manifest_consistency.py.
+      SENTENCE_STREAM_SPEC: "sentence-stream>=1.3.0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -212,6 +223,7 @@ jobs:
           uv run --isolated --no-project --python 3.14 \
             --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
             --with "${MISTRALAI_SPEC}" \
+            --with "${SENTENCE_STREAM_SPEC}" \
             --with PyTurboJPEG \
             --with hassil \
             --with home-assistant-intents \
