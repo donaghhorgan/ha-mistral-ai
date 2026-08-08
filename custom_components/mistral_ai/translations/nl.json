@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API-sleutel"
                 }
+            },
+            "reconfigure": {
+                "description": "Voer de Mistral AI-API-sleutel in die je vanaf nu wilt gebruiken. De opgeslagen sleutel wordt niet getoond, dus voer de nieuwe volledig in. Je gespreksagenten, AI-taken en spraakentiteiten blijven ongewijzigd.",
+                "data": {
+                    "api_key": "API-sleutel"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft."
         },
         "abort": {
-            "reauth_successful": "Opnieuw verifiëren is gelukt."
+            "reauth_successful": "Opnieuw verifiëren is gelukt.",
+            "reconfigure_successful": "De Mistral AI-API-sleutel is bijgewerkt."
         }
     },
     "config_subentries": {

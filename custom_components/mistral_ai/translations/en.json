@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API Key"
                 }
+            },
+            "reconfigure": {
+                "description": "Please enter the Mistral AI API key to use from now on. The stored key is not shown, so enter the new one in full. Your conversation agents, AI tasks and speech entities are kept as they are.",
+                "data": {
+                    "api_key": "API Key"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI refused the request. The API key is valid, so a new one will not help — check that your account has access at console.mistral.ai."
         },
         "abort": {
-            "reauth_successful": "Re-authentication was successful."
+            "reauth_successful": "Re-authentication was successful.",
+            "reconfigure_successful": "The Mistral AI API key was updated."
         }
     },
     "config_subentries": {

@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "Klíč API"
                 }
+            },
+            "reconfigure": {
+                "description": "Zadejte klíč API Mistral AI, který se má používat od této chvíle. Uložený klíč se nezobrazuje, zadejte proto nový celý. Vaši konverzační agenti, úlohy AI a hlasové entity zůstanou beze změny.",
+                "data": {
+                    "api_key": "Klíč API"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI požadavek odmítl. Klíč API je platný, takže nový nepomůže — na console.mistral.ai ověřte, že váš účet má přístup."
         },
         "abort": {
-            "reauth_successful": "Opětovné ověření proběhlo úspěšně."
+            "reauth_successful": "Opětovné ověření proběhlo úspěšně.",
+            "reconfigure_successful": "Klíč API Mistral AI byl aktualizován."
         }
     },
     "config_subentries": {

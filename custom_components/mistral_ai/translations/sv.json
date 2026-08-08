@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API-nyckel"
                 }
+            },
+            "reconfigure": {
+                "description": "Ange den API-nyckel för Mistral AI som ska användas hädanefter. Den sparade nyckeln visas inte, så ange den nya i sin helhet. Dina konversationsagenter, AI-uppgifter och talenheter behålls som de är.",
+                "data": {
+                    "api_key": "API-nyckel"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst."
         },
         "abort": {
-            "reauth_successful": "Omautentiseringen lyckades."
+            "reauth_successful": "Omautentiseringen lyckades.",
+            "reconfigure_successful": "API-nyckeln för Mistral AI har uppdaterats."
         }
     },
     "config_subentries": {

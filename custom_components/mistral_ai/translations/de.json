@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API-Schlüssel"
                 }
+            },
+            "reconfigure": {
+                "description": "Bitte geben Sie den Mistral-AI-API-Schlüssel ein, der ab jetzt verwendet werden soll. Der gespeicherte Schlüssel wird nicht angezeigt, geben Sie den neuen daher vollständig ein. Ihre Konversationsagenten, KI-Aufgaben und Sprachentitäten bleiben unverändert.",
+                "data": {
+                    "api_key": "API-Schlüssel"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI hat die Anfrage abgelehnt. Der API-Schlüssel ist gültig, ein neuer hilft also nicht — prüfen Sie unter console.mistral.ai, ob Ihr Konto Zugriff hat."
         },
         "abort": {
-            "reauth_successful": "Die erneute Authentifizierung war erfolgreich."
+            "reauth_successful": "Die erneute Authentifizierung war erfolgreich.",
+            "reconfigure_successful": "Der Mistral-AI-API-Schlüssel wurde aktualisiert."
         }
     },
     "config_subentries": {

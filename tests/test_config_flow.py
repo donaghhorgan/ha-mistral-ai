@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 import voluptuous as vol
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -196,6 +196,146 @@ async def test_reauth_flow_reports_a_refusal_separately(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "forbidden"}
     assert init_integration.data[CONF_API_KEY] == "test-api-key"
+
+
+async def test_reconfigure_flow_replaces_the_key(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The key can be rotated deliberately, with everything under it kept.
+
+    Before this step existed the only route to the field was the reauth
+    dialog, which opens on a 401 -- so a planned rotation meant revoking the
+    working key upstream first, or deleting the entry and taking every
+    subentry with it.
+    """
+    before = set(init_integration.subentries)
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "rotated-api-key"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert init_integration.data[CONF_API_KEY] == "rotated-api-key"
+
+    # The point of the whole thing: the agents, tasks and speech entities
+    # underneath survive, which is what deleting the entry cost.
+    assert set(init_integration.subentries) == before
+    assert init_integration.state is ConfigEntryState.LOADED
+
+
+@pytest.mark.parametrize(
+    ("side_effect", "expected_error"),
+    [
+        (make_sdk_error(401), "invalid_auth"),
+        (make_sdk_error(403), "forbidden"),
+        (make_sdk_error(500), "cannot_connect"),
+        (httpx.ConnectError("no route to host"), "cannot_connect"),
+        (TimeoutError(), "cannot_connect"),
+        (ValueError("something odd"), "unknown"),
+    ],
+)
+async def test_reconfigure_flow_errors(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    side_effect: Exception,
+    expected_error: str,
+) -> None:
+    """A key that does not work is refused, and the stored one is left alone.
+
+    The same ladder the user step renders, because the remedies differ: a 403
+    is a valid key with no account access, and telling someone their key is
+    invalid sends them to generate another one that will fail the same way.
+    That case is why this step exists at all -- a 403 never triggers reauth,
+    so there was previously no way to try a different key.
+    """
+    mock_client.models.list_async = AsyncMock(side_effect=side_effect)
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "no-good"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": expected_error}
+    assert init_integration.data[CONF_API_KEY] == "test-api-key"
+
+
+async def test_reconfigure_flow_recovers_after_error(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    mock_models_response: MagicMock,
+) -> None:
+    """A working key typed after a refusal still saves."""
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "no-access"}
+    )
+    assert result["errors"] == {"base": "forbidden"}
+
+    mock_client.models.list_async = AsyncMock(return_value=mock_models_response)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "a-key-with-access"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert init_integration.data[CONF_API_KEY] == "a-key-with-access"
+
+
+async def test_reconfigure_form_does_not_echo_the_stored_key(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The field starts empty rather than prefilled with the secret.
+
+    A suggested value on a password field is sent to the browser and sits in
+    the DOM. There is nothing to edit in a key either -- a replacement is
+    typed whole -- so prefilling would only leak it.
+    """
+    result = await init_integration.start_reconfigure_flow(hass)
+
+    assert _suggested(result, CONF_API_KEY) is None
+    for marker in result["data_schema"].schema:
+        if marker.schema == CONF_API_KEY:
+            assert marker.default is vol.UNDEFINED
+            break
+    else:
+        pytest.fail("the reconfigure form does not ask for an API key")
+
+
+async def test_reconfigure_entry_abort_reason_has_a_message(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Saving ends with a sentence, not a translation key.
+
+    async_update_reload_and_abort picks the reason itself, so the string is
+    never written down in this repository and no static check could find it.
+    Home Assistant has no default either: its own strings.json carries only a
+    `common` section, with nothing under `config`.
+    """
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "rotated-api-key"}
+    )
+    await hass.async_block_till_done()
+
+    path = Path(integration.__file__).parent / "translations" / "en.json"
+    aborts = json.loads(path.read_text(encoding="utf-8"))["config"]["abort"]
+
+    assert result["reason"] in aborts, (
+        f"reconfiguring aborts with {result['reason']!r}, which has no message "
+        f"in en.json and renders to the user as that literal string"
+    )
 
 
 @pytest.mark.parametrize(

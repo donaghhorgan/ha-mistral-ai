@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "API-nøgle"
                 }
+            },
+            "reconfigure": {
+                "description": "Indtast den API-nøgle til Mistral AI, der skal bruges fremover. Den gemte nøgle vises ikke, så indtast den nye i sin helhed. Dine samtaleagenter, AI-opgaver og taleenheder bevares, som de er.",
+                "data": {
+                    "api_key": "API-nøgle"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI afviste anmodningen. API-nøglen er gyldig, så en ny hjælper ikke — tjek på console.mistral.ai, om din konto har adgang."
         },
         "abort": {
-            "reauth_successful": "Godkendelsen blev fornyet."
+            "reauth_successful": "Godkendelsen blev fornyet.",
+            "reconfigure_successful": "API-nøglen til Mistral AI blev opdateret."
         }
     },
     "config_subentries": {

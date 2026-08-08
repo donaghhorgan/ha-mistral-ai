@@ -12,6 +12,12 @@
                 "data": {
                     "api_key": "Klucz API"
                 }
+            },
+            "reconfigure": {
+                "description": "Podaj klucz API Mistral AI, który ma być używany od tej pory. Zapisany klucz nie jest wyświetlany, więc wprowadź nowy w całości. Twoi agenci konwersacyjni, zadania AI i encje mowy pozostaną bez zmian.",
+                "data": {
+                    "api_key": "Klucz API"
+                }
             }
         },
         "error": {
@@ -21,7 +27,8 @@
             "forbidden": "Mistral AI odrzucił żądanie. Klucz API jest prawidłowy, więc nowy nic nie zmieni — sprawdź na console.mistral.ai, czy Twoje konto ma dostęp."
         },
         "abort": {
-            "reauth_successful": "Ponowne uwierzytelnienie powiodło się."
+            "reauth_successful": "Ponowne uwierzytelnienie powiodło się.",
+            "reconfigure_successful": "Klucz API Mistral AI został zaktualizowany."
         }
     },
     "config_subentries": {
