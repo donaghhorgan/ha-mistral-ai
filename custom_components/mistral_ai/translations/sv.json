@@ -1,0 +1,252 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Ange din API-nyckel för Mistral AI för att konfigurera konversationsagenten.",
+                "data": {
+                    "api_key": "API-nyckel"
+                }
+            },
+            "reauth_confirm": {
+                "description": "API-nyckeln för Mistral AI för {name} fungerar inte längre. Ange en ny.",
+                "data": {
+                    "api_key": "API-nyckel"
+                }
+            },
+            "reconfigure": {
+                "description": "Ange den API-nyckel för Mistral AI som ska användas hädanefter. Den sparade nyckeln visas inte, så ange den nya i sin helhet. Dina konversationsagenter, AI-uppgifter och talenheter behålls som de är.",
+                "data": {
+                    "api_key": "API-nyckel"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Kunde inte ansluta till Mistral AI:s API. Kontrollera din internetanslutning och försök igen.",
+            "invalid_auth": "Ogiltig API-nyckel. Kontrollera din API-nyckel för Mistral AI och försök igen.",
+            "unknown": "Ett oväntat fel inträffade. Försök igen.",
+            "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst."
+        },
+        "abort": {
+            "reauth_successful": "Omautentiseringen lyckades.",
+            "reconfigure_successful": "API-nyckeln för Mistral AI har uppdaterats."
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Lägg till konversationsagent",
+                "reconfigure": "Konfigurera om konversationsagenten"
+            },
+            "entry_type": "Konversationsagent",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurera Mistral AI:s konversationsagent.",
+                    "data": {
+                        "name": "Namn",
+                        "model": "Modell",
+                        "temperature": "Temperatur",
+                        "max_tokens": "Högsta antal tokens per svar",
+                        "prompt": "Instruktioner",
+                        "llm_hass_api": "Styra Home Assistant",
+                        "web_search": "Webbsökning (beta)",
+                        "web_search_citations": "Namnge källorna från webbsökningen",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Resonemang"
+                    },
+                    "data_description": {
+                        "temperature": "Högre värden gör svaren mer kreativa, lägre värden mer fokuserade.",
+                        "prompt": "Instruktioner till modellen om hur den ska bete sig.",
+                        "llm_hass_api": "Låt agenten styra enheterna i ditt hem.",
+                        "reasoning_effort": "Låter modellen tänka innan den svarar. Tänkandet räknas mot det högsta antalet tokens nedan, så en låg gräns kan förbruka hela svaret innan det börjar — höj den om svaren kommer tillbaka tomma.\n\nVisas bara för modeller som stöder det. Lämna oangivet för att använda modellens eget standardvärde.",
+                        "web_search": "Låter agenten slå upp det den inte vet. Mistral debiterar per sökning, och premiumnivån kostar mer, så lämna oangivet för att stänga av det.\n\nBeta: detta bygger på Mistrals conversations-API, som är i offentlig förhandsvisning och kan ändras.",
+                        "web_search_citations": "Ber agenten berätta varifrån ett uppslaget svar kommer, så att du kan skilja det från ett svar ur minnet. Påverkar bara svar där en sökning faktiskt gjordes.\n\nDet är en instruktion till modellen och ingen garanti, så den kan ignoreras. Källorna namnges i själva svaret, som en röstassistent läser upp, så stäng av det om du hellre slipper höra dem.",
+                        "top_p": "Ett alternativ till temperatur: modellen överväger bara de mest sannolika orden vars sannolikheter summerar till detta värde. 1.0 lämnar urvalet orört. Sänk antingen detta värde eller temperaturen, inte båda samtidigt."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Inställningarna för konversationsagenten sparades.",
+                "entry_not_loaded": "Det går inte att lägga till en konversationsagent medan integrationen inte är inläst.",
+                "cannot_connect": "Kunde inte ansluta till Mistral AI:s API.",
+                "invalid_auth": "Den sparade API-nyckeln för Mistral AI avvisades. Konfigurera om integrationen.",
+                "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst."
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "Lägg till AI-uppgift",
+                "reconfigure": "Konfigurera om AI-uppgiften"
+            },
+            "entry_type": "AI-uppgift",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurera Mistral AI-uppgiften.",
+                    "data": {
+                        "name": "Namn",
+                        "model": "Modell",
+                        "temperature": "Temperatur",
+                        "max_tokens": "Högsta antal tokens per svar",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Resonemang"
+                    },
+                    "data_description": {
+                        "temperature": "Högre värden gör svaren mer kreativa, lägre värden mer fokuserade.",
+                        "top_p": "Ett alternativ till temperatur: modellen överväger bara de mest sannolika orden vars sannolikheter summerar till detta värde. 1.0 lämnar urvalet orört. Sänk antingen detta värde eller temperaturen, inte båda samtidigt.",
+                        "reasoning_effort": "Låter modellen tänka innan den svarar. Tänkandet räknas mot det högsta antalet tokens ovan, så en låg gräns kan förbruka hela svaret innan det börjar — höj den om uppgifter misslyckas utan strukturerade data.\n\nVisas bara för modeller som stöder det. Lämna oangivet för att använda modellens eget standardvärde."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Inställningarna för AI-uppgiften sparades.",
+                "entry_not_loaded": "Det går inte att lägga till en AI-uppgift medan integrationen inte är inläst.",
+                "cannot_connect": "Kunde inte ansluta till Mistral AI:s API.",
+                "invalid_auth": "Den sparade API-nyckeln för Mistral AI avvisades. Konfigurera om integrationen.",
+                "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst."
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "Lägg till tal-till-text",
+                "reconfigure": "Konfigurera om tal-till-text"
+            },
+            "entry_type": "Tal-till-text",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurera Mistral AI:s tal-till-text.",
+                    "data": {
+                        "name": "Namn",
+                        "model": "Modell",
+                        "temperature": "Temperatur"
+                    },
+                    "data_description": {
+                        "model": "Endast modeller som kan transkribera ljud visas.",
+                        "temperature": "Högre värden låter modellen gissa friare vid otydligt ljud."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Inställningarna för tal-till-text sparades.",
+                "entry_not_loaded": "Det går inte att lägga till tal-till-text medan integrationen inte är inläst.",
+                "cannot_connect": "Kunde inte ansluta till Mistral AI:s API.",
+                "invalid_auth": "Den sparade API-nyckeln för Mistral AI avvisades. Konfigurera om integrationen.",
+                "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst."
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Lägg till text-till-tal",
+                "reconfigure": "Konfigurera om text-till-tal"
+            },
+            "entry_type": "Text-till-tal",
+            "step": {
+                "set_options": {
+                    "description": "Konfigurera Mistral AI:s text-till-tal.",
+                    "data": {
+                        "name": "Namn",
+                        "model": "Modell",
+                        "voice": "Röst"
+                    },
+                    "data_description": {
+                        "model": "Endast modeller som kan generera tal visas.",
+                        "voice": "Rösten som används när anroparen inte ber om någon särskild."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Inställningarna för text-till-tal sparades.",
+                "entry_not_loaded": "Det går inte att lägga till text-till-tal medan integrationen inte är inläst.",
+                "cannot_connect": "Kunde inte ansluta till Mistral AI:s API.",
+                "invalid_auth": "Den sparade API-nyckeln för Mistral AI avvisades. Konfigurera om integrationen.",
+                "forbidden": "Mistral AI nekade begäran. API-nyckeln är giltig, så en ny hjälper inte — kontrollera på console.mistral.ai att ditt konto har åtkomst.",
+                "no_voices": "Kunde inte hämta rösterna på ditt Mistral AI-konto. Text-till-tal kräver en röst, så det går inte att konfigurera förrän listan har lästs in — försök igen om en stund."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standard",
+                "web_search_premium": "Premium (kostar mer per sökning)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Av",
+                "high": "På"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Fel vid kommunikation med Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "Bilagan {path} finns inte."
+        },
+        "attachment_too_large": {
+            "message": "{path} är {size} MB, och bilagor är begränsade till {limit} MB."
+        },
+        "empty_image": {
+            "message": "Mistral AI returnerade en tom bild. Försök igen."
+        },
+        "forbidden": {
+            "message": "Mistral AI nekade begäran. Ditt konto kanske inte har åtkomst till den här modellen eller funktionen."
+        },
+        "image_download_error": {
+            "message": "Fel vid hämtning av den genererade bilden: {error}"
+        },
+        "invalid_api_key": {
+            "message": "API-nyckeln för Mistral AI avvisades. Konfigurera om integrationen."
+        },
+        "invalid_request": {
+            "message": "Mistral AI avvisade begäran: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI returnerade inga giltiga strukturerade data. Prova att förenkla strukturen, eller fråga igen."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI returnerade ingen bild. {model} kanske inte kan generera bilder."
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI fortsatte att begära verktyg och blev inte klar inom {limit} rundor. Prova att formulera om begäran, eller dela upp den i mindre steg."
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI returnerade inget ljud för det här svaret. Försök igen."
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI returnerade ljud som inte gick att avkoda. Försök igen."
+        },
+        "speech_transport_error": {
+            "message": "Anslutningen till Mistral AI bröts under talgenereringen: {error}"
+        },
+        "rate_limited": {
+            "message": "Begränsad av Mistral AI. Försök igen om en stund."
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI fick slut på utrymme innan den svarade. Höj inställningen för högsta antal tokens, eller sänk resonemanget om det är angivet."
+        },
+        "unexpected_error": {
+            "message": "Oväntat fel från Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Endast bilder och PDF-filer kan skickas till Mistral AI, och {path} är ingetdera."
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} använder en modell som håller på att avvecklas",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "Byt {name} till {replacement}",
+                        "description": "{name} är inställd på {model}, som Mistral AI avvecklar den {date}. Efter det datumet slutar den svara.\n\nMistral AI anger {replacement} som ersättare. Bekräfta för att byta {name} till den.\n\nInget annat med {name} ändras, och du kan när som helst själv välja en annan modell genom att konfigurera om den."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} använder en modell som håller på att avvecklas",
+            "description": "{name} är inställd på {model}, som Mistral AI avvecklar den {date}. Efter det datumet slutar den svara.\n\nMistral AI har inte angett någon ersättare för den här, så det finns inget att byta till automatiskt. Konfigurera om {name} och välj en annan modell — rullgardinsmenyn markerar allt annat som också avvecklas, så att du inte hamnar i samma problem två gånger."
+        }
+    }
+}

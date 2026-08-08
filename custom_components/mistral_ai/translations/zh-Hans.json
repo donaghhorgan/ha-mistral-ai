@@ -1,0 +1,252 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "请输入你的 Mistral AI API 密钥以设置对话代理。",
+                "data": {
+                    "api_key": "API 密钥"
+                }
+            },
+            "reauth_confirm": {
+                "description": "{name} 使用的 Mistral AI API 密钥已失效。请输入一个新的。",
+                "data": {
+                    "api_key": "API 密钥"
+                }
+            },
+            "reconfigure": {
+                "description": "请输入今后要使用的 Mistral AI API 密钥。已保存的密钥不会显示，请完整输入新的密钥。你的对话代理、AI 任务和语音实体将保持不变。",
+                "data": {
+                    "api_key": "API 密钥"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "无法连接到 Mistral AI 的 API。请检查网络连接后重试。",
+            "invalid_auth": "API 密钥无效。请检查你的 Mistral AI API 密钥后重试。",
+            "unknown": "发生了意外错误。请重试。",
+            "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。"
+        },
+        "abort": {
+            "reauth_successful": "重新认证成功。",
+            "reconfigure_successful": "Mistral AI API 密钥已更新。"
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "添加对话代理",
+                "reconfigure": "重新配置对话代理"
+            },
+            "entry_type": "对话代理",
+            "step": {
+                "set_options": {
+                    "description": "配置 Mistral AI 对话代理。",
+                    "data": {
+                        "name": "名称",
+                        "model": "模型",
+                        "temperature": "温度",
+                        "max_tokens": "每次回复的最大令牌数",
+                        "prompt": "指令",
+                        "llm_hass_api": "控制 Home Assistant",
+                        "web_search": "网络搜索（测试版）",
+                        "web_search_citations": "标明网络搜索来源",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "推理"
+                    },
+                    "data_description": {
+                        "temperature": "值越高回复越有创意，值越低回复越聚焦。",
+                        "prompt": "告诉模型应当如何行事的指令。",
+                        "llm_hass_api": "允许代理控制你家中的设备。",
+                        "reasoning_effort": "让模型先思考再作答。思考会计入下方的最大令牌数，因此上限过低可能在答案开始之前就把额度用光——如果回复返回为空，请调高它。\n\n仅对支持该功能的模型显示。留空则使用模型自身的默认设置。",
+                        "web_search": "让代理查找它不知道的内容。Mistral 按次搜索计费，高级档位费用更高，因此留空即可关闭。\n\n测试版：这基于 Mistral 的 conversations API，该 API 处于公开预览阶段，可能会有变动。",
+                        "web_search_citations": "让代理说明查到的答案出自何处，这样你就能把它和凭记忆作答的回复区分开。仅影响确实执行了搜索的回复。\n\n这是给模型的指令而非保证，模型可能会忽略它。来源会写在回复正文里，语音助手会把它读出来，因此若不想听到，请将其关闭。",
+                        "top_p": "温度的替代选项：模型只考虑概率之和达到该值的那些最可能的词。设为 1.0 则不改变采样方式。请只调低该值或温度中的一个，不要同时调低两者。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "对话代理设置已保存。",
+                "entry_not_loaded": "集成未加载时无法添加对话代理。",
+                "cannot_connect": "无法连接到 Mistral AI 的 API。",
+                "invalid_auth": "已保存的 Mistral AI API 密钥被拒绝。请重新配置该集成。",
+                "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。"
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "添加 AI 任务",
+                "reconfigure": "重新配置 AI 任务"
+            },
+            "entry_type": "AI 任务",
+            "step": {
+                "set_options": {
+                    "description": "配置 Mistral AI 任务。",
+                    "data": {
+                        "name": "名称",
+                        "model": "模型",
+                        "temperature": "温度",
+                        "max_tokens": "每次回复的最大令牌数",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "推理"
+                    },
+                    "data_description": {
+                        "temperature": "值越高回复越有创意，值越低回复越聚焦。",
+                        "top_p": "温度的替代选项：模型只考虑概率之和达到该值的那些最可能的词。设为 1.0 则不改变采样方式。请只调低该值或温度中的一个，不要同时调低两者。",
+                        "reasoning_effort": "让模型先思考再作答。思考会计入上方的最大令牌数，因此上限过低可能在答案开始之前就把额度用光——如果任务因没有结构化数据而失败，请调高它。\n\n仅对支持该功能的模型显示。留空则使用模型自身的默认设置。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "AI 任务设置已保存。",
+                "entry_not_loaded": "集成未加载时无法添加 AI 任务。",
+                "cannot_connect": "无法连接到 Mistral AI 的 API。",
+                "invalid_auth": "已保存的 Mistral AI API 密钥被拒绝。请重新配置该集成。",
+                "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。"
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "添加语音转文字",
+                "reconfigure": "重新配置语音转文字"
+            },
+            "entry_type": "语音转文字",
+            "step": {
+                "set_options": {
+                    "description": "配置 Mistral AI 语音转文字。",
+                    "data": {
+                        "name": "名称",
+                        "model": "模型",
+                        "temperature": "温度"
+                    },
+                    "data_description": {
+                        "model": "仅列出能够转写音频的模型。",
+                        "temperature": "值越高，模型在音频不清晰时猜测得越自由。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "语音转文字设置已保存。",
+                "entry_not_loaded": "集成未加载时无法添加语音转文字。",
+                "cannot_connect": "无法连接到 Mistral AI 的 API。",
+                "invalid_auth": "已保存的 Mistral AI API 密钥被拒绝。请重新配置该集成。",
+                "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。"
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "添加文字转语音",
+                "reconfigure": "重新配置文字转语音"
+            },
+            "entry_type": "文字转语音",
+            "step": {
+                "set_options": {
+                    "description": "配置 Mistral AI 文字转语音。",
+                    "data": {
+                        "name": "名称",
+                        "model": "模型",
+                        "voice": "声音"
+                    },
+                    "data_description": {
+                        "model": "仅列出能够生成语音的模型。",
+                        "voice": "调用方未指定声音时所使用的声音。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "文字转语音设置已保存。",
+                "entry_not_loaded": "集成未加载时无法添加文字转语音。",
+                "cannot_connect": "无法连接到 Mistral AI 的 API。",
+                "invalid_auth": "已保存的 Mistral AI API 密钥被拒绝。请重新配置该集成。",
+                "forbidden": "Mistral AI 拒绝了该请求。API 密钥本身有效，因此换一个新的也无济于事——请在 console.mistral.ai 上确认你的账户是否有权限。",
+                "no_voices": "无法获取你 Mistral AI 账户中的声音列表。文字转语音需要一个声音，因此在列表加载出来之前无法完成设置——请稍后再试。"
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "标准",
+                "web_search_premium": "高级（每次搜索费用更高）"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "关闭",
+                "high": "开启"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "与 Mistral AI 通信时出错：{error}"
+        },
+        "attachment_not_found": {
+            "message": "附件 {path} 不存在。"
+        },
+        "attachment_too_large": {
+            "message": "{path} 大小为 {size} MB，而附件限制为 {limit} MB。"
+        },
+        "empty_image": {
+            "message": "Mistral AI 返回了空白图像。请重试。"
+        },
+        "forbidden": {
+            "message": "Mistral AI 拒绝了该请求。你的账户可能无权使用该模型或功能。"
+        },
+        "image_download_error": {
+            "message": "下载生成的图像时出错：{error}"
+        },
+        "invalid_api_key": {
+            "message": "Mistral AI API 密钥被拒绝。请重新配置该集成。"
+        },
+        "invalid_request": {
+            "message": "Mistral AI 拒绝了该请求：{detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI 未返回有效的结构化数据。请尝试简化结构，或再问一次。"
+        },
+        "no_image_returned": {
+            "message": "Mistral AI 未返回任何图像。{model} 可能无法生成图像。"
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI 不断请求使用工具，在 {limit} 轮内仍未完成。请尝试换一种说法，或把它拆成更小的步骤。"
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI 没有为这条回复返回音频。请重试。"
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI 返回的音频无法解码。请重试。"
+        },
+        "speech_transport_error": {
+            "message": "生成语音时与 Mistral AI 的连接中断：{error}"
+        },
+        "rate_limited": {
+            "message": "已被 Mistral AI 限流。请稍后再试。"
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI 在给出答案之前就用尽了空间。请调高最大令牌数设置，或在已设置推理时调低推理。"
+        },
+        "unexpected_error": {
+            "message": "来自 Mistral AI 的意外错误：{error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "只能向 Mistral AI 发送图像和 PDF，而 {path} 两者都不是。"
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} 使用的模型即将停用",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "将 {name} 切换到 {replacement}",
+                        "description": "{name} 设置为使用 {model}，而 Mistral AI 将于 {date} 停用该模型。此后它将不再作答。\n\nMistral AI 指定 {replacement} 作为其替代。提交即可将 {name} 切换过去。\n\n{name} 的其他设置均不变，你也可以随时通过重新配置自行选择其他模型。"
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} 使用的模型即将停用",
+            "description": "{name} 设置为使用 {model}，而 Mistral AI 将于 {date} 停用该模型。此后它将不再作答。\n\nMistral AI 没有为它指定替代模型，因此没有可以自动切换的目标。请重新配置 {name} 并选择其他模型——下拉列表会标出同样即将停用的选项，这样你就不会再次遇到同样的问题。"
+        }
+    }
+}

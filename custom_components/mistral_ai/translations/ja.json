@@ -1,0 +1,252 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "会話エージェントを設定するには、Mistral AI の API キーを入力してください。",
+                "data": {
+                    "api_key": "API キー"
+                }
+            },
+            "reauth_confirm": {
+                "description": "{name} の Mistral AI API キーが使えなくなりました。新しいキーを入力してください。",
+                "data": {
+                    "api_key": "API キー"
+                }
+            },
+            "reconfigure": {
+                "description": "これから使用する Mistral AI の API キーを入力してください。保存済みのキーは表示されないため、新しいキーを最初から入力してください。会話エージェント、AI タスク、音声エンティティはそのまま維持されます。",
+                "data": {
+                    "api_key": "API キー"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Mistral AI の API に接続できませんでした。インターネット接続を確認してもう一度お試しください。",
+            "invalid_auth": "API キーが正しくありません。Mistral AI の API キーを確認してもう一度お試しください。",
+            "unknown": "予期しないエラーが発生しました。もう一度お試しください。",
+            "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。"
+        },
+        "abort": {
+            "reauth_successful": "再認証に成功しました。",
+            "reconfigure_successful": "Mistral AI の API キーを更新しました。"
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "会話エージェントを追加",
+                "reconfigure": "会話エージェントを再設定"
+            },
+            "entry_type": "会話エージェント",
+            "step": {
+                "set_options": {
+                    "description": "Mistral AI の会話エージェントを設定します。",
+                    "data": {
+                        "name": "名前",
+                        "model": "モデル",
+                        "temperature": "温度",
+                        "max_tokens": "1 回の応答あたりの最大トークン数",
+                        "prompt": "指示",
+                        "llm_hass_api": "Home Assistant を操作する",
+                        "web_search": "ウェブ検索 (ベータ)",
+                        "web_search_citations": "ウェブ検索の出典を示す",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "推論"
+                    },
+                    "data_description": {
+                        "temperature": "値を大きくすると応答がより創造的に、小さくするとより的を絞ったものになります。",
+                        "prompt": "どのように振る舞うべきかをモデルに伝える指示です。",
+                        "llm_hass_api": "エージェントが家庭内のデバイスを操作できるようにします。",
+                        "reasoning_effort": "答える前にモデルに考えさせます。思考は下の最大トークン数に加算されるため、上限が低いと答えが始まる前に使い切ってしまうことがあります。応答が空で返ってくる場合は上限を引き上げてください。\n\n対応しているモデルでのみ表示されます。未設定のままにすると、モデル自身の既定値が使われます。",
+                        "web_search": "知らないことをエージェントが調べられるようにします。Mistral は検索ごとに課金し、プレミアム階層はさらに高くなります。オフにするには未設定のままにしてください。\n\nベータ: これは Mistral の conversations API 上で動作します。同 API はパブリックプレビュー中で、変更される可能性があります。",
+                        "web_search_citations": "調べて得た回答の出典を述べるようエージェントに指示します。記憶から答えた回答と区別できるようになります。実際に検索が行われた回答にのみ影響します。\n\nこれはモデルへの指示であって保証ではないため、無視されることがあります。出典は回答本文の中で示され、音声アシスタントはそれを読み上げます。聞きたくない場合はオフにしてください。",
+                        "top_p": "温度の代わりになる設定です。モデルは、確率の合計がこの値に達するまでの最も可能性の高い単語だけを候補にします。1.0 なら選択の仕方は変わりません。この値か温度のどちらか一方を下げてください。両方同時には下げないでください。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "会話エージェントの設定を保存しました。",
+                "entry_not_loaded": "統合が読み込まれていない間は、会話エージェントを追加できません。",
+                "cannot_connect": "Mistral AI の API に接続できませんでした。",
+                "invalid_auth": "保存されている Mistral AI の API キーが拒否されました。統合を再設定してください。",
+                "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。"
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "AI タスクを追加",
+                "reconfigure": "AI タスクを再設定"
+            },
+            "entry_type": "AI タスク",
+            "step": {
+                "set_options": {
+                    "description": "Mistral AI のタスクを設定します。",
+                    "data": {
+                        "name": "名前",
+                        "model": "モデル",
+                        "temperature": "温度",
+                        "max_tokens": "1 回の応答あたりの最大トークン数",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "推論"
+                    },
+                    "data_description": {
+                        "temperature": "値を大きくすると応答がより創造的に、小さくするとより的を絞ったものになります。",
+                        "top_p": "温度の代わりになる設定です。モデルは、確率の合計がこの値に達するまでの最も可能性の高い単語だけを候補にします。1.0 なら選択の仕方は変わりません。この値か温度のどちらか一方を下げてください。両方同時には下げないでください。",
+                        "reasoning_effort": "答える前にモデルに考えさせます。思考は上の最大トークン数に加算されるため、上限が低いと答えが始まる前に使い切ってしまうことがあります。構造化データが返らずタスクが失敗する場合は上限を引き上げてください。\n\n対応しているモデルでのみ表示されます。未設定のままにすると、モデル自身の既定値が使われます。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "AI タスクの設定を保存しました。",
+                "entry_not_loaded": "統合が読み込まれていない間は、AI タスクを追加できません。",
+                "cannot_connect": "Mistral AI の API に接続できませんでした。",
+                "invalid_auth": "保存されている Mistral AI の API キーが拒否されました。統合を再設定してください。",
+                "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。"
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "音声認識を追加",
+                "reconfigure": "音声認識を再設定"
+            },
+            "entry_type": "音声認識",
+            "step": {
+                "set_options": {
+                    "description": "Mistral AI の音声認識を設定します。",
+                    "data": {
+                        "name": "名前",
+                        "model": "モデル",
+                        "temperature": "温度"
+                    },
+                    "data_description": {
+                        "model": "音声を文字起こしできるモデルのみを表示しています。",
+                        "temperature": "値を大きくすると、聞き取りにくい音声に対してモデルがより自由に推測します。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "音声認識の設定を保存しました。",
+                "entry_not_loaded": "統合が読み込まれていない間は、音声認識を追加できません。",
+                "cannot_connect": "Mistral AI の API に接続できませんでした。",
+                "invalid_auth": "保存されている Mistral AI の API キーが拒否されました。統合を再設定してください。",
+                "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。"
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "音声合成を追加",
+                "reconfigure": "音声合成を再設定"
+            },
+            "entry_type": "音声合成",
+            "step": {
+                "set_options": {
+                    "description": "Mistral AI の音声合成を設定します。",
+                    "data": {
+                        "name": "名前",
+                        "model": "モデル",
+                        "voice": "声"
+                    },
+                    "data_description": {
+                        "model": "音声を生成できるモデルのみを表示しています。",
+                        "voice": "呼び出し側が特定の声を指定しなかったときに使われる声です。"
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "音声合成の設定を保存しました。",
+                "entry_not_loaded": "統合が読み込まれていない間は、音声合成を追加できません。",
+                "cannot_connect": "Mistral AI の API に接続できませんでした。",
+                "invalid_auth": "保存されている Mistral AI の API キーが拒否されました。統合を再設定してください。",
+                "forbidden": "Mistral AI がリクエストを拒否しました。API キー自体は有効なので、新しいキーを入れても解決しません。console.mistral.ai でアカウントにアクセス権があるか確認してください。",
+                "no_voices": "Mistral AI アカウントの声の一覧を取得できませんでした。音声合成には声が必要なため、一覧が読み込まれるまで設定できません。少し待ってからもう一度お試しください。"
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "標準",
+                "web_search_premium": "プレミアム (検索ごとの料金が高くなります)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "オフ",
+                "high": "オン"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Mistral AI との通信でエラーが発生しました: {error}"
+        },
+        "attachment_not_found": {
+            "message": "添付ファイル {path} は存在しません。"
+        },
+        "attachment_too_large": {
+            "message": "{path} は {size} MB ですが、添付ファイルは {limit} MB までに制限されています。"
+        },
+        "empty_image": {
+            "message": "Mistral AI が空の画像を返しました。もう一度お試しください。"
+        },
+        "forbidden": {
+            "message": "Mistral AI がリクエストを拒否しました。お使いのアカウントにこのモデルまたは機能へのアクセス権がない可能性があります。"
+        },
+        "image_download_error": {
+            "message": "生成された画像のダウンロード中にエラーが発生しました: {error}"
+        },
+        "invalid_api_key": {
+            "message": "Mistral AI の API キーが拒否されました。統合を再設定してください。"
+        },
+        "invalid_request": {
+            "message": "Mistral AI がリクエストを拒否しました: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI から有効な構造化データが返りませんでした。構造を簡素化するか、もう一度尋ねてみてください。"
+        },
+        "no_image_returned": {
+            "message": "Mistral AI から画像が返りませんでした。{model} は画像を生成できない可能性があります。"
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI がツールの使用を求め続け、{limit} 回のやり取りでは終わりませんでした。リクエストを言い換えるか、より小さな手順に分けてみてください。"
+        },
+        "speech_no_audio": {
+            "message": "この応答に対して Mistral AI から音声が返りませんでした。もう一度お試しください。"
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI から返された音声をデコードできませんでした。もう一度お試しください。"
+        },
+        "speech_transport_error": {
+            "message": "音声の生成中に Mistral AI との接続が切れました: {error}"
+        },
+        "rate_limited": {
+            "message": "Mistral AI によりレート制限されています。少し待ってからもう一度お試しください。"
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI は答えを出す前に上限に達しました。最大トークン数の設定を上げるか、推論が設定されている場合はそれを下げてください。"
+        },
+        "unexpected_error": {
+            "message": "Mistral AI からの予期しないエラー: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Mistral AI に送れるのは画像と PDF だけですが、{path} はそのどちらでもありません。"
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} は提供終了予定のモデルを使用しています",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "{name} を {replacement} に切り替える",
+                        "description": "{name} は {model} を使う設定になっていますが、Mistral AI は {date} にこれを提供終了します。その日以降は応答しなくなります。\n\nMistral AI は {replacement} を後継として挙げています。送信すると {name} をそちらに切り替えます。\n\n{name} の他の設定は変わりません。再設定すれば、いつでもご自身で別のモデルを選べます。"
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} は提供終了予定のモデルを使用しています",
+            "description": "{name} は {model} を使う設定になっていますが、Mistral AI は {date} にこれを提供終了します。その日以降は応答しなくなります。\n\nMistral AI はこのモデルの後継を挙げていないため、自動で切り替える先がありません。{name} を再設定して別のモデルを選んでください。ドロップダウンでは、同じく提供終了予定のものに印が付いているので、同じ問題に二度当たることはありません。"
+        }
+    }
+}

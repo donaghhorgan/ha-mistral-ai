@@ -24,7 +24,8 @@ and dashboards, and speech-to-text and text-to-speech for the assist pipeline.
   being written
 - 🎛️ **Multiple agents**: Run several agents and tasks off one API key, each
   with its own model, prompt and parameters
-- 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models
+- 🌐 **Multilingual**: Supports multiple languages through Mistral AI's models,
+  and the setup screens themselves are translated into fourteen more
 - ⚙️ **Easy setup**: Configured entirely through the Home Assistant UI
 
 ## Requirements
@@ -95,6 +96,17 @@ models and prompts against the same key.
 3. Configure it, then click "Submit"
 
 To change an existing one, click "Configure" next to it.
+
+### Changing the API key
+
+1. Go to Settings → Devices & Services → Mistral AI
+2. Open the three-dot menu on the Mistral AI entry itself and choose
+   "Reconfigure"
+3. Enter the new key, then click "Submit"
+
+The key is checked against the API before it is saved, and everything set up
+underneath it is kept — deleting the entry to change the key would take every
+agent, task and speech entity with it.
 
 ### Configuration options
 
@@ -193,6 +205,21 @@ premium tier costs more — the expensive one is never picked for you.
 It works alongside device control: Mistral runs the search itself and hands
 back any Home Assistant tool calls for the integration to run, so one turn can
 both check the forecast and turn on a light.
+
+**Name web search sources** asks the agent to say where a looked-up answer came
+from, so a reply fetched seconds ago can be told apart from one recalled from
+training. It appears once a tier is chosen and is on by default; nothing is
+added to replies where no search ran. The phrasing is left to the model
+because the same text is displayed and read aloud, and there is no wording
+that suits both — a publication name reads and speaks well but cannot be
+derived from every domain, a bare domain speaks badly, and a count of sources
+says little. What the model is told is to attribute without writing URLs,
+links or footnote markers.
+
+It is an instruction rather than a mechanism, so a model may ignore it — Home
+Assistant's own OpenAI integration records exactly that about its equivalent,
+and how reliable this is here has not yet been measured against a live model.
+Turn it off if you would rather not hear sources read out.
 
 Marked beta for one reason, worth knowing before turning it on:
 
@@ -406,6 +433,20 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
+
+#### Translations
+
+The setup screens are available in Czech, Danish, Dutch, French, German,
+Italian, Japanese, Norwegian Bokmål, Polish, Portuguese, Russian, Simplified
+Chinese, Spanish and Swedish. Only the English is written by a speaker of the
+language; the rest are machine-translated and have not been reviewed, so
+expect the occasional wrong word or stiff phrasing.
+
+Corrections are welcome and need no ceremony — open an issue quoting the text
+you saw, or edit the file under `custom_components/mistral_ai/translations/`
+directly. English is the source: every other file mirrors its keys exactly,
+and `scripts/check_translation_consistency.py` will tell you if an edit breaks
+that.
 
 ### Local Development
 

@@ -12,6 +12,7 @@ CONF_TEMPERATURE = "temperature"
 CONF_TOP_P = "top_p"
 CONF_VOICE = "voice"
 CONF_WEB_SEARCH = "web_search"
+CONF_WEB_SEARCH_CITATIONS = "web_search_citations"
 
 # Default values
 #
@@ -215,6 +216,43 @@ IMAGE_GENERATION_TOOL = "image_generation"
 # is used is named rather than toggled -- the expensive one should never be
 # picked on someone's behalf.
 WEB_SEARCH_TOOLS = ("web_search", "web_search_premium")
+
+# On by default. A searched answer and a remembered one are indistinguishable
+# today, and which of the two you are reading is most of what says how far to
+# trust it. Nothing changes unless a search actually ran, so the cost of
+# leaving it on for someone who does not want it is a phrase on the replies
+# they were already paying Mistral for.
+DEFAULT_WEB_SEARCH_CITATIONS = True
+
+# Appended to the system prompt when web search is on and citations are
+# wanted, rather than written into the default prompt.
+#
+# The default prompt is seeded into a subentry when it is *created* and read
+# back verbatim on every request afterwards, so editing it would reach new
+# agents only, and never anyone who has since written their own instructions.
+# A separate option consulted per request reaches everybody.
+#
+# The wording asks for a source and leaves the phrasing to the model, because
+# there is no phrasing that is right in both places this text lands. The same
+# string is shown in the chat UI and read aloud by a voice pipeline, and the
+# three candidates trade against each other: a publication name reads well
+# in both but cannot be derived from a domain like climatejargonbuster.ie, a
+# bare domain reads acceptably and speaks terribly, and a count speaks well
+# and says little. So the model is told what it must convey and what it must
+# not emit -- URLs, links and footnote markers, all of which are noise in
+# print and unlistenable aloud -- and picks between the rest itself.
+#
+# It is an instruction, not a mechanism. openai_conversation's own comment
+# records that models ignore its equivalent, and the tool_reference chunks
+# _content_deltas drops carry the same information structurally if this turns
+# out not to hold.
+WEB_SEARCH_CITATIONS_PROMPT = (
+    "When your answer comes from a web search, say so in the reply and name "
+    "where it came from -- the publication or organisation, in your own "
+    "words. Where a source has no name worth saying, give the number of "
+    "sources instead. Keep it to one short phrase, and never write out a URL, "
+    "a link or a footnote marker: this reply may be read aloud."
+)
 
 # Max number of back and forth with the LLM to generate a response
 MAX_TOOL_ITERATIONS = 10

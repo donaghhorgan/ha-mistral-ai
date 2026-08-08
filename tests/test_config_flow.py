@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 import voluptuous as vol
-from homeassistant.config_entries import SOURCE_USER
+from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import CONF_LLM_HASS_API, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import llm
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+import custom_components.mistral_ai as integration
 from custom_components.mistral_ai.const import (
     CONF_API_KEY,
     CONF_MAX_TOKENS,
@@ -23,6 +27,8 @@ from custom_components.mistral_ai.const import (
     CONF_TEMPERATURE,
     CONF_TOP_P,
     CONF_VOICE,
+    CONF_WEB_SEARCH,
+    CONF_WEB_SEARCH_CITATIONS,
     DEFAULT_MODEL,
     DEFAULT_STT_TEMPERATURE,
     DOMAIN,
@@ -33,7 +39,14 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_TTS,
 )
 
-from .conftest import DEPRECATED_MODEL, NON_CHAT_MODEL, ORPHANED_MODEL
+from .conftest import (
+    DEPRECATED_MODEL,
+    NON_CHAT_MODEL,
+    ORPHANED_MODEL,
+    STT_MODEL,
+    TTS_MODEL,
+    VOICE_ID,
+)
 from .helpers import make_sdk_error
 
 
@@ -183,6 +196,146 @@ async def test_reauth_flow_reports_a_refusal_separately(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "forbidden"}
     assert init_integration.data[CONF_API_KEY] == "test-api-key"
+
+
+async def test_reconfigure_flow_replaces_the_key(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The key can be rotated deliberately, with everything under it kept.
+
+    Before this step existed the only route to the field was the reauth
+    dialog, which opens on a 401 -- so a planned rotation meant revoking the
+    working key upstream first, or deleting the entry and taking every
+    subentry with it.
+    """
+    before = set(init_integration.subentries)
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "rotated-api-key"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert init_integration.data[CONF_API_KEY] == "rotated-api-key"
+
+    # The point of the whole thing: the agents, tasks and speech entities
+    # underneath survive, which is what deleting the entry cost.
+    assert set(init_integration.subentries) == before
+    assert init_integration.state is ConfigEntryState.LOADED
+
+
+@pytest.mark.parametrize(
+    ("side_effect", "expected_error"),
+    [
+        (make_sdk_error(401), "invalid_auth"),
+        (make_sdk_error(403), "forbidden"),
+        (make_sdk_error(500), "cannot_connect"),
+        (httpx.ConnectError("no route to host"), "cannot_connect"),
+        (TimeoutError(), "cannot_connect"),
+        (ValueError("something odd"), "unknown"),
+    ],
+)
+async def test_reconfigure_flow_errors(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    side_effect: Exception,
+    expected_error: str,
+) -> None:
+    """A key that does not work is refused, and the stored one is left alone.
+
+    The same ladder the user step renders, because the remedies differ: a 403
+    is a valid key with no account access, and telling someone their key is
+    invalid sends them to generate another one that will fail the same way.
+    That case is why this step exists at all -- a 403 never triggers reauth,
+    so there was previously no way to try a different key.
+    """
+    mock_client.models.list_async = AsyncMock(side_effect=side_effect)
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "no-good"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": expected_error}
+    assert init_integration.data[CONF_API_KEY] == "test-api-key"
+
+
+async def test_reconfigure_flow_recovers_after_error(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    mock_models_response: MagicMock,
+) -> None:
+    """A working key typed after a refusal still saves."""
+    mock_client.models.list_async = AsyncMock(side_effect=make_sdk_error(403))
+
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "no-access"}
+    )
+    assert result["errors"] == {"base": "forbidden"}
+
+    mock_client.models.list_async = AsyncMock(return_value=mock_models_response)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "a-key-with-access"}
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert init_integration.data[CONF_API_KEY] == "a-key-with-access"
+
+
+async def test_reconfigure_form_does_not_echo_the_stored_key(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The field starts empty rather than prefilled with the secret.
+
+    A suggested value on a password field is sent to the browser and sits in
+    the DOM. There is nothing to edit in a key either -- a replacement is
+    typed whole -- so prefilling would only leak it.
+    """
+    result = await init_integration.start_reconfigure_flow(hass)
+
+    assert _suggested(result, CONF_API_KEY) is None
+    for marker in result["data_schema"].schema:
+        if marker.schema == CONF_API_KEY:
+            assert marker.default is vol.UNDEFINED
+            break
+    else:
+        pytest.fail("the reconfigure form does not ask for an API key")
+
+
+async def test_reconfigure_entry_abort_reason_has_a_message(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Saving ends with a sentence, not a translation key.
+
+    async_update_reload_and_abort picks the reason itself, so the string is
+    never written down in this repository and no static check could find it.
+    Home Assistant has no default either: its own strings.json carries only a
+    `common` section, with nothing under `config`.
+    """
+    result = await init_integration.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_API_KEY: "rotated-api-key"}
+    )
+    await hass.async_block_till_done()
+
+    path = Path(integration.__file__).parent / "translations" / "en.json"
+    aborts = json.loads(path.read_text(encoding="utf-8"))["config"]["abort"]
+
+    assert result["reason"] in aborts, (
+        f"reconfiguring aborts with {result['reason']!r}, which has no message "
+        f"in en.json and renders to the user as that literal string"
+    )
 
 
 @pytest.mark.parametrize(
@@ -924,6 +1077,106 @@ async def test_reasoning_effort_kept_for_an_unlisted_model(
     assert updated.data[CONF_REASONING_EFFORT] == "high"
 
 
+def _default_for(result: dict, field: str) -> object:
+    """Return the default a form offers for a named field."""
+    marker = next(m for m in result["data_schema"].schema if m.schema == field)
+    return marker.default()
+
+
+async def test_citations_hidden_until_web_search_is_on(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A new agent is not asked about attributing searches it cannot make.
+
+    Same reasoning as reasoning effort: a setting that cannot do anything on
+    the configuration it is shown beside reads as broken rather than as
+    inapplicable.
+    """
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": SOURCE_USER},
+    )
+
+    assert _has_field(result, CONF_WEB_SEARCH)
+    assert not _has_field(result, CONF_WEB_SEARCH_CITATIONS)
+
+
+async def test_citations_offered_and_default_on_with_web_search(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Once a tier is stored the checkbox appears, already ticked.
+
+    On by default because the reply is only affected when a search actually
+    ran, and knowing an answer was fetched seconds ago rather than recalled is
+    most of what says how far to trust it.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_WEB_SEARCH: "web_search"},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+
+    assert _has_field(result, CONF_WEB_SEARCH_CITATIONS)
+    assert _default_for(result, CONF_WEB_SEARCH_CITATIONS) is True
+
+
+async def test_citations_can_be_saved_off(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Clearing the box is stored, and shown cleared next time.
+
+    Worth asserting on the second render as well as on the stored value: a
+    default applied unconditionally would tick the box again on every visit,
+    and quietly turn the setting back on for anyone who saved from that form.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == SUBENTRY_TYPE_CONVERSATION
+    )
+    hass.config_entries.async_update_subentry(
+        init_integration,
+        subentry,
+        data={**subentry.data, CONF_WEB_SEARCH: "web_search"},
+    )
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            CONF_MODEL: DEFAULT_MODEL,
+            CONF_TEMPERATURE: 0.5,
+            CONF_WEB_SEARCH: "web_search",
+            CONF_WEB_SEARCH_CITATIONS: False,
+        },
+    )
+    await hass.async_block_till_done()
+
+    updated = init_integration.subentries[subentry.subentry_id]
+    assert updated.data[CONF_WEB_SEARCH_CITATIONS] is False
+
+    again = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, SUBENTRY_TYPE_CONVERSATION),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    assert _default_for(again, CONF_WEB_SEARCH_CITATIONS) is False
+
+
 def test_reasoning_effort_offers_only_the_values_the_api_accepts() -> None:
     """Two options, not the six the spec declares nor the seven it 422s with.
 
@@ -953,3 +1206,88 @@ async def test_reauth_dialog_is_given_the_entry_name(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["description_placeholders"]["name"] == init_integration.title
+
+
+def _abort_strings(subentry_type: str) -> dict[str, str]:
+    """Return the abort messages declared for a subentry type."""
+    path = Path(integration.__file__).parent / "translations" / "en.json"
+    translations = json.loads(path.read_text(encoding="utf-8"))
+    return translations["config_subentries"][subentry_type]["abort"]
+
+
+@pytest.mark.parametrize(
+    ("subentry_type", "options"),
+    [
+        (SUBENTRY_TYPE_CONVERSATION, {CONF_MODEL: DEFAULT_MODEL}),
+        (SUBENTRY_TYPE_AI_TASK_DATA, {CONF_MODEL: DEFAULT_MODEL}),
+        (SUBENTRY_TYPE_STT, {CONF_MODEL: STT_MODEL}),
+        (SUBENTRY_TYPE_TTS, {CONF_MODEL: TTS_MODEL, CONF_VOICE: VOICE_ID}),
+    ],
+)
+async def test_reconfigure_abort_reason_has_a_message(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_client: MagicMock,
+    subentry_type: str,
+    options: dict,
+) -> None:
+    """Saving a subentry ends with a sentence, not a translation key.
+
+    async_update_and_abort picks its own reason -- reconfigure_successful for
+    a reconfigure flow -- so the key is never written down in this repository
+    and no static check could find it. Home Assistant has no default to fall
+    back on either: its strings.json carries only a `common` section, with
+    nothing for config_subentries. So a missing entry renders as the raw key,
+    which is what every save did.
+
+    Driven to completion rather than asserted against the file, because the
+    point is to catch a reason the integration does not name itself.
+    """
+    subentry = next(
+        s
+        for s in init_integration.subentries.values()
+        if s.subentry_type == subentry_type
+    )
+
+    result = await hass.config_entries.subentries.async_init(
+        (init_integration.entry_id, subentry_type),
+        context={"source": "reconfigure", "subentry_id": subentry.subentry_id},
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], options
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] in _abort_strings(subentry_type), (
+        f"{subentry_type} aborts with {result['reason']!r}, which has no message "
+        f"in en.json and renders to the user as that literal string"
+    )
+
+
+def test_every_subentry_abort_reason_used_in_code_has_a_message() -> None:
+    """The reasons the flow raises itself are covered too.
+
+    The test above catches the success path, which is the one that was broken.
+    These are the failure paths, which are harder to reach -- each needs the
+    API to fail a particular way -- so they are read from the source instead.
+    """
+    source = (Path(integration.__file__).parent / "config_flow.py").read_text()
+    raised = set(re.findall(r'async_abort\(\s*reason="([^"]+)"', source))
+
+    assert raised, "no abort reasons found -- the pattern may have moved"
+
+    for subentry_type in (
+        SUBENTRY_TYPE_CONVERSATION,
+        SUBENTRY_TYPE_AI_TASK_DATA,
+        SUBENTRY_TYPE_STT,
+        SUBENTRY_TYPE_TTS,
+    ):
+        declared = _abort_strings(subentry_type)
+        # no_voices is only reachable for text-to-speech, so the others are
+        # not expected to declare it.
+        expected = raised - (
+            {"no_voices"} if subentry_type != SUBENTRY_TYPE_TTS else set()
+        )
+        missing = expected - set(declared)
+        assert not missing, f"{subentry_type} is missing messages for {sorted(missing)}"

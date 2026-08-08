@@ -45,9 +45,22 @@ _LOGGER = logging.getLogger(__name__)
 # the reply over as the conversation agent writes it, so waiting for the whole
 # message means waiting for the whole model response before any audio starts.
 #
+# Every boundary here is a cost, not a help. The speech model reads sentence
+# structure, abbreviations and prosody better than this regex does, and given
+# the whole reply it would get all of them right -- splitting is precisely
+# what denies it the context, so request two arrives as a standalone
+# "Seuss. His work includes..." with nothing saying that "Dr." preceded it.
+# Boundaries buy early audio and nothing else, which is why there should be as
+# few of them as the latency allows.
+#
+# Joins are not audible. Heard on real playback rather than inferred from the
+# bytes: "The Road Not Taken" spoken in three requests had no seam at either
+# join, and a Wikipedia summary that split mid-name -- request two beginning
+# "Seuss." -- still sounded natural. This comment previously asserted a seam
+# at each join and at that split; nobody had listened.
+#
 # Split on terminators followed by whitespace, so "20.5 degrees" is not an
-# end -- the digit fails the \s+. A minimum length stops every comma-free
-# fragment becoming its own billed request with an audible seam at each join.
+# end -- the digit fails the \s+.
 #
 # The negative lookbehind covers dotted abbreviations: in "e.g." the final
 # period *is* followed by a space, so the first version of this split there
@@ -55,15 +68,30 @@ _LOGGER = logging.getLogger(__name__)
 # did not do. Three characters back being dot-letter-dot identifies the shape
 # and rules it out, which catches "e.g.", "i.e." and "U.S." alike.
 #
+# What that buys is requests rather than audio quality, now that the quality
+# claim is gone: on a paragraph dense with abbreviations it takes 7 chunks
+# down to 4, and on ordinary replies it changes nothing whatsoever. Measured
+# by scripts/measure_tts_chunking.py, which also reports the request counts
+# below.
+#
 # It does not catch titles: "Dr. Smith" still splits, because nothing about
 # "r." distinguishes it from a real sentence end without a list of words.
-# That costs a seam and one extra request, and full sentence segmentation is
-# a rabbit hole this does not need to enter.
+# That costs one extra request -- and, per the playback above, no seam. Full
+# sentence segmentation is a rabbit hole this does not need to enter.
 _SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\.\w\.)\s+")
 
 # Below this, keep accumulating rather than issuing a request. Roughly a short
 # clause -- long enough that "Yes." and "OK." join whatever follows them,
 # short enough that a normal sentence still goes out on its own.
+#
+# It earns its keep on request count: across the sample replies in
+# scripts/measure_tts_chunking.py it stops "Seuss.", "Upstairs is quieter."
+# and "Nothing needs your attention urgently." each becoming a billed request
+# of its own, which is two fewer on a three-paragraph reply.
+#
+# Whether 40 is the right number is still open. It trades requests against how
+# early the first audio starts, and only one side of that trade has been
+# measured -- see the issue linked from that script.
 MIN_SPEECH_CHARS = 40
 
 
@@ -80,26 +108,37 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     """
     buffer = ""
 
-    async for chunk in message_gen:
-        buffer += chunk
+    # Closed with this generator rather than left to the garbage collector.
+    # Home Assistant owns message_gen, but we are the ones who stop consuming
+    # it early -- when a speech request fails, _sentences is closed while
+    # suspended right here, and dropping the reference schedules the
+    # finalisation as a task instead of awaiting it.
+    #
+    # The last of five generators in this chain to be closed properly, and the
+    # one that kept the leak alive after the other four were fixed. It only
+    # showed intermittently, because whether the collector had run by the time
+    # the check looked depended on test ordering.
+    async with aclosing(message_gen) as chunks:
+        async for chunk in chunks:
+            buffer += chunk
 
-        while True:
-            # The first boundary with enough text before it to be worth a
-            # request. Earlier ones are left in place, so a short reply keeps
-            # accumulating instead of going out a clause at a time.
-            boundary = next(
-                (
-                    match
-                    for match in _SENTENCE_END.finditer(buffer)
-                    if match.start() >= MIN_SPEECH_CHARS
-                ),
-                None,
-            )
-            if boundary is None:
-                break
+            while True:
+                # The first boundary with enough text before it to be worth
+                # a request. Earlier ones are left in place, so a short reply
+                # keeps accumulating instead of going out a clause at a time.
+                boundary = next(
+                    (
+                        match
+                        for match in _SENTENCE_END.finditer(buffer)
+                        if match.start() >= MIN_SPEECH_CHARS
+                    ),
+                    None,
+                )
+                if boundary is None:
+                    break
 
-            yield buffer[: boundary.start()].strip()
-            buffer = buffer[boundary.end() :]
+                yield buffer[: boundary.start()].strip()
+                buffer = buffer[boundary.end() :]
 
     if final := buffer.strip():
         yield final
@@ -333,25 +372,50 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
                 # this generator is what left an async_generator_athrow task
                 # pending after the test that caused it.
                 async with aclosing(_speech_events(response)) as events:
-                    async for event in events:
-                        if not (encoded := event.get("audio_data")):
-                            # The terminating speech.audio.done carries no
-                            # audio.
-                            continue
+                    # Drained rather than abandoned, in the finally below.
+                    # Walking away from a partly-read response leaves httpx's
+                    # own generators for the garbage collector: aiter_lines
+                    # iterates aiter_text, which iterates aiter_bytes, both
+                    # with bare `async for` loops, so closing the outer one
+                    # does not close the inner two. Nothing we close on our
+                    # side reaches them.
+                    #
+                    # Measured on a streamed response: abandoning after one
+                    # line leaves one finaliser task, draining to the end
+                    # leaves none -- and that holds for aiter_bytes too, so
+                    # picking a different iterator does not help. Consuming
+                    # the rest is the only thing that does.
+                    #
+                    # Cheap in practice: this only runs when a request is cut
+                    # short, and the remainder is at most one sentence of
+                    # audio.
+                    try:
+                        async for event in events:
+                            if not (encoded := event.get("audio_data")):
+                                # The terminating speech.audio.done carries no
+                                # audio.
+                                continue
 
-                        # Decoded strictly. Handing Home Assistant the wrong
-                        # bytes produces silence at playback rather than an
-                        # error here, which is a miserable thing to debug.
-                        try:
-                            chunk = base64.b64decode(encoded, validate=True)
-                        except (TypeError, binascii.Error) as err:
-                            raise HomeAssistantError(
-                                translation_domain=DOMAIN,
-                                translation_key="speech_not_base64",
-                            ) from err
+                            # Decoded strictly. Handing Home Assistant the wrong
+                            # bytes produces silence at playback rather than an
+                            # error here, which is a miserable thing to debug.
+                            try:
+                                chunk = base64.b64decode(encoded, validate=True)
+                            except (TypeError, binascii.Error) as err:
+                                raise HomeAssistantError(
+                                    translation_domain=DOMAIN,
+                                    translation_key="speech_not_base64",
+                                ) from err
 
-                        spoke = True
-                        yield chunk
+                            spoke = True
+                            yield chunk
+                    finally:
+                        # However this loop ends -- normally, on the
+                        # decode error above, or because the caller
+                        # stopped consuming -- the rest of the response
+                        # is read before letting go of it.
+                        async for _ in events:
+                            pass
 
         except (TimeoutError, httpx.HTTPError) as err:
             # The non-streaming path catches these and this did not, so a

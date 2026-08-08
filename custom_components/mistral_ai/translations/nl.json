@@ -1,0 +1,252 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "description": "Voer je Mistral AI-API-sleutel in om de gespreksagent in te stellen.",
+                "data": {
+                    "api_key": "API-sleutel"
+                }
+            },
+            "reauth_confirm": {
+                "description": "De Mistral AI-API-sleutel voor {name} werkt niet meer. Voer een nieuwe in.",
+                "data": {
+                    "api_key": "API-sleutel"
+                }
+            },
+            "reconfigure": {
+                "description": "Voer de Mistral AI-API-sleutel in die je vanaf nu wilt gebruiken. De opgeslagen sleutel wordt niet getoond, dus voer de nieuwe volledig in. Je gespreksagenten, AI-taken en spraakentiteiten blijven ongewijzigd.",
+                "data": {
+                    "api_key": "API-sleutel"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Kan geen verbinding maken met de Mistral AI-API. Controleer je internetverbinding en probeer het opnieuw.",
+            "invalid_auth": "Ongeldige API-sleutel. Controleer je Mistral AI-API-sleutel en probeer het opnieuw.",
+            "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
+            "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft."
+        },
+        "abort": {
+            "reauth_successful": "Opnieuw verifiëren is gelukt.",
+            "reconfigure_successful": "De Mistral AI-API-sleutel is bijgewerkt."
+        }
+    },
+    "config_subentries": {
+        "conversation": {
+            "initiate_flow": {
+                "user": "Gespreksagent toevoegen",
+                "reconfigure": "Gespreksagent opnieuw configureren"
+            },
+            "entry_type": "Gespreksagent",
+            "step": {
+                "set_options": {
+                    "description": "Configureer de Mistral AI-gespreksagent.",
+                    "data": {
+                        "name": "Naam",
+                        "model": "Model",
+                        "temperature": "Temperatuur",
+                        "max_tokens": "Maximum aantal tokens per antwoord",
+                        "prompt": "Instructies",
+                        "llm_hass_api": "Home Assistant bedienen",
+                        "web_search": "Zoeken op het web (bèta)",
+                        "web_search_citations": "Bronnen van de zoekopdracht noemen",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Redeneren"
+                    },
+                    "data_description": {
+                        "temperature": "Hogere waarden maken antwoorden creatiever, lagere waarden gerichter.",
+                        "prompt": "Instructies aan het model over hoe het zich moet gedragen.",
+                        "llm_hass_api": "Sta de agent toe apparaten in je huis te bedienen.",
+                        "reasoning_effort": "Laat het model nadenken voordat het antwoordt. Het nadenken telt mee voor het maximum aantal tokens hieronder, dus een lage limiet kan het hele antwoord opsouperen voordat het begint — verhoog hem als antwoorden leeg terugkomen.\n\nAlleen zichtbaar bij modellen die dit ondersteunen. Laat leeg om de standaardwaarde van het model te gebruiken.",
+                        "web_search": "Laat de agent opzoeken wat hij niet weet. Mistral rekent per zoekopdracht af, en het premiumniveau kost meer, dus laat leeg om het uit te zetten.\n\nBèta: dit draait op Mistrals conversations-API, die in publieke preview is en kan veranderen.",
+                        "web_search_citations": "Vraagt de agent te vertellen waar een opgezocht antwoord vandaan komt, zodat je het kunt onderscheiden van een antwoord uit het geheugen. Heeft alleen effect op antwoorden waarbij daadwerkelijk is gezocht.\n\nDit is een instructie aan het model en geen garantie, dus die kan genegeerd worden. De bronnen worden in het antwoord zelf genoemd, dat een spraakassistent hardop voorleest, dus zet het uit als je ze liever niet hoort.",
+                        "top_p": "Een alternatief voor temperatuur: het model kijkt alleen naar de waarschijnlijkste woorden waarvan de kansen tot deze waarde optellen. 1.0 laat de selectie ongemoeid. Verlaag deze waarde óf de temperatuur, niet allebei tegelijk."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Instellingen van de gespreksagent opgeslagen.",
+                "entry_not_loaded": "Kan geen gespreksagent toevoegen zolang de integratie niet geladen is.",
+                "cannot_connect": "Kan geen verbinding maken met de Mistral AI-API.",
+                "invalid_auth": "De opgeslagen Mistral AI-API-sleutel is geweigerd. Configureer de integratie opnieuw.",
+                "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft."
+            }
+        },
+        "ai_task_data": {
+            "initiate_flow": {
+                "user": "AI-taak toevoegen",
+                "reconfigure": "AI-taak opnieuw configureren"
+            },
+            "entry_type": "AI-taak",
+            "step": {
+                "set_options": {
+                    "description": "Configureer de Mistral AI-taak.",
+                    "data": {
+                        "name": "Naam",
+                        "model": "Model",
+                        "temperature": "Temperatuur",
+                        "max_tokens": "Maximum aantal tokens per antwoord",
+                        "top_p": "Top-p",
+                        "reasoning_effort": "Redeneren"
+                    },
+                    "data_description": {
+                        "temperature": "Hogere waarden maken antwoorden creatiever, lagere waarden gerichter.",
+                        "top_p": "Een alternatief voor temperatuur: het model kijkt alleen naar de waarschijnlijkste woorden waarvan de kansen tot deze waarde optellen. 1.0 laat de selectie ongemoeid. Verlaag deze waarde óf de temperatuur, niet allebei tegelijk.",
+                        "reasoning_effort": "Laat het model nadenken voordat het antwoordt. Het nadenken telt mee voor het maximum aantal tokens hierboven, dus een lage limiet kan het hele antwoord opsouperen voordat het begint — verhoog hem als taken mislukken zonder gestructureerde gegevens.\n\nAlleen zichtbaar bij modellen die dit ondersteunen. Laat leeg om de standaardwaarde van het model te gebruiken."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Instellingen van de AI-taak opgeslagen.",
+                "entry_not_loaded": "Kan geen AI-taak toevoegen zolang de integratie niet geladen is.",
+                "cannot_connect": "Kan geen verbinding maken met de Mistral AI-API.",
+                "invalid_auth": "De opgeslagen Mistral AI-API-sleutel is geweigerd. Configureer de integratie opnieuw.",
+                "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft."
+            }
+        },
+        "stt": {
+            "initiate_flow": {
+                "user": "Spraak-naar-tekst toevoegen",
+                "reconfigure": "Spraak-naar-tekst opnieuw configureren"
+            },
+            "entry_type": "Spraak-naar-tekst",
+            "step": {
+                "set_options": {
+                    "description": "Configureer Mistral AI spraak-naar-tekst.",
+                    "data": {
+                        "name": "Naam",
+                        "model": "Model",
+                        "temperature": "Temperatuur"
+                    },
+                    "data_description": {
+                        "model": "Alleen modellen die audio kunnen transcriberen worden getoond.",
+                        "temperature": "Hogere waarden laten het model vrijer gokken bij onduidelijke audio."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Instellingen voor spraak-naar-tekst opgeslagen.",
+                "entry_not_loaded": "Kan spraak-naar-tekst niet toevoegen zolang de integratie niet geladen is.",
+                "cannot_connect": "Kan geen verbinding maken met de Mistral AI-API.",
+                "invalid_auth": "De opgeslagen Mistral AI-API-sleutel is geweigerd. Configureer de integratie opnieuw.",
+                "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft."
+            }
+        },
+        "tts": {
+            "initiate_flow": {
+                "user": "Tekst-naar-spraak toevoegen",
+                "reconfigure": "Tekst-naar-spraak opnieuw configureren"
+            },
+            "entry_type": "Tekst-naar-spraak",
+            "step": {
+                "set_options": {
+                    "description": "Configureer Mistral AI tekst-naar-spraak.",
+                    "data": {
+                        "name": "Naam",
+                        "model": "Model",
+                        "voice": "Stem"
+                    },
+                    "data_description": {
+                        "model": "Alleen modellen die spraak kunnen genereren worden getoond.",
+                        "voice": "De stem die wordt gebruikt als de aanroeper er geen specifieke vraagt."
+                    }
+                }
+            },
+            "abort": {
+                "reconfigure_successful": "Instellingen voor tekst-naar-spraak opgeslagen.",
+                "entry_not_loaded": "Kan tekst-naar-spraak niet toevoegen zolang de integratie niet geladen is.",
+                "cannot_connect": "Kan geen verbinding maken met de Mistral AI-API.",
+                "invalid_auth": "De opgeslagen Mistral AI-API-sleutel is geweigerd. Configureer de integratie opnieuw.",
+                "forbidden": "Mistral AI heeft het verzoek geweigerd. De API-sleutel is geldig, dus een nieuwe helpt niet — controleer op console.mistral.ai of je account toegang heeft.",
+                "no_voices": "Kon de stemmen van je Mistral AI-account niet ophalen. Tekst-naar-spraak heeft een stem nodig, dus het kan pas worden ingesteld als de lijst geladen is — probeer het zo meteen nog eens."
+            }
+        }
+    },
+    "selector": {
+        "web_search": {
+            "options": {
+                "web_search": "Standaard",
+                "web_search_premium": "Premium (kost meer per zoekopdracht)"
+            }
+        },
+        "reasoning_effort": {
+            "options": {
+                "none": "Uit",
+                "high": "Aan"
+            }
+        }
+    },
+    "exceptions": {
+        "api_error": {
+            "message": "Fout bij het communiceren met Mistral AI: {error}"
+        },
+        "attachment_not_found": {
+            "message": "De bijlage {path} bestaat niet."
+        },
+        "attachment_too_large": {
+            "message": "{path} is {size} MB, en bijlagen zijn beperkt tot {limit} MB."
+        },
+        "empty_image": {
+            "message": "Mistral AI gaf een lege afbeelding terug. Probeer het opnieuw."
+        },
+        "forbidden": {
+            "message": "Mistral AI heeft het verzoek geweigerd. Je account heeft mogelijk geen toegang tot dit model of deze functie."
+        },
+        "image_download_error": {
+            "message": "Fout bij het downloaden van de gegenereerde afbeelding: {error}"
+        },
+        "invalid_api_key": {
+            "message": "De Mistral AI-API-sleutel is geweigerd. Configureer de integratie opnieuw."
+        },
+        "invalid_request": {
+            "message": "Mistral AI heeft het verzoek afgewezen: {detail}"
+        },
+        "invalid_structured_response": {
+            "message": "Mistral AI gaf geen geldige gestructureerde gegevens terug. Probeer de structuur te vereenvoudigen, of vraag het opnieuw."
+        },
+        "no_image_returned": {
+            "message": "Mistral AI gaf geen afbeelding terug. {model} kan mogelijk geen afbeeldingen genereren."
+        },
+        "tool_loop_exhausted": {
+            "message": "Mistral AI bleef om tools vragen en was niet klaar binnen {limit} rondes. Probeer het verzoek anders te formuleren, of op te splitsen in kleinere stappen."
+        },
+        "speech_no_audio": {
+            "message": "Mistral AI gaf geen audio terug voor dit antwoord. Probeer het opnieuw."
+        },
+        "speech_not_base64": {
+            "message": "Mistral AI gaf audio terug die niet gedecodeerd kon worden. Probeer het opnieuw."
+        },
+        "speech_transport_error": {
+            "message": "De verbinding met Mistral AI ging verloren tijdens het genereren van spraak: {error}"
+        },
+        "rate_limited": {
+            "message": "Verzoeklimiet bereikt bij Mistral AI. Probeer het zo meteen nog eens."
+        },
+        "truncated_before_answering": {
+            "message": "Mistral AI kwam ruimte tekort voordat het antwoord gaf. Verhoog de instelling voor het maximum aantal tokens, of verlaag het redeneren als dat is ingesteld."
+        },
+        "unexpected_error": {
+            "message": "Onverwachte fout van Mistral AI: {error}"
+        },
+        "unsupported_attachment_type": {
+            "message": "Alleen afbeeldingen en PDF's kunnen naar Mistral AI worden gestuurd, en {path} is geen van beide."
+        }
+    },
+    "issues": {
+        "deprecated_model": {
+            "title": "{name} gebruikt een model dat wordt uitgefaseerd",
+            "fix_flow": {
+                "step": {
+                    "confirm": {
+                        "title": "{name} overzetten naar {replacement}",
+                        "description": "{name} is ingesteld op {model}, dat Mistral AI op {date} uitfaseert. Na die datum geeft het geen antwoord meer.\n\nMistral AI noemt {replacement} als vervanger. Bevestig om {name} daarnaar over te zetten.\n\nVerder verandert er niets aan {name}, en je kunt op elk moment zelf een ander model kiezen door het opnieuw te configureren."
+                    }
+                }
+            }
+        },
+        "deprecated_model_no_successor": {
+            "title": "{name} gebruikt een model dat wordt uitgefaseerd",
+            "description": "{name} is ingesteld op {model}, dat Mistral AI op {date} uitfaseert. Na die datum geeft het geen antwoord meer.\n\nMistral AI heeft hiervoor geen vervanger genoemd, dus er is niets om automatisch naar over te stappen. Configureer {name} opnieuw en kies een ander model — de keuzelijst markeert alles wat ook wordt uitgefaseerd, zodat je niet twee keer in hetzelfde probleem loopt."
+        }
+    }
+}
