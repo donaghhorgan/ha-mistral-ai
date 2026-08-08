@@ -90,6 +90,7 @@ updates:
     # its complement.
     allow:
       - dependency-name: mistralai
+      - dependency-name: sentence-stream
       - dependency-name: bandit
       # ha-ffmpeg and mutagen are needed to import homeassistant.components.tts
       # at all. Neither is pinned by Home Assistant, so both are ordinary dev

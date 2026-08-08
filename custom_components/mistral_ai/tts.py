@@ -6,7 +6,6 @@ import base64
 import binascii
 import json
 import logging
-import re
 from contextlib import aclosing
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
@@ -19,6 +18,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.httpx_client import get_async_client
 from mistralai.client.errors import SDKError
+from sentence_stream import SentenceBoundaryDetector
 
 from .const import (
     CONF_API_KEY,
@@ -46,12 +46,11 @@ _LOGGER = logging.getLogger(__name__)
 # message means waiting for the whole model response before any audio starts.
 #
 # Every boundary here is a cost, not a help. The speech model reads sentence
-# structure, abbreviations and prosody better than this regex does, and given
-# the whole reply it would get all of them right -- splitting is precisely
-# what denies it the context, so request two arrives as a standalone
-# "Seuss. His work includes..." with nothing saying that "Dr." preceded it.
-# Boundaries buy early audio and nothing else, which is why there should be as
-# few of them as the latency allows.
+# structure, abbreviations and prosody better than any splitter does, and
+# given the whole reply it would get all of them right -- splitting is
+# precisely what denies it that context. Boundaries buy early audio and
+# nothing else, which is why there should be as few of them as the latency
+# allows.
 #
 # Joins are not audible. Heard on real playback rather than inferred from the
 # bytes: "The Road Not Taken" spoken in three requests had no seam at either
@@ -59,40 +58,59 @@ _LOGGER = logging.getLogger(__name__)
 # "Seuss." -- still sounded natural. This comment previously asserted a seam
 # at each join and at that split; nobody had listened.
 #
-# Split on terminators followed by whitespace, so "20.5 degrees" is not an
-# end -- the digit fails the \s+.
+# Where the boundaries are is `sentence_stream`'s problem, not ours. It is
+# what `elevenlabs` uses for the same job -- the only other integration in
+# Home Assistant that has to split a text stream itself, because its endpoint
+# also takes one finished string per request rather than a stream. `cloud` and
+# `wyoming` both hand the stream straight to something downstream that accepts
+# one, which is not an option here.
 #
-# The negative lookbehind covers dotted abbreviations: in "e.g." the final
-# period *is* followed by a space, so the first version of this split there
-# and spoke a fragment ending "e.g." -- exactly what its comment claimed it
-# did not do. Three characters back being dot-letter-dot identifies the shape
-# and rules it out, which catches "e.g.", "i.e." and "U.S." alike.
+# This replaced a single regex, `(?<=[.!?])(?<!\.\w\.)\s+`, which was wrong in
+# two ways that matter:
 #
-# What that buys is requests rather than audio quality, now that the quality
-# claim is gone: on a paragraph dense with abbreviations it takes 7 chunks
-# down to 4, and on ordinary replies it changes nothing whatsoever. Measured
-# by scripts/measure_tts_chunking.py, which also reports the request counts
-# below.
+#   Titles. "Dr. Seuss" split mid-name, because nothing about "r." tells a
+#   lookbehind that it is not a sentence end. The library's rule is a capital
+#   followed by one or two more letters and a dot, which covers "Dr.", "Mr."
+#   and "St." as well as the "e.g." and "U.S." shapes the lookbehind caught.
 #
-# It does not catch titles: "Dr. Smith" still splits, because nothing about
-# "r." distinguishes it from a real sentence end without a list of words.
-# That costs one extra request -- and, per the playback above, no seam. Full
-# sentence segmentation is a rabbit hole this does not need to enter.
-_SENTENCE_END = re.compile(r"(?<=[.!?])(?<!\.\w\.)\s+")
+#   Anything not written with spaces after full stops. "。" is not followed by
+#   whitespace, so the regex found *no* boundaries at all in Chinese or
+#   Japanese and spoke the entire reply as one request. This integration ships
+#   translations for both, and a conversation agent answers in whatever
+#   language it is addressed in, so that was a real gap rather than a
+#   theoretical one.
+#
+# It also strips markdown asterisks, which the model emits and which have no
+# business being spoken.
 
 # Below this, keep accumulating rather than issuing a request. Roughly a short
 # clause -- long enough that "Yes." and "OK." join whatever follows them,
 # short enough that a normal sentence still goes out on its own.
 #
-# It earns its keep on request count: across the sample replies in
-# scripts/measure_tts_chunking.py it stops "Seuss.", "Upstairs is quieter."
-# and "Nothing needs your attention urgently." each becoming a billed request
-# of its own, which is two fewer on a three-paragraph reply.
-#
-# Whether 40 is the right number is still open. It trades requests against how
-# early the first audio starts, and only one side of that trade has been
-# measured -- see the issue linked from that script.
+# `elevenlabs` has no equivalent and speaks every sentence as it arrives. Kept
+# anyway, but for a smaller reason than it used to have: speech is billed per
+# character, so the extra requests cost nothing, and the case for the floor is
+# now only that each request consumes rate-limit budget and adds wall clock --
+# 22s against 11.5s to deliver a three-paragraph reply, measured in #160.
+# Neither is audible, since both finish far ahead of playback.
 MIN_SPEECH_CHARS = 40
+
+
+# Sentence-final punctuation in scripts that are written without spaces
+# between sentences. Chinese and Japanese put nothing after "。", so joining
+# two of them with a space inserts whitespace their writing system does not
+# use -- the same mistake in the opposite direction as running two English
+# sentences together.
+_NO_SPACE_AFTER = "。！？…」』）》】〕〉"
+
+
+def _join(pending: str, sentence: str) -> str:
+    """Return two sentences joined the way their script writes them."""
+    if not pending:
+        return sentence
+    if pending[-1] in _NO_SPACE_AFTER:
+        return f"{pending}{sentence}"
+    return f"{pending} {sentence}"
 
 
 async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
@@ -102,11 +120,19 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     by token and therefore mid-word. Speaking those directly would be one
     request per fragment.
 
-    Slices the accumulated buffer rather than splitting and rejoining it, so
-    the whitespace between sentences survives. Rejoining lost it, and "Yes."
-    followed by "OK." was spoken as "Yes.OK.".
+    Sentences come from `sentence_stream`, which is fed the fragments as they
+    arrive and holds back a boundary it cannot yet judge -- a trailing "Dr."
+    is only a sentence end once the next word shows it is not a title. What
+    is left here is the grouping: sentences accumulate until there are enough
+    characters to be worth a request.
+
+    Sentences come back stripped, so the separator between two of them has to
+    be put back explicitly -- without it "Yes." and "OK." are handed over as
+    "Yes.OK.", which is how this went wrong the first time. Which separator
+    depends on the script: see `_join`.
     """
-    buffer = ""
+    detector = SentenceBoundaryDetector()
+    pending = ""
 
     # Closed with this generator rather than left to the garbage collector.
     # Home Assistant owns message_gen, but we are the ones who stop consuming
@@ -120,28 +146,21 @@ async def _sentences(message_gen: AsyncGenerator[str]) -> AsyncGenerator[str]:
     # the check looked depended on test ordering.
     async with aclosing(message_gen) as chunks:
         async for chunk in chunks:
-            buffer += chunk
+            for sentence in detector.add_chunk(chunk):
+                pending = _join(pending, sentence)
+                if len(pending) >= MIN_SPEECH_CHARS:
+                    yield pending
+                    pending = ""
 
-            while True:
-                # The first boundary with enough text before it to be worth
-                # a request. Earlier ones are left in place, so a short reply
-                # keeps accumulating instead of going out a clause at a time.
-                boundary = next(
-                    (
-                        match
-                        for match in _SENTENCE_END.finditer(buffer)
-                        if match.start() >= MIN_SPEECH_CHARS
-                    ),
-                    None,
-                )
-                if boundary is None:
-                    break
+    # Whatever the detector was still holding when the stream ended. A reply
+    # that does not end in punctuation leaves its last sentence here, and it
+    # is a sentence like any other -- it just never got the following word
+    # that would have settled its boundary.
+    if trailing := detector.finish():
+        pending = _join(pending, trailing)
 
-                yield buffer[: boundary.start()].strip()
-                buffer = buffer[boundary.end() :]
-
-    if final := buffer.strip():
-        yield final
+    if pending:
+        yield pending
 
 
 async def _speech_events(response: httpx.Response) -> AsyncGenerator[dict[str, Any]]:
