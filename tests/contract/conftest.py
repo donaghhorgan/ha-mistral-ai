@@ -6,6 +6,7 @@ run by --ignore in pyproject.toml, so `uv run pytest` stays offline and free.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import TYPE_CHECKING
 
@@ -34,6 +35,58 @@ TTS_MODEL = "voxtral-mini-tts-latest"
 # the same family does not, which is the whole reason the gate is read per
 # model id instead of guessed from the name.
 NON_REASONING_MODEL = "mistral-medium-2508"
+
+# How many times a request that came back "not now" is sent again, and the
+# backoff between tries: 1s, 2s, 4s, for about seven seconds in the worst case.
+ATTEMPTS = 4
+
+# The statuses that mean "not now" rather than "no".
+#
+# 429 is a shared quota. Two pull requests pushed together draw on one account
+# and will limit each other.
+#
+# The 5xx family is the API having a moment, and is here because it happened:
+# the weekly run of 2026-08-10 failed one test on a 503 while the other 33
+# passed. The body was 167 bytes of text/plain and the gateway spent 2ms on it,
+# which is an edge declining to route rather than a model declining a request.
+#
+# Retrying these does not hide a real outage. A sustained one exhausts the
+# attempts and the suite still goes red, carrying the real status code. What it
+# stops is a single blip painting the contract suite red, which is worse here
+# than elsewhere: this suite going red is supposed to mean the API changed
+# under us, and the value of that signal is in how rarely it fires.
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+
+
+class RetryTransport(httpx.AsyncBaseTransport):
+    """Retry transient failures under the client, not per call site.
+
+    Attached to the client rather than wrapped around a POST helper so that it
+    covers the whole suite. The retry used to live in the `post` fixture, which
+    left the tests that reach for `client.get` or `client.stream` -- the voice
+    listing, the model listing, both streamed-speech tests -- with no cover at
+    all, for no better reason than that they do not post.
+    """
+
+    def __init__(self, wrapped: httpx.AsyncBaseTransport) -> None:
+        """Wrap the transport that does the real work."""
+        self._wrapped = wrapped
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        """Send the request, trying again while it comes back retryable."""
+        for attempt in range(ATTEMPTS):
+            response = await self._wrapped.handle_async_request(request)
+            if response.status_code not in RETRY_STATUSES or attempt == ATTEMPTS - 1:
+                return response
+            # Nothing has read the body yet, so this releases the connection
+            # rather than discarding a response someone is waiting on.
+            await response.aclose()
+            await asyncio.sleep(2**attempt)
+        return response
+
+    async def aclose(self) -> None:
+        """Close the wrapped transport along with this one."""
+        await self._wrapped.aclose()
 
 
 @pytest.fixture(scope="session")
@@ -100,37 +153,28 @@ async def client(
 
     The network restrictions the rest of the suite runs under are lifted by
     the fixture above, in one place rather than per test.
+
+    Transient failures are retried by the transport, so every request made
+    through this client is covered however it was sent.
     """
     async with httpx.AsyncClient(
         base_url=BASE_URL,
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=60.0,
+        transport=RetryTransport(httpx.AsyncHTTPTransport()),
     ) as http:
         yield http
 
 
 @pytest.fixture
 def post(client: httpx.AsyncClient) -> Callable:
-    """Return a POST helper that retries a rate limit rather than failing.
+    """Return a POST helper, for the JSON body most of these tests send.
 
-    Two pull requests pushed together share an account quota and will limit
-    each other. A false red on a shared limit is indistinguishable from a real
-    failure to whoever reads it, and teaches them the suite is unreliable.
+    Brevity only. Retries belong to the transport above, where `client.get`
+    and `client.stream` get them too.
     """
 
     async def _post(path: str, payload: dict, **kwargs: object) -> httpx.Response:
-        for attempt in range(4):
-            response = await client.post(path, json=payload, **kwargs)
-            if response.status_code != 429:
-                return response
-            await _sleep(2**attempt)
-        return response
+        return await client.post(path, json=payload, **kwargs)
 
     return _post
-
-
-async def _sleep(seconds: float) -> None:
-    """Sleep between retries."""
-    import asyncio
-
-    await asyncio.sleep(seconds)
