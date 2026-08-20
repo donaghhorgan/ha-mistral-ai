@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -86,6 +87,24 @@ def test_convert_tool_result_content() -> None:
     assert message["tool_call_id"] == "call_1"
     assert message["name"] == "turn_on"
     assert json.loads(message["content"]) == {"ok": True}
+
+
+def test_convert_tool_result_content_with_non_json_native_value() -> None:
+    """A tool result containing a non-JSON-native value (e.g. HassGetCurrentTime's
+    speech_slots) is coerced instead of crashing message replay on a later turn.
+    """
+    content = conversation.ToolResultContent(
+        agent_id="agent",
+        tool_call_id="call_1",
+        tool_name="HassGetCurrentTime",
+        tool_result={"speech_slots": {"time": time(14, 30)}},
+    )
+
+    message = _convert_content(content)
+
+    assert json.loads(message["content"]) == {
+        "speech_slots": {"time": str(time(14, 30))}
+    }
 
 
 def test_convert_unsupported_content() -> None:
