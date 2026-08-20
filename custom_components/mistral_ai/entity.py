@@ -256,7 +256,7 @@ def _convert_content(content: conversation.Content) -> dict[str, Any]:
             "role": "tool",
             "name": content.tool_name,
             "tool_call_id": content.tool_call_id,
-            "content": json.dumps(content.tool_result),
+            "content": json.dumps(content.tool_result, default=str),
         }
 
     raise HomeAssistantError(f"Unsupported content type: {type(content)}")
