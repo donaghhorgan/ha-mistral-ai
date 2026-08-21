@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -30,6 +31,7 @@ from custom_components.mistral_ai.const import (
     SUBENTRY_TYPE_CONVERSATION,
     WEB_SEARCH_CITATIONS_PROMPT,
 )
+from custom_components.mistral_ai.entity import LAZY_SEARCH_TOOL_NAME
 
 from .helpers import make_chunk, make_sdk_error, make_tool_call, stream_of
 
@@ -499,10 +501,21 @@ def _conversation_stream(*events: MagicMock):
 def _enable_web_search(
     hass: HomeAssistant,
     entry: MockConfigEntry,
+    mock_client: MagicMock,
     tier: str = "web_search",
     **extra: object,
 ) -> None:
-    """Turn web search on for the conversation subentry."""
+    """Turn web search on for the conversation subentry.
+
+    Also arms the lazy stand-in tool to get "called" on the very next chat-
+    completions turn, so every test written against the old unconditional
+    connector still reaches beta.conversations.start_stream_async exactly as
+    it did before lazy escalation existed -- see
+    _async_detect_search_escalation. A test of the lazy path itself
+    overwrites mock_client.chat.stream_async afterwards, which is exactly
+    what test_web_search_skips_the_connector_when_search_is_not_needed and
+    its neighbours do.
+    """
     subentry = next(
         s
         for s in entry.subentries.values()
@@ -513,28 +526,40 @@ def _enable_web_search(
         subentry,
         data={CONF_MODEL: "mistral-small-latest", CONF_WEB_SEARCH: tier, **extra},
     )
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(call_id="lazy-1", name=LAZY_SEARCH_TOOL_NAME)
+                ],
+                finish_reason="tool_calls",
+            )
+        )
+    )
 
 
-async def test_web_search_goes_to_the_conversations_endpoint(
+async def test_web_search_escalates_to_the_conversations_endpoint(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """An agent with web search on does not use chat completions at all.
+    """A turn that calls the lazy stand-in escalates to the real connector.
 
-    Connectors do not run there: the endpoint accepts the tool and then never
-    runs it, because its responses have nowhere to carry what a connector
-    returns.
+    Connectors do not run on chat completions: the endpoint accepts the tool
+    and then never runs it, because its responses have nowhere to carry what
+    a connector returns -- so calling the stand-in there is only ever a
+    signal, never the search itself. See #176.
     """
     mock_client.beta.conversations.start_stream_async = AsyncMock(
         side_effect=_conversation_stream(
             _event(type="message.output.delta", content="It is raining.")
         )
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "what is the weather")) == "It is raining."
 
-    mock_client.chat.stream_async.assert_not_awaited()
+    # Exactly one detection round trip, not a retry loop.
+    mock_client.chat.stream_async.assert_awaited_once()
 
     request = mock_client.beta.conversations.start_stream_async.await_args.kwargs
     assert {"type": "web_search"} in request["tools"]
@@ -572,6 +597,219 @@ async def test_web_search_is_off_by_default(
     assert "tools" not in mock_client.chat.stream_async.await_args.kwargs
 
 
+async def test_web_search_skips_the_connector_when_search_is_not_needed(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A turn that never calls the stand-in never touches the connector.
+
+    This is the point of lazy escalation -- #176: the connector cost every
+    turn ~0.7s of time-to-first-token to serve a feature roughly 1 turn in 40
+    actually needed. Verified against the real API before this shipped: the
+    stand-in was never called on trivial, small-talk, arithmetic, general
+    knowledge or plain Home-Assistant-tool probes, only on ones that actually
+    needed a search.
+    """
+    _enable_web_search(hass, init_integration, mock_client)
+    await hass.async_block_till_done()
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="Yes."))
+    )
+
+    assert speech(await converse(hass, "say yes")) == "Yes."
+
+    mock_client.chat.stream_async.assert_awaited_once()
+    mock_client.beta.conversations.start_stream_async.assert_not_called()
+
+
+class _FakeEventStream:
+    """Mimics EventStreamAsync's shape: chunks plus a closeable .response.
+
+    The mocks built by stream_of/make_stream are bare async generators, which
+    cannot carry an arbitrary .response attribute -- CPython's async
+    generator objects have no __dict__. This stands in wherever a test needs
+    to assert on the underlying connection being closed.
+    """
+
+    def __init__(self, chunks: list[Any]) -> None:
+        self._chunks = chunks
+        self.response = AsyncMock()
+
+    def __aiter__(self):
+        return self._generator()
+
+    async def _generator(self):
+        for chunk in self._chunks:
+            yield chunk
+
+
+async def test_web_search_escalation_closes_the_abandoned_detection_stream(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """Escalating closes the detection request's connection, not just drops it.
+
+    EventStreamAsync only closes the underlying response once its stream is
+    read to the SSE sentinel or EOF. Escalating stops reading as soon as the
+    stand-in's name is seen, well before either -- and escalating is the
+    success case for a search turn, not an error path, so leaving the
+    connection to whenever garbage collection gets to it would leak one on
+    every turn that actually searches.
+    """
+    detection_stream = _FakeEventStream(
+        [
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(call_id="lazy-1", name=LAZY_SEARCH_TOOL_NAME)
+                ],
+                finish_reason="tool_calls",
+            )
+        ]
+    )
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="It is raining.")
+        )
+    )
+    _enable_web_search(hass, init_integration, mock_client)
+    await hass.async_block_till_done()
+    mock_client.chat.stream_async = AsyncMock(return_value=detection_stream)
+
+    assert speech(await converse(hass, "what is the weather")) == "It is raining."
+
+    detection_stream.response.aclose.assert_awaited_once()
+
+
+async def test_web_search_lazy_tool_is_offered_alongside_real_tools(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """The detection request carries the stand-in next to real HA tools."""
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
+    await hass.async_block_till_done()
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(make_chunk(content="Done."))
+    )
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        await converse(hass, "turn on the light")
+
+    tools = mock_client.chat.stream_async.await_args.kwargs["tools"]
+    names = {tool["function"]["name"] for tool in tools}
+    assert names == {"test_tool", LAZY_SEARCH_TOOL_NAME}
+
+
+async def test_web_search_escalation_discards_a_combined_detection_call(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A real tool called alongside the stand-in is never run from detection.
+
+    Verified against the real API: asking for both a Home Assistant action
+    and a search in the same sentence calls both tools in the same turn, in
+    either order. Whichever one it is, detection only ever reads the names --
+    it never dispatches anything, so the real tool has to run again, for
+    real, once the turn hands off to the endpoint that can actually search.
+    """
+    streams = [
+        _conversation_stream(
+            _event(
+                type="function.call.delta",
+                tool_call_id="call-1",
+                name="test_tool",
+                arguments='{"param": "value"}',
+            ),
+        ),
+        _conversation_stream(
+            _event(type="message.output.delta", content="Done, and it is raining.")
+        ),
+    ]
+
+    async def _next_stream(*args: object, **kwargs: object):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_next_stream
+    )
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
+    await hass.async_block_till_done()
+    # _enable_web_search armed a plain detection stub; this test needs its own.
+    mock_client.chat.stream_async = AsyncMock(
+        side_effect=stream_of(
+            make_chunk(
+                tool_calls=[
+                    make_tool_call(index=0, call_id="ha-1", name="test_tool"),
+                    make_tool_call(
+                        index=1, call_id="lazy-1", name=LAZY_SEARCH_TOOL_NAME
+                    ),
+                ],
+                finish_reason="tool_calls",
+            )
+        )
+    )
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "turn on the light and check the weather")
+
+    assert speech(result) == "Done, and it is raining."
+    # Exactly once: detection saw the name but never ran it.
+    mock_tool.async_call.assert_awaited_once()
+
+
+async def test_web_search_falls_back_when_a_real_tool_claims_the_lazy_name(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A real tool named the same as the stand-in disables lazy escalation.
+
+    An edge case worth not colliding with rather than one worth solving
+    cleverly -- the turn falls back to what every web-search turn did before
+    lazy escalation existed: the connector attached unconditionally, with no
+    detection round trip at all.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_conversation_stream(
+            _event(type="message.output.delta", content="It is raining.")
+        )
+    )
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
+    await hass.async_block_till_done()
+    mock_client.chat.stream_async.reset_mock()
+
+    mock_tool = AsyncMock()
+    mock_tool.name = LAZY_SEARCH_TOOL_NAME
+    mock_tool.description = "A user-defined tool that happens to share a name"
+    mock_tool.parameters = vol.Schema({})
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "what is the weather")
+
+    assert speech(result) == "It is raining."
+    mock_client.chat.stream_async.assert_not_awaited()
+    mock_client.beta.conversations.start_stream_async.assert_awaited_once()
+
+
 async def test_web_search_agent_still_streams(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
@@ -584,7 +822,7 @@ async def test_web_search_agent_still_streams(
     component = hass.data["conversation"]
     assert component.get_entity(ENTITY_ID).supports_streaming is True
 
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     assert component.get_entity(ENTITY_ID).supports_streaming is True
@@ -602,7 +840,7 @@ async def test_web_search_streams_the_reply_in_pieces(
             _event(type="conversation.response.done"),
         )
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "weather")) == "It is raining in Dublin."
@@ -627,7 +865,7 @@ async def test_web_search_error_event_becomes_an_error(
             ),
         )
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     result = await converse(hass, "weather")
@@ -677,7 +915,9 @@ async def test_web_search_runs_home_assistant_tools(
     mock_client.beta.conversations.start_stream_async = AsyncMock(
         side_effect=_next_stream
     )
-    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
     await hass.async_block_till_done()
 
     mock_tool = AsyncMock()
@@ -700,6 +940,72 @@ async def test_web_search_runs_home_assistant_tools(
     second = mock_client.beta.conversations.start_stream_async.await_args_list[1].kwargs
     results = [e for e in second["inputs"] if e.get("type") == "function.result"]
     assert results and results[0]["tool_call_id"] == "call-1"
+
+
+async def test_web_search_drops_a_phantom_tool_call(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A function.call.delta naming no real tool is dropped, not dispatched.
+
+    Observed once on the web-search path: a tool_call_id whose name was a
+    comma-joined run of other tool-call IDs and digits, belonging to neither
+    Home Assistant nor the connector. Dispatching it can only fail ("Tool ...
+    not found"), costing a full round trip while the model recovers -- #177.
+    A real call in the same turn still has to go through.
+    """
+    streams = [
+        _conversation_stream(
+            _event(
+                type="function.call.delta",
+                tool_call_id="WyqrjjA9B",
+                name="TJv1Kxiq,niCOZXrz,MPt03GYA,5,7,6,4,3,9,8,2,1,0",
+                arguments="{}",
+            ),
+            _event(
+                type="function.call.delta",
+                tool_call_id="call-1",
+                name="test_tool",
+                arguments='{"param": "value"}',
+            ),
+        ),
+        _conversation_stream(
+            _event(type="message.output.delta", content="Done, and it is raining.")
+        ),
+    ]
+
+    async def _next_stream(*args: object, **kwargs: object):
+        return await streams.pop(0)(*args, **kwargs)
+
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=_next_stream
+    )
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
+    await hass.async_block_till_done()
+
+    mock_tool = AsyncMock()
+    mock_tool.name = "test_tool"
+    mock_tool.description = "A test tool"
+    mock_tool.parameters = vol.Schema({})
+    mock_tool.async_call.return_value = {"result": "ok"}
+
+    with patch(
+        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
+        return_value=[mock_tool],
+    ):
+        result = await converse(hass, "check the weather")
+
+    assert speech(result) == "Done, and it is raining."
+    assert mock_tool.async_call.await_count == 1
+    assert mock_tool.async_call.await_args.args[1].tool_name == "test_tool"
+
+    # Only the real call gets a result sent back. The phantom name never
+    # reached Home Assistant, so nothing came back for it to report as
+    # "not found" and burn a second round trip on.
+    second = mock_client.beta.conversations.start_stream_async.await_args_list[1].kwargs
+    results = [e for e in second["inputs"] if e.get("type") == "function.result"]
+    assert [r["tool_call_id"] for r in results] == ["call-1"]
 
 
 @pytest.mark.parametrize(
@@ -725,12 +1031,54 @@ async def test_web_search_api_errors_are_reported(
     mock_client.beta.conversations.start_stream_async = AsyncMock(
         side_effect=side_effect
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     result = await converse(hass, "what is the weather")
 
     assert result.response.response_type == intent.IntentResponseType.ERROR
+
+
+async def test_web_search_unsupported_model_names_the_conflict(
+    hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
+) -> None:
+    """A model that cannot take the connector says so, not the raw API body.
+
+    The model picker offers models the conversations endpoint then refuses --
+    #179. Every turn used to read the raw response body aloud:
+
+        Error talking to Mistral AI: API error occurred: Status 400.
+        Body: {"message":"Model ministral-8b-2512 currently does not support
+        builtin connectors.", ...}
+
+    The configured model is named from local state, not parsed out of the
+    API's text, so this does not depend on Mistral's wording holding still.
+    """
+    mock_client.beta.conversations.start_stream_async = AsyncMock(
+        side_effect=SDKError(
+            "API error occurred",
+            httpx.Response(
+                400,
+                text=(
+                    '{"object":"Error","message":"Model ministral-8b-2512 '
+                    'currently does not support builtin connectors.",'
+                    '"type":"invalid_request_error"}'
+                ),
+            ),
+        )
+    )
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_MODEL: "ministral-8b-2512"}
+    )
+    await hass.async_block_till_done()
+
+    result = await converse(hass, "what is the weather")
+
+    assert result.response.response_type == intent.IntentResponseType.ERROR
+    assert "ministral-8b-2512" in speech(result)
+    assert "web search" in speech(result)
+    # Not the raw body, which named a Mistral-internal field nobody here set.
+    assert "builtin connector" not in speech(result)
 
 
 async def test_web_search_citations_do_not_break_the_reply(
@@ -766,7 +1114,7 @@ async def test_web_search_citations_do_not_break_the_reply(
             _event(type="message.output.delta", content=_entry(type="text", text=".")),
         )
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     assert speech(await converse(hass, "weather")) == "It is 21 degrees in Dublin."
@@ -788,7 +1136,7 @@ async def test_web_search_asks_the_model_to_name_its_sources(
             _event(type="message.output.delta", content="ok")
         )
     )
-    _enable_web_search(hass, init_integration)
+    _enable_web_search(hass, init_integration, mock_client)
     await hass.async_block_till_done()
 
     await converse(hass, "weather")
@@ -812,7 +1160,9 @@ async def test_web_search_citations_can_be_turned_off(
             _event(type="message.output.delta", content="ok")
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_WEB_SEARCH_CITATIONS: False})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_WEB_SEARCH_CITATIONS: False}
+    )
     await hass.async_block_till_done()
 
     await converse(hass, "weather")
@@ -835,7 +1185,9 @@ async def test_web_search_citations_keep_the_configured_prompt(
             _event(type="message.output.delta", content="ok")
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_PROMPT: "Answer like a pirate."})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_PROMPT: "Answer like a pirate."}
+    )
     await hass.async_block_till_done()
 
     await converse(hass, "weather")
@@ -874,7 +1226,9 @@ async def test_web_search_citations_are_not_appended_twice(
     mock_client.beta.conversations.start_stream_async = AsyncMock(
         side_effect=_next_stream
     )
-    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
     await hass.async_block_till_done()
 
     mock_tool = AsyncMock()
@@ -966,7 +1320,7 @@ async def test_top_p_is_sent_on_the_conversations_path(
             _event(type="message.output.delta", content="ok")
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_TOP_P: 0.4})
+    _enable_web_search(hass, init_integration, mock_client, **{CONF_TOP_P: 0.4})
     await hass.async_block_till_done()
 
     await converse(hass)
@@ -1008,7 +1362,9 @@ async def test_reasoning_effort_is_sent_on_the_conversations_path(
             _event(type="message.output.delta", content="ok")
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_REASONING_EFFORT: "high"})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_REASONING_EFFORT: "high"}
+    )
     await hass.async_block_till_done()
 
     await converse(hass)
@@ -1056,7 +1412,7 @@ async def test_web_search_reply_cut_off_before_answering_is_reported(
             _event(type="conversation.response.done", usage=_usage(12)),
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 12})
+    _enable_web_search(hass, init_integration, mock_client, **{CONF_MAX_TOKENS: 12})
     await hass.async_block_till_done()
 
     result = await converse(hass)
@@ -1079,7 +1435,7 @@ async def test_web_search_keeps_a_truncated_partial_answer(
             _event(type="conversation.response.done", usage=_usage(12)),
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 12})
+    _enable_web_search(hass, init_integration, mock_client, **{CONF_MAX_TOKENS: 12})
     await hass.async_block_till_done()
 
     result = await converse(hass)
@@ -1103,7 +1459,7 @@ async def test_web_search_does_not_report_a_reply_that_finished(
             _event(type="conversation.response.done", usage=_usage(13)),
         )
     )
-    _enable_web_search(hass, init_integration, **{CONF_MAX_TOKENS: 3000})
+    _enable_web_search(hass, init_integration, mock_client, **{CONF_MAX_TOKENS: 3000})
     await hass.async_block_till_done()
 
     result = await converse(hass)
@@ -1178,7 +1534,9 @@ async def test_web_search_tool_loop_exhaustion_is_reported(
     hass: HomeAssistant, init_integration: MockConfigEntry, mock_client: MagicMock
 ) -> None:
     """And on the other loop, which had the same silence."""
-    _enable_web_search(hass, init_integration, **{CONF_LLM_HASS_API: ["assist"]})
+    _enable_web_search(
+        hass, init_integration, mock_client, **{CONF_LLM_HASS_API: ["assist"]}
+    )
     await hass.async_block_till_done()
 
     mock_client.beta.conversations.start_stream_async = AsyncMock(

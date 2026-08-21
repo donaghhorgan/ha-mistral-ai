@@ -52,6 +52,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable, Mapping
     from pathlib import Path
 
+    from mistralai.client import Mistral
+
     from . import MistralConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
@@ -349,6 +351,88 @@ async def _async_convert_messages(
     return messages
 
 
+# A stand-in for the real connector, attached to chat completions instead of
+# always paying for the conversations endpoint -- see
+# _async_detect_search_escalation. Calling it never actually searches
+# anything: the model calling it at all is the only signal used, so the
+# description only has to get the model to reach for it at the right moments,
+# not describe a real contract.
+#
+# Verified against the real API (mistral-small-2603, 24 probes across eight
+# prompts): called on every prompt that needed a search (weather, news, an
+# explicit search request) and zero of the ones that did not (small talk,
+# arithmetic, general knowledge, a plain Home Assistant tool call) -- and
+# correctly called alongside a real Home Assistant tool in the same turn when
+# a prompt asked for both, in either order.
+LAZY_SEARCH_TOOL_NAME = "web_search"
+
+LAZY_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": LAZY_SEARCH_TOOL_NAME,
+        "description": (
+            "Search the web for information you do not already know, such as "
+            "news, weather, sports scores, or anything time-sensitive."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+}
+
+
+async def _async_detect_search_escalation(
+    stream: AsyncIterable[Any],
+) -> tuple[bool, list[Any]]:
+    """Peek a chat-completions stream for a call to the lazy search stand-in.
+
+    Verified against the real API: a turn's tool calls arrive complete, in
+    the same chunk that carries finish_reason "tool_calls" -- never split
+    across chunks, never alongside content. So the decision is safe to make
+    as soon as either signal appears: real content means the model is
+    answering directly, and finish_reason "tool_calls" means every tool call
+    for this turn is already in the delta that carries it.
+
+    Returns (escalate, consumed). `consumed` holds every chunk already read
+    off `stream` -- an async generator cannot be un-consumed, so the caller
+    replays them ahead of whatever remains of `stream` when escalate is
+    False, through _prefixed_stream, and _transform_stream then sees the same
+    sequence it would have seen without the detour.
+    """
+    consumed: list[Any] = []
+    async for chunk in stream:
+        consumed.append(chunk)
+        data = getattr(chunk, "data", None)
+        if data is None or not data.choices:
+            continue
+
+        delta = data.choices[0].delta
+        if delta.content:
+            return False, consumed
+
+        if data.choices[0].finish_reason == "tool_calls":
+            names = {
+                tool_call.function.name
+                for tool_call in delta.tool_calls or []
+                if tool_call.function is not None
+            }
+            return LAZY_SEARCH_TOOL_NAME in names, consumed
+
+    return False, consumed
+
+
+async def _prefixed_stream(
+    prefix: list[Any], rest: AsyncIterable[Any]
+) -> AsyncGenerator[Any]:
+    """Replay chunks already read off a stream, then continue reading it."""
+    for chunk in prefix:
+        yield chunk
+    async for chunk in rest:
+        yield chunk
+
+
 async def _transform_stream(
     stream: AsyncIterable[Any],
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
@@ -452,12 +536,12 @@ async def _transform_stream(
 
 
 async def _transform_conversation_stream(
-    stream: AsyncIterable[Any], max_tokens: int
+    stream: AsyncIterable[Any], max_tokens: int, valid_tool_names: frozenset[str]
 ) -> AsyncGenerator[conversation.AssistantContentDeltaDict]:
     """Transform a conversations event stream into chat log deltas.
 
     A parallel to _transform_stream rather than a branch in it, because the
-    conversations endpoint reports a different vocabulary of events. Four
+    conversations endpoint reports a different vocabulary of events. Five
     differences matter:
 
     - A failure arrives as an event carrying a message and a code, where chat
@@ -473,8 +557,16 @@ async def _transform_conversation_stream(
       tool_call_id rather than by index. They are buffered and emitted at the
       end, because Home Assistant dispatches a tool call the moment it is
       yielded and a partial one would run with broken arguments.
+    - A function.call.delta can carry a name that belongs to neither Home
+      Assistant nor the connector -- observed once as a comma-joined run of
+      other tool-call IDs and digits, on the web-search path specifically.
+      Dispatching it can only fail ("Tool ... not found"), costing a full
+      round trip while the model recovers, so it is dropped against
+      valid_tool_names instead: the names chat_log.llm_api actually exposes,
+      which the connector itself is never a member of since it runs
+      server-side and never reaches Home Assistant as a tool call.
 
-    Truncation is the fifth difference, and the reason max_tokens is passed
+    Truncation is the sixth difference, and the reason max_tokens is passed
     in. No conversation event carries a finish reason -- searching the SDK's
     models for one finds it only on the two chat-completions shapes -- so the
     test #131 applies on the other path is simply unavailable here, and a
@@ -543,7 +635,22 @@ async def _transform_conversation_stream(
         if arguments := getattr(data, "arguments", None):
             buffered["args"] += arguments
 
-    if complete := [call for call in tool_calls.values() if call["name"]]:
+    if phantom := [
+        call["name"]
+        for call in tool_calls.values()
+        if call["name"] and call["name"] not in valid_tool_names
+    ]:
+        _LOGGER.debug(
+            "Dropping tool call(s) for unknown tool(s) %s from the "
+            "conversations endpoint's event stream",
+            phantom,
+        )
+
+    if complete := [
+        call
+        for call in tool_calls.values()
+        if call["name"] and call["name"] in valid_tool_names
+    ]:
         yield {
             "tool_calls": [
                 llm.ToolInput(
@@ -669,6 +776,33 @@ class MistralBaseEntity(Entity):
                 translation_domain=DOMAIN,
                 translation_key="rate_limited",
             )
+        if (
+            status_code == 400
+            and "does not support" in detail.lower()
+            and "connector" in detail.lower()
+        ):
+            # The model picker offers models the conversations endpoint will
+            # then refuse, because nothing filters on connector support --
+            # the API reports no capability flag for it, unlike
+            # audio_transcription and the others model_choices filters on.
+            # Every turn on this pair failed with the raw body read aloud:
+            #
+            #   API error occurred: Status 400. Body: {"message":"Model
+            #   ministral-8b-2512 currently does not support builtin
+            #   connectors.", ...}
+            #
+            # So this names the actual conflict instead -- the model
+            # configured for the agent, not the one the API happened to echo
+            # back, since the two are the same thing here but the local value
+            # does not depend on the API's wording holding still.
+            _LOGGER.error("Mistral AI rejected the request: %s", detail)
+            return HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="web_search_unsupported_model",
+                translation_placeholders={
+                    "model": self.subentry.data.get(CONF_MODEL, DEFAULT_MODEL)
+                },
+            )
         if status_code == 422 and validation:
             _LOGGER.error("Mistral AI rejected the request: %s", detail)
             return HomeAssistantError(
@@ -754,6 +888,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             ]
         tools.append({"type": options[CONF_WEB_SEARCH]})
         max_tokens = options.get(CONF_MAX_TOKENS, DEFAULT_MAX_TOKENS)
+        valid_tool_names = frozenset(
+            tool.name for tool in (chat_log.llm_api.tools if chat_log.llm_api else [])
+        )
 
         for _iteration in range(MAX_TOOL_ITERATIONS):
             # Rebuilt each pass so tool results from the previous one are
@@ -815,7 +952,9 @@ class MistralBaseLLMEntity(MistralBaseEntity):
 
                 async for _content in chat_log.async_add_delta_content_stream(
                     self.entity_id,
-                    _transform_conversation_stream(stream, max_tokens),
+                    _transform_conversation_stream(
+                        stream, max_tokens, valid_tool_names
+                    ),
                 ):
                     pass
 
@@ -890,12 +1029,14 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         options = self.subentry.data
         client = self.entry.runtime_data.client
 
-        # Connectors only run on the conversations endpoint, so an agent with
-        # web search on takes an entirely different path -- see
-        # _async_handle_chat_log_with_search for what that costs.
-        if options.get(CONF_WEB_SEARCH) in WEB_SEARCH_TOOLS:
-            await self._async_handle_chat_log_with_search(chat_log)
-            return
+        # Connectors only run on the conversations endpoint, and attaching
+        # one there unconditionally cost every turn ~0.7s of time-to-first-
+        # token to serve a feature roughly 1 turn in 40 actually needed --
+        # #176. So an agent with web search on still starts here, on chat
+        # completions, carrying a lightweight stand-in tool alongside its
+        # real ones; only a turn that calls it escalates to the conversations
+        # endpoint, which is where the cost belongs.
+        wants_search = options.get(CONF_WEB_SEARCH) in WEB_SEARCH_TOOLS
 
         model_args: dict[str, Any] = {
             "model": options.get(CONF_MODEL, DEFAULT_MODEL),
@@ -927,14 +1068,27 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             else llm.selector_serializer
         )
 
-        if chat_log.llm_api and (
-            tools := [
+        tools: list[dict[str, Any]] = []
+        if chat_log.llm_api:
+            tools = [
                 _format_tool(tool, custom_serializer) for tool in chat_log.llm_api.tools
             ]
+
+        if wants_search and any(
+            tool["function"]["name"] == LAZY_SEARCH_TOOL_NAME for tool in tools
         ):
+            # A real tool already claims the stand-in's name -- an edge case
+            # worth not colliding with rather than one worth solving cleverly.
+            # Falls back to what every web-search turn did before lazy
+            # escalation existed: the connector attached unconditionally.
+            await self._async_handle_chat_log_with_search(chat_log)
+            return
+
+        if tools or wants_search:
             # An empty tools list is rejected by the API, so only send it when
-            # the selected LLM API actually exposes something.
-            model_args["tools"] = tools
+            # there is something to send -- either real tools, or (with
+            # search wanted) at least the stand-in.
+            model_args["tools"] = [*tools, LAZY_SEARCH_TOOL] if wants_search else tools
 
         if structure and structure_name:
             # Mistral supports structured output natively, so there is no need
@@ -953,24 +1107,72 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             # previous iteration are included.
             messages = await _async_convert_messages(self.hass, chat_log.content)
 
-            async with self._translating_errors():
-                # timeout_ms is applied by the SDK per read, so a stalled
-                # stream fails rather than hanging, while a long but steady
-                # response is left alone. Wrapping the loop in a deadline
-                # instead would also cut off legitimate tool execution.
-                stream = await client.chat.stream_async(
-                    messages=messages, timeout_ms=TIMEOUT * 1000, **model_args
-                )
-
-                async for _content in chat_log.async_add_delta_content_stream(
-                    self.entity_id, _transform_stream(stream)
-                ):
-                    pass
+            if await self._async_stream_chat_completions(
+                chat_log, client, messages, model_args, wants_search=wants_search
+            ):
+                # The stand-in was called: nothing from this attempt was kept
+                # -- see _async_stream_chat_completions -- and the rest of
+                # this turn, including any further tool-calling rounds, is
+                # handed to the endpoint that can actually search.
+                await self._async_handle_chat_log_with_search(chat_log)
+                return
 
             if not chat_log.unresponded_tool_results:
                 break
         else:
             _raise_tool_loop_exhausted()
+
+    async def _async_stream_chat_completions(
+        self,
+        chat_log: conversation.ChatLog,
+        client: Mistral,
+        messages: list[dict[str, Any]],
+        model_args: dict[str, Any],
+        *,
+        wants_search: bool,
+    ) -> bool:
+        """Stream one chat-completions round; return whether it escalated.
+
+        Split out of _async_handle_chat_log because escalating has to return
+        True from inside the try/except _translating_errors wraps, and
+        looping back around to try the conversations endpoint from in there
+        would nest one tool loop inside another for no reason -- the caller
+        already has one.
+
+        When wants_search is set, model_args carries the lazy stand-in
+        alongside the real tools, and a stream that calls it is abandoned
+        without dispatching anything: chat_log never learns the stand-in was
+        called, so nothing needs to be undone before the same turn is retried
+        on the endpoint that can actually search.
+        """
+        async with self._translating_errors():
+            # timeout_ms is applied by the SDK per read, so a stalled stream
+            # fails rather than hanging, while a long but steady response is
+            # left alone. Wrapping the loop in a deadline instead would also
+            # cut off legitimate tool execution.
+            stream = await client.chat.stream_async(
+                messages=messages, timeout_ms=TIMEOUT * 1000, **model_args
+            )
+
+            if wants_search:
+                escalate, consumed = await _async_detect_search_escalation(stream)
+                if escalate:
+                    # Abandoned before the SSE sentinel, or even EOF -- ending
+                    # the async for loop early leaves the underlying response
+                    # open otherwise, since EventStreamAsync only closes it
+                    # once the stream is read to completion. A stream built
+                    # from a test double has no `response` to close.
+                    if (response := getattr(stream, "response", None)) is not None:
+                        await response.aclose()
+                    return True
+                stream = _prefixed_stream(consumed, stream)
+
+            async for _content in chat_log.async_add_delta_content_stream(
+                self.entity_id, _transform_stream(stream)
+            ):
+                pass
+
+        return False
 
     def _convert_error(self, err: SDKError) -> HomeAssistantError:
         """Map a Mistral AI SDK error onto a Home Assistant error."""

@@ -230,6 +230,9 @@
         },
         "unsupported_attachment_type": {
             "message": "只能向 Mistral AI 发送图像和 PDF，而 {path} 两者都不是。"
+        },
+        "web_search_unsupported_model": {
+            "message": "为此代理配置的模型 {model} 不支持网络搜索。请选择其他模型，或在该代理的设置中关闭网络搜索。"
         }
     },
     "issues": {
