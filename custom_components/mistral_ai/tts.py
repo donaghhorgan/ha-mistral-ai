@@ -83,9 +83,7 @@ _LOGGER = logging.getLogger(__name__)
 # It also strips markdown asterisks, which the model emits and which have no
 # business being spoken.
 
-# Below this, keep accumulating rather than issuing a request. Roughly a short
-# clause -- long enough that "Yes." and "OK." join whatever follows them,
-# short enough that a normal sentence still goes out on its own.
+# Below this, keep accumulating rather than issuing a request.
 #
 # `elevenlabs` has no equivalent and speaks every sentence as it arrives. Kept
 # anyway, but for a smaller reason than it used to have: speech is billed per
@@ -93,7 +91,17 @@ _LOGGER = logging.getLogger(__name__)
 # now only that each request consumes rate-limit budget and adds wall clock --
 # 22s against 11.5s to deliver a three-paragraph reply, measured in #160.
 # Neither is audible, since both finish far ahead of playback.
-MIN_SPEECH_CHARS = 40
+#
+# Set to match Home Assistant's own STREAM_RESPONSE_CHARS
+# (assist_pipeline/const.py) rather than picked independently -- #180. Below
+# that many characters of assistant content, the pipeline has not started
+# streaming yet and hands the whole reply over in one piece regardless of
+# what this integration does, so a floor lower than 60 could never be
+# reached by the first chunk of a genuinely streamed reply anyway: measured,
+# streaming engaged in 0 of 23 runs on short replies with the previous floor
+# of 40, and reached first audio *sooner* on long replies than short ones,
+# which is backwards from what a user would expect.
+MIN_SPEECH_CHARS = 60
 
 
 # Sentence-final punctuation in scripts that are written without spaces

@@ -377,8 +377,16 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
     [
         # Split on terminators, but only once a chunk is worth a request.
         (
-            ["This is the first sentence, which is long enough. ", "And a second one."],
-            ["This is the first sentence, which is long enough.", "And a second one."],
+            [
+                "This is the first sentence, and it is long enough on its "
+                "own to be worth a request. ",
+                "And a second one.",
+            ],
+            [
+                "This is the first sentence, and it is long enough on its "
+                "own to be worth a request.",
+                "And a second one.",
+            ],
         ),
         # Short leading fragments join what follows rather than each becoming
         # a billed request with an audible seam at the join.
@@ -408,11 +416,12 @@ async def _collect(entity: tts.TextToSpeechEntity, *chunks: str) -> tuple[str, b
         # A real sentence end still splits when an abbreviation precedes it.
         (
             [
-                "Several rooms are warm, e.g. the kitchen and the hall. "
-                "The porch light is still on."
+                "Several rooms are warm right now, e.g. the kitchen and the "
+                "front hall. The porch light is still on."
             ],
             [
-                "Several rooms are warm, e.g. the kitchen and the hall.",
+                "Several rooms are warm right now, e.g. the kitchen and the "
+                "front hall.",
                 "The porch light is still on.",
             ],
         ),
@@ -529,8 +538,8 @@ async def test_each_sentence_is_spoken_as_it_is_written(
 
     _, audio = await _collect(
         _entity(hass),
-        "The kitchen light is on and the hall light is off. ",
-        "The garage door is closed and the porch light is on.",
+        "The kitchen light is on right now and the hall light is off as well. ",
+        "The garage door is closed and the porch light is currently on too.",
     )
 
     assert route.call_count == 2
@@ -538,8 +547,8 @@ async def test_each_sentence_is_spoken_as_it_is_written(
 
     spoken = [json.loads(call.request.content)["input"] for call in route.calls]
     assert spoken == [
-        "The kitchen light is on and the hall light is off.",
-        "The garage door is closed and the porch light is on.",
+        "The kitchen light is on right now and the hall light is off as well.",
+        "The garage door is closed and the porch light is currently on too.",
     ]
 
 

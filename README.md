@@ -410,6 +410,12 @@ This integration uses the Mistral AI API, which is a paid service. Costs depend 
 - Try a smaller/faster model like `mistral-small-latest`
 - Reduce the maximum tokens setting
 - Check your internet connection speed
+- A system prompt that enforces very short replies (a sentence or two) can
+  prevent Home Assistant's own pipeline from streaming the reply at all --
+  it does not start streaming until more than 60 characters of assistant
+  content have accumulated, regardless of what this integration does. Below
+  that, the whole reply is sent to text-to-speech in one piece, so a longer
+  reply can reach first audio sooner than a very short one.
 
 ### Debug Logging
 
