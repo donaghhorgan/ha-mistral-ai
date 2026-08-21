@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import io
 import logging
-import wave
+import struct
 from typing import TYPE_CHECKING
 
 import httpx
@@ -66,14 +65,40 @@ def _to_wav(pcm: bytes, metadata: stt.SpeechMetadata) -> bytes:
     the metadata describes the samples, not a container. The transcription
     endpoint is given a file and infers the format from it, so without a
     header it sees noise and returns either nothing or nonsense.
+
+    Written directly rather than through `wave` + `BytesIO`: this integration
+    only ever produces the one canonical 44-byte PCM header, and the pipeline
+    delivers a whole utterance at once, so building it through a module meant
+    for incremental writes to a real file was synchronous work on the event
+    loop for no benefit -- #178. `struct.pack` on values already in hand is
+    not a blocking call in the way `wave.open` opening a file would be, and
+    scales with nothing: it is the same handful of packed integers whether
+    the utterance is one frame or a minute long.
     """
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wav:
-        wav.setnchannels(metadata.channel)
-        wav.setsampwidth(metadata.bit_rate // 8)
-        wav.setframerate(metadata.sample_rate)
-        wav.writeframes(pcm)
-    return buffer.getvalue()
+    channels = metadata.channel
+    sample_width = metadata.bit_rate // 8
+    frame_rate = metadata.sample_rate
+    byte_rate = frame_rate * channels * sample_width
+    block_align = channels * sample_width
+
+    return b"".join(
+        (
+            b"RIFF",
+            struct.pack("<I", 36 + len(pcm)),
+            b"WAVE",
+            b"fmt ",
+            struct.pack("<I", 16),  # Subchunk1Size, 16 for PCM
+            struct.pack("<H", 1),  # AudioFormat, 1 for PCM
+            struct.pack("<H", channels),
+            struct.pack("<I", frame_rate),
+            struct.pack("<I", byte_rate),
+            struct.pack("<H", block_align),
+            struct.pack("<H", metadata.bit_rate),
+            b"data",
+            struct.pack("<I", len(pcm)),
+            pcm,
+        )
+    )
 
 
 class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
