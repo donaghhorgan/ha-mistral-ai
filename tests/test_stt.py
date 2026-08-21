@@ -17,6 +17,7 @@ from custom_components.mistral_ai.const import (
     DEFAULT_STT_TEMPERATURE,
     SUBENTRY_TYPE_STT,
 )
+from custom_components.mistral_ai.stt import _to_wav
 
 from .helpers import make_sdk_error
 
@@ -100,6 +101,54 @@ async def test_audio_is_sent_as_a_wav_file(
         assert wav.getsampwidth() == 2
         assert wav.getframerate() == 16000
         assert wav.readframes(wav.getnframes()) == PCM
+
+
+def _wave_module_reference(pcm: bytes, metadata: stt.SpeechMetadata) -> bytes:
+    """Build the same WAV container the `wave` module would, for comparison."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(metadata.channel)
+        wav.setsampwidth(metadata.bit_rate // 8)
+        wav.setframerate(metadata.sample_rate)
+        wav.writeframes(pcm)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("channel", "sample_rate", "pcm"),
+    [
+        (stt.AudioChannels.CHANNEL_MONO, stt.AudioSampleRates.SAMPLERATE_16000, PCM),
+        (stt.AudioChannels.CHANNEL_STEREO, stt.AudioSampleRates.SAMPLERATE_16000, PCM),
+        (stt.AudioChannels.CHANNEL_MONO, stt.AudioSampleRates.SAMPLERATE_48000, PCM),
+        (stt.AudioChannels.CHANNEL_MONO, stt.AudioSampleRates.SAMPLERATE_16000, b""),
+        (
+            stt.AudioChannels.CHANNEL_MONO,
+            stt.AudioSampleRates.SAMPLERATE_16000,
+            b"\x01",
+        ),
+    ],
+)
+def test_to_wav_matches_the_wave_module_byte_for_byte(
+    channel: stt.AudioChannels, sample_rate: stt.AudioSampleRates, pcm: bytes
+) -> None:
+    """The hand-written header is identical to what the `wave` module builds.
+
+    `_to_wav` writes the 44-byte canonical PCM header directly rather than
+    going through `wave` + `BytesIO`, which does synchronous work on the
+    event loop to build a container this integration only ever produces one
+    fixed shape of -- see #178. This is the regression test that fixing that
+    did not change a single byte of what gets sent to the API.
+    """
+    metadata = stt.SpeechMetadata(
+        language="en-GB",
+        format=stt.AudioFormats.WAV,
+        codec=stt.AudioCodecs.PCM,
+        bit_rate=stt.AudioBitRates.BITRATE_16,
+        sample_rate=sample_rate,
+        channel=channel,
+    )
+
+    assert _to_wav(pcm, metadata) == _wave_module_reference(pcm, metadata)
 
 
 @pytest.mark.parametrize(
