@@ -230,6 +230,9 @@
         },
         "unsupported_attachment_type": {
             "message": "Kun billeder og PDF-filer kan sendes til Mistral AI, og {path} er ingen af delene."
+        },
+        "web_search_unsupported_model": {
+            "message": "Den model, der er konfigureret til denne agent, {model}, understøtter ikke websøgning. Vælg en anden model, eller slå websøgning fra i denne agents indstillinger."
         }
     },
     "issues": {

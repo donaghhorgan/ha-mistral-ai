@@ -230,6 +230,9 @@
         },
         "unsupported_attachment_type": {
             "message": "Seuls des images et des PDF peuvent être envoyés à Mistral AI, et {path} n'est ni l'un ni l'autre."
+        },
+        "web_search_unsupported_model": {
+            "message": "Le modèle configuré pour cet agent, {model}, ne prend pas en charge la recherche web. Choisissez un autre modèle, ou désactivez la recherche web dans les paramètres de cet agent."
         }
     },
     "issues": {

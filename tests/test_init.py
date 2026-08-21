@@ -167,7 +167,7 @@ def test_lazy_resources_cover_what_the_integration_uses() -> None:
     import_module on the event loop the first time it is used, which shows
     up as a Home Assistant warning and nothing else.
     """
-    assert set(LAZY_RESOURCES) == {"models", "chat", "audio", "files"}
+    assert set(LAZY_RESOURCES) == {"models", "chat", "audio", "files", "beta"}
 
 
 async def test_setup_seeds_the_model_cache(

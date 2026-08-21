@@ -230,6 +230,9 @@
         },
         "unsupported_attachment_type": {
             "message": "Do Mistral AI można wysyłać tylko obrazy i pliki PDF, a {path} nie jest ani jednym, ani drugim."
+        },
+        "web_search_unsupported_model": {
+            "message": "Model skonfigurowany dla tego agenta, {model}, nie obsługuje wyszukiwania w sieci. Wybierz inny model lub wyłącz wyszukiwanie w sieci w ustawieniach tego agenta."
         }
     },
     "issues": {

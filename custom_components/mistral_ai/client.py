@@ -13,13 +13,22 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 # The SDK imports its resource modules on first attribute access -- touching
-# these four pulls in 89 modules. Home Assistant warns about blocking calls in
-# the event loop, and import_module is one, so they are touched here instead,
-# inside the executor job that builds the client.
+# these five pulls in every module the integration ever reaches for. Home
+# Assistant warns about blocking calls in the event loop, and import_module is
+# one, so they are touched here instead, inside the executor job that builds
+# the client.
 #
 # The audio sub-resources (transcriptions, speech, voices) need no separate
-# warming: they arrive with `audio`.
-LAZY_RESOURCES = ("models", "chat", "audio", "files")
+# warming: they arrive with `audio`. `beta` is the same story for
+# `beta.conversations`, the web search path -- Beta.__init__ builds every beta
+# sub-resource eagerly, so importing the `beta` module warms `conversations`
+# along with prompts, agents, libraries, connectors, rag and users. Left out,
+# the first web-search turn paid for it instead:
+#
+#   Detected blocking call to open inside the event loop by custom
+#   integration 'mistral_ai' at entity.py, line 774: stream = await
+#   client.beta.conversations.start_stream_async(
+LAZY_RESOURCES = ("models", "chat", "audio", "files", "beta")
 
 
 def _build(api_key: str, async_client: httpx.AsyncClient) -> Mistral:

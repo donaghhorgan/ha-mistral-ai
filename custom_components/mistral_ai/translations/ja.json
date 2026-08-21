@@ -230,6 +230,9 @@
         },
         "unsupported_attachment_type": {
             "message": "Mistral AI に送れるのは画像と PDF だけですが、{path} はそのどちらでもありません。"
+        },
+        "web_search_unsupported_model": {
+            "message": "このエージェントに設定されているモデル {model} はウェブ検索に対応していません。別のモデルを選択するか、このエージェントの設定でウェブ検索をオフにしてください。"
         }
     },
     "issues": {
