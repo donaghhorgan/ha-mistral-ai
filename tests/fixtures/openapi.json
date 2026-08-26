@@ -638,6 +638,17 @@
             "description": "Whether to inject a safety prompt before all conversations.",
             "type": "boolean"
           },
+          "service_tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestedServiceTier"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Determines whether to serve the request using priority or standard capacity."
+          },
           "stop": {
             "anyOf": [
               {
@@ -2950,6 +2961,14 @@
         "title": "ReferenceChunk",
         "type": "object"
       },
+      "RequestedServiceTier": {
+        "enum": [
+          "auto",
+          "standard_only"
+        ],
+        "title": "RequestedServiceTier",
+        "type": "string"
+      },
       "ResponseBase": {
         "properties": {
           "id": {
@@ -3770,6 +3789,18 @@
             "default": 0,
             "title": "Prompt Tokens",
             "type": "integer"
+          },
+          "service_tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The service tier at which the request was processed: standard or priority.",
+            "title": "Service Tier"
           },
           "total_tokens": {
             "default": 0,
