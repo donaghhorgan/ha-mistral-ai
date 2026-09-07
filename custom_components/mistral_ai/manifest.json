@@ -24,7 +24,8 @@
     ],
     "requirements": [
         "mistralai>=2.9.0",
-        "sentence-stream>=1.1.0"
+        "sentence-stream>=1.1.0",
+        "voluptuous-openapi>=0.2.0"
     ],
     "version": "1.0.2"
 }

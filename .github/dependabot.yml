@@ -146,6 +146,11 @@ updates:
       # is decorative. Home Assistant's exact pin always wins, and everything
       # else in the tree asks only for >=0.15, so no bump can ever resolve.
       - dependency-name: voluptuous
+      # voluptuous-openapi is the same situation as voluptuous: Home Assistant
+      # pins it exactly too, voluptuous-openapi==0.2.0, so the floor declared
+      # in [project] dependencies (needed because entity.py imports it
+      # directly) is equally decorative -- Home Assistant's pin always wins.
+      - dependency-name: voluptuous-openapi
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions
