@@ -53,7 +53,16 @@ dependencies = [
   "mistralai>=2.9.0",
   "sentence-stream>=1.1.0",
   "homeassistant>=2025.8.0",
-  "voluptuous>=0.13.1"
+  "voluptuous>=0.13.1",
+  # entity.py imports this directly to turn a tool's voluptuous schema into
+  # the JSON schema Mistral's function-calling and structured-output APIs
+  # expect. It only worked without being declared here because homeassistant
+  # itself pins voluptuous-openapi as one of its own dependencies -- present
+  # in every dev/test environment, but not guaranteed on every real
+  # installation, and its absence there fails the whole integration at
+  # import time (ModuleNotFoundError in entity.py, reported by a user
+  # running v1.0.1).
+  "voluptuous-openapi>=0.2.0"
 ]
 
 [tool.uv]
