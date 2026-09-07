@@ -39,6 +39,30 @@ updates:
     # after any change here: a rejected config fails silently, which is the
     # same failure mode the allowlist comments warn about below.
     versioning-strategy: lockfile-only
+    # Bundles every dev-tool bump into one PR instead of one per package --
+    # ruff, ty and a pre-commit-hooks-group bump for the same ruff release
+    # used to land as three separate reviews for one decision.
+    #
+    # mistralai and sentence-stream are deliberately left out of the group.
+    # They are runtime dependencies this integration ships to users, not
+    # tooling, and CLAUDE.md's rule that behaviour changes are checked
+    # against the live API rather than assumed applies to them specifically
+    # ("A type signature is not a behaviour"). Folding a mistralai bump into
+    # a group with a ruff bump would bury that review instead of asking for
+    # it, so each keeps its own PR.
+    groups:
+      dev-tools:
+        patterns:
+          - bandit
+          - ha-ffmpeg
+          - mutagen
+          - pre-commit
+          - pymarkdownlnt
+          - pyturbojpeg
+          - ruff
+          - toml-sort
+          - ty
+          - validate-pyproject
     # An allowlist, not a blocklist, because the blocklist below can never be
     # complete. Home Assistant 2026.2.3 pins 46 packages exactly and its
     # dependencies pin more beneath that, so the set of things that cannot
@@ -157,6 +181,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Every action bump here is CI plumbing rather than something that ships
+    # to users, so there is no reason to review setup-uv and
+    # action-gh-release separately -- group them the same way the pre-commit
+    # ecosystem below already groups its hooks.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
 
   # Without this, hook versions in .pre-commit-config.yaml drift silently.
   # That matters most for ruff, which is pinned both here and in the dev
