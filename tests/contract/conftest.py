@@ -29,11 +29,20 @@ MAX_TOKENS = 8
 TTS_MODEL = "voxtral-mini-tts-latest"
 
 # A chat model that reports capabilities.reasoning: false, used to prove the
-# flag means what the config flow relies on it meaning. Pinned rather than
-# -latest deliberately: mistral-medium-latest reasons and this pinned build of
-# the same family does not, which is the whole reason the gate is read per
-# model id instead of guessed from the name.
-NON_REASONING_MODEL = "mistral-medium-2508"
+# flag means what the config flow relies on it meaning.
+#
+# Previously pinned to mistral-medium-2508, a snapshot of the same "medium"
+# family as mistral-medium-latest that did not reason -- which was the whole
+# point: it showed the gate had to be read per model id rather than guessed
+# from the name. Mistral retired that snapshot on 2026-08-31, and every
+# current mistral-medium snapshot (dated or -latest) now reports
+# reasoning: true, so that same-family contrast is no longer available to
+# test against. mistral-large-2512 is the closest live substitute: a current,
+# non-deprecated, general-purpose chat model that still reports
+# reasoning: false. Pinned to a dated snapshot rather than -latest anyway, so
+# a future Mistral release cannot silently flip this fixture's premise again
+# without the pin itself going stale first.
+NON_REASONING_MODEL = "mistral-large-2512"
 
 
 @pytest.fixture(scope="session")
