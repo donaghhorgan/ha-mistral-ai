@@ -1,7 +1,7 @@
 repos:
   # TOML sorting and formatting
   - repo: https://github.com/pappasam/toml-sort
-    rev: v0.24.4
+    rev: v0.25.0
     hooks:
       - id: toml-sort-fix
         name: Sort TOML files
@@ -9,7 +9,7 @@ repos:
 
   # Ruff for Python formatting and linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.6
+    rev: v0.16.7
     hooks:
       # Run the formatter
       - id: ruff-format
@@ -31,7 +31,7 @@ repos:
 
   # PyMarkdown for Markdown linting
   - repo: https://github.com/jackdewinter/pymarkdown
-    rev: v0.9.39
+    rev: v0.9.40
     hooks:
       - id: pymarkdown
         name: PyMarkdown Lint
