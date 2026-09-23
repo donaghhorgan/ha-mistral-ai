@@ -16,6 +16,8 @@ jobs:
   release-please:
     name: Open or update the release pull request
     runs-on: ubuntu-latest
+    outputs:
+      pr: ${{ steps.release.outputs.pr }}
     steps:
       # release-please reads Conventional Commits on main since the last
       # release and keeps a pull request up to date that bumps the version in
@@ -23,7 +25,41 @@ jobs:
       # writes CHANGELOG.md. Merging that pull request tags the release and
       # publishes a GitHub Release, which release.yml then picks up to build
       # and attach the HACS archive.
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  sync-lockfile:
+    name: Sync uv.lock with the release pull request
+    needs: release-please
+    if: ${{ needs.release-please.outputs.pr }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # uv.lock records this package's own version alongside its
+      # dependencies, so bumping pyproject.toml without it makes `uv sync
+      # --locked` (ci.yml's lint and test jobs) fail on the release PR every
+      # time -- release-please only knows about the files named in
+      # release-please-config.json's extra-files, not the lockfile.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ fromJson(needs.release-please.outputs.pr).headBranchName }}
+
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+
+      - run: uv lock
+
+      - name: Commit uv.lock if it changed
+        run: |
+          if ! git diff --quiet -- uv.lock; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add uv.lock
+            git commit -m "chore: sync uv.lock with release version bump"
+            git push
+          fi
