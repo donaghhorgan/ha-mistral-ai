@@ -235,6 +235,9 @@ than a bug report.
 ### Source Code Management
 
 - Write concise but descriptive commit messages
+- Pull requests are squash-merged, so the pull request title becomes `main`'s
+  commit message — see "Merging" below for the Conventional Commits format
+  it has to follow
 
 #### Branching
 
@@ -260,9 +263,29 @@ the checks — open it early, in draft if it is not ready.
 
 ### Releasing
 
-**The committed version is the version.** Bump it in `pyproject.toml` and
-`manifest.json` in a pull request, merge that, then tag. `release.yml` checks
-the tag against the committed manifest and fails the release if they disagree.
+**The committed version is the version.** [`release-please`](./.github/workflows/release-please.yml)
+keeps a standing pull request open on `main`, generated from
+[`release-please-config.json`](./release-please-config.json) and
+[`.release-please-manifest.json`](./.release-please-manifest.json). It reads
+the Conventional Commit type of every pull request title merged since the
+last release, and that pull request bumps `pyproject.toml`'s version,
+`manifest.json`'s (via `extra-files` in the config, since release-please only
+tracks the Python package's own version file on its own), and
+`CHANGELOG.md`. Merging it tags the release and publishes a GitHub Release,
+which [`release.yml`](./.github/workflows/release.yml) then picks up to build
+and attach the HACS archive.
+
+A `fix:` title bumps the patch version, a `feat:` title bumps minor, and a
+`BREAKING CHANGE:` footer (or `!` after the type) bumps major. Anything else
+— `chore:`, `ci:`, `docs:`, `refactor:`, `test:` — rides along in whichever
+release follows but never forces one by itself, so routine dependency or
+tooling pull requests do not each demand a release the way a hand-bumped
+version would. See "Merging" below for where the title comes from and how
+it is enforced.
+
+`release.yml` still checks the tag against the committed manifest and fails
+the release if they disagree, as a backstop against a manually created tag or
+a hand edit that skipped the pull request.
 
 It used to rewrite the manifest to match the tag instead, which only ever
 reached manual installers: `hacs.json` sets no `zip_release`, so HACS installs
@@ -296,22 +319,30 @@ can merge. With short-lived branches that is rarely more than a fast-forward.
 
 #### Merging
 
-Pull requests are merged with a merge commit. Not squashed, not rebased.
+Pull requests are squash-merged. Every pull request becomes exactly one
+commit on `main`, titled with the pull request's title.
 
-- Commit messages here carry the reasoning, not just a label. Squashing
-  concatenates or discards them, and moves the record into the pull request
-  body, which is not in the repository.
-- Pull requests sometimes carry commits from more than one author. Squashing
-  collapses them to one, demoting the rest to a trailer at best.
-- Commit hashes stay stable, and the documentation cites one:
-  [`brands/README.md`](./brands/README.md) points at the artwork it was
-  generated from by hash. A squash would rewrite it and leave the citation
-  dangling in every clone.
+That title has to be a [Conventional Commit](https://www.conventionalcommits.org/)
+— `fix: …`, `feat: …`, `chore(deps): …` and so on — because it is what
+release-please reads to decide the next version, described in "Releasing"
+above. [`pr-title.yml`](./.github/workflows/pr-title.yml) checks this on
+every pull request and fails it if the title does not parse, so a malformed
+title is caught before merge rather than silently dropping out of the
+changelog. Dependabot's pull requests are already covered:
+[`dependabot.yml`](./.github/dependabot.yml) prefixes each ecosystem's
+titles (`fix`/`chore` split by production vs. development dependency for
+`uv`, `ci` for `github-actions`, `chore` for `pre-commit`).
 
-The cost, accepted knowingly: `main`'s history interleaves rather than reading
-as one commit per change, and `git bisect` can land on a commit that never
-passed CI on its own. Keeping pull requests small is what holds that in check,
-which the branching rules above already ask for.
+The cost, accepted knowingly: a branch's own commit history — intermediate
+work, commits from more than one author — is discarded at merge, kept only
+in the pull request itself. Write descriptive commits while working; the
+title is what survives.
 
-This means "Require linear history" must stay off in the ruleset — it forbids
-merge commits outright.
+This does not touch history already on `main`. Merge commits from before
+this changed stay as they are, including the one
+[`brands/README.md`](./brands/README.md) cites by hash.
+
+Squashing already gives one commit per pull request on `main`, so unlike a
+merge-commit strategy there is no conflict with turning "Require linear
+history" on in the ruleset — that is a repository setting, not something
+this file enforces.

@@ -1,0 +1,24 @@
+name: PR Title
+
+permissions:
+  pull-requests: read
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      # Pull requests here are squash-merged, and GitHub uses the pull
+      # request title as the squash commit's subject by default. That subject
+      # is what release-please parses to decide the version bump, so it has
+      # to be a Conventional Commit -- checked here rather than at merge
+      # time, so it fails loudly on the pull request instead of silently
+      # dropping out of the changelog.
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

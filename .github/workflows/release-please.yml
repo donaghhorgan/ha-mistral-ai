@@ -1,0 +1,29 @@
+name: Release Please
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Open or update the release pull request
+    runs-on: ubuntu-latest
+    steps:
+      # release-please reads Conventional Commits on main since the last
+      # release and keeps a pull request up to date that bumps the version in
+      # pyproject.toml and manifest.json (release-please-config.json) and
+      # writes CHANGELOG.md. Merging that pull request tags the release and
+      # publishes a GitHub Release, which release.yml then picks up to build
+      # and attach the HACS archive.
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
