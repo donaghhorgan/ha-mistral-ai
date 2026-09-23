@@ -44,7 +44,11 @@ async def async_list_voices(client: Mistral) -> list[Voice]:
     try:
         async with asyncio.timeout(TIMEOUT):
             while True:
-                response = await client.audio.voices.list_async(
+                # mistralai 2.10.1 deprecated offset pagination in favour of
+                # GET /v2/audio/voices, but the SDK does not expose a v2
+                # method yet -- list_async is still the only way to call this
+                # endpoint. Re-check when the SDK adds one.
+                response = await client.audio.voices.list_async(  # ty: ignore[deprecated]
                     limit=VOICE_PAGE_SIZE, offset=offset
                 )
 
