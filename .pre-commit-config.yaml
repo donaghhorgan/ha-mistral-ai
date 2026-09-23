@@ -41,6 +41,11 @@ repos:
         # flattens every key and rejects ruff's "__init__.py" per-file-ignore.
         args: [--config, .pymarkdown.json, scan]
         files: \.md$
+        # CHANGELOG.md is written by release-please, not by hand -- its
+        # double blank lines between sections are that tool's own format,
+        # regenerated on every release. Linting it would fail every release
+        # PR for a style choice this repo does not control.
+        exclude: ^CHANGELOG\.md$
 
   # Local hooks
   - repo: local
