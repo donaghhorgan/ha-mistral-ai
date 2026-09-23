@@ -4,6 +4,15 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Conventional Commits, because release-please parses PR titles (the
+    # squash commit subject) to decide version bumps. mistralai and
+    # sentence-stream are the runtime dependencies this integration ships, so
+    # a bump to either is a `fix`; everything else here is in
+    # [dependency-groups.dev] and gets `prefix-development` instead.
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
     # Update uv.lock and leave every floor alone.
     #
     # The default for a direct dependency is `increase`, which rewrites the
@@ -181,6 +190,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
     # Every action bump here is CI plumbing rather than something that ships
     # to users, so there is no reason to review setup-uv and
     # action-gh-release separately -- group them the same way the pre-commit
@@ -197,6 +209,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       pre-commit-hooks:
         patterns:
