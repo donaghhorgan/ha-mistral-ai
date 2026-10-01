@@ -104,12 +104,6 @@ updates:
     #                  deleted the thing that group existed to test. The floor
     #                  now lives in ci.yml and resolves on the fly, so it is
     #                  out of reach of this file entirely.
-    #   pillow         we declare it for scripts/generate_brand_assets.py, but
-    #                  Home Assistant pins it exactly -- 12.0.0 in 2026.2.3 --
-    #                  so allowing it reproduces exactly the failure this
-    #                  avoids. The floor in pyproject.toml used to be held
-    #                  down to 11.3.0 by the minimum-version group; that is
-    #                  gone, but the exact pin above it is not.
     #   hassil, home-assistant-intents
     #                  pinned to mirror what a given Home Assistant release
     #                  needs. These resolve fine and then break at runtime,
@@ -184,6 +178,21 @@ updates:
       # in [project] dependencies (needed because entity.py imports it
       # directly) is equally decorative -- Home Assistant's pin always wins.
       - dependency-name: voluptuous-openapi
+      # pillow is the same again: we declare it for
+      # scripts/generate_brand_assets.py, but Home Assistant pins it exactly
+      # -- pillow==12.0.0 in 2026.2.3. It used to be left off the allowlist
+      # and nothing more, which keeps it out of version updates but not
+      # security updates: the allowlist does not apply to those, and an
+      # advisory against 12.0.0 failed the whole uv security-update run with
+      #
+      #   Because homeassistant==2026.2.3 depends on pillow==12.0.0 and
+      #   pillow==12.3.0, we can conclude that homeassistant==2026.2.3
+      #   cannot be used.
+      #
+      # The ignore list does apply to security updates, which is why pyjwt
+      # above never caused the same failure. It moves when Home Assistant
+      # moves.
+      - dependency-name: pillow
     open-pull-requests-limit: 10
 
   - package-ecosystem: github-actions

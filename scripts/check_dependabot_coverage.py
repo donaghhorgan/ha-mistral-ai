@@ -36,10 +36,6 @@ EXPECTED_ABSENT = {
         "chooses the Home Assistant version everything is tested against. "
         "New releases are noticed by the test-latest job in ci.yml."
     ),
-    "pillow": (
-        "Home Assistant pins it exactly, so allowing it makes the project "
-        "unresolvable rather than merely outdated."
-    ),
 }
 
 
