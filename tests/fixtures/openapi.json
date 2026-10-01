@@ -296,6 +296,17 @@
             "title": "Aliases",
             "type": "array"
           },
+          "billing_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Model Name"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/ModelCapabilities"
           },
@@ -1665,6 +1676,17 @@
             "title": "Archived",
             "type": "boolean"
           },
+          "billing_model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billing Model Name"
+          },
           "capabilities": {
             "$ref": "#/components/schemas/ModelCapabilities"
           },
@@ -2518,7 +2540,7 @@
           },
           "ocr": {
             "default": false,
-            "title": "OCR",
+            "title": "Ocr",
             "type": "boolean"
           },
           "reasoning": {
@@ -3115,6 +3137,7 @@
                 "type": "string"
               },
               {
+                "contentMediaType": "application/octet-stream",
                 "type": "string"
               },
               {
@@ -3718,8 +3741,15 @@
         "additionalProperties": false,
         "properties": {
           "end": {
-            "title": "End",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
           },
           "score": {
             "anyOf": [
@@ -3744,8 +3774,15 @@
             "title": "Speaker Id"
           },
           "start": {
-            "title": "Start",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
           },
           "text": {
             "title": "Text",
@@ -4037,6 +4074,15 @@
             ],
             "title": "Trimmed Seconds"
           },
+          "type": {
+            "enum": [
+              "preset",
+              "custom"
+            ],
+            "readOnly": true,
+            "title": "Type",
+            "type": "string"
+          },
           "user_id": {
             "anyOf": [
               {
@@ -4053,7 +4099,8 @@
           "name",
           "id",
           "created_at",
-          "user_id"
+          "user_id",
+          "type"
         ],
         "title": "VoiceResponse",
         "type": "object"
@@ -4173,6 +4220,17 @@
                       "properties": {
                         "role": {
                           "$ref": "#/$defs/Roles"
+                        },
+                        "settings_tokens": {
+                          "anyOf": [
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "title": "Settings Tokens"
                         },
                         "total_tokens": {
                           "anyOf": [
@@ -4367,6 +4425,18 @@
                           ],
                           "title": "Request Count"
                         },
+                        "service_tier": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The service tier at which the request was processed: standard or priority.",
+                          "title": "Service Tier"
+                        },
                         "total_tokens": {
                           "default": 0,
                           "title": "Total Tokens",
@@ -4479,7 +4549,8 @@
     },
     "/v1/audio/voices": {
       "get": {
-        "description": "List all voices (excluding sample data)",
+        "deprecated": true,
+        "description": "Offset pagination will not be supported anymore. Use GET /v2/audio/voices instead.",
         "operationId": "list_voices_v1_audio_voices_get",
         "parameters": [
           {
@@ -4552,7 +4623,11 @@
         "summary": "List all voices",
         "tags": [
           "audio.voices"
-        ]
+        ],
+        "x-deprecated-replacement": "/v2/audio/voices",
+        "x-deprecation-date": "2026-09-07",
+        "x-speakeasy-deprecation-message": "Offset pagination will not be supported anymore. Use GET /v2/audio/voices instead.",
+        "x-sunset-date": "2027-03-31"
       }
     },
     "/v1/chat/completions": {
