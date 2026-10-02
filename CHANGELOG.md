@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/donaghhorgan/ha-mistral-ai/compare/v1.0.3...v1.0.4) (2026-10-02)
+
+
+### Bug Fixes
+
+* **deps:** bump mistralai from 2.10.1 to 3.0.0 ([#229](https://github.com/donaghhorgan/ha-mistral-ai/issues/229)) ([1f6dcca](https://github.com/donaghhorgan/ha-mistral-ai/commit/1f6dccab1e8bf39515ee4130b20ae10f43d241b5))
+
 ## [1.0.3](https://github.com/donaghhorgan/ha-mistral-ai/compare/v1.0.2...v1.0.3) (2026-09-23)
 
 
