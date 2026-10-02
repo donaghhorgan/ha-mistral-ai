@@ -126,7 +126,7 @@ jobs:
       # because an isolated run has no project to read it from, and it drifted
       # to >=2.1.0 once already -- check_manifest_consistency.py now compares
       # the two.
-      MISTRALAI_SPEC: "mistralai>=2.9.0"
+      MISTRALAI_SPEC: "mistralai>=3.0.0"
       # Same reasoning as MISTRALAI_SPEC: a runtime requirement declared in
       # manifest.json, restated because an isolated run has no project to read
       # it from, and compared against the manifest by
@@ -191,7 +191,7 @@ jobs:
       PHCC_VERSION: 0.13.348 # Home Assistant 2026.7.4
       # As above: the declared floor, kept honest by
       # check_manifest_consistency.py.
-      MISTRALAI_SPEC: "mistralai>=2.9.0"
+      MISTRALAI_SPEC: "mistralai>=3.0.0"
       # Same reasoning as MISTRALAI_SPEC: a runtime requirement declared in
       # manifest.json, restated because an isolated run has no project to read
       # it from, and compared against the manifest by

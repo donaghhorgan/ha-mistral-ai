@@ -6,7 +6,6 @@ import logging
 from json import JSONDecodeError
 from typing import TYPE_CHECKING, Any
 
-import httpx
 from homeassistant.components import ai_task, conversation
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
@@ -15,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.json import json_loads
 from mistralai.client.errors import SDKError
 
+from .client import HTTP_ERRORS
 from .const import (
     CAPABILITY_FUNCTION_CALLING,
     CONF_MODEL,
@@ -106,7 +106,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             card = await self.entry.runtime_data.client.models.retrieve_async(
                 model_id=model, timeout_ms=TIMEOUT * 1000
             )
-        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+        except (SDKError, TimeoutError, *HTTP_ERRORS) as err:
             _LOGGER.debug("Could not read the capabilities of %s: %s", model, err)
             return None
 
@@ -260,7 +260,7 @@ class MistralTaskEntity(ai_task.AITaskEntity, MistralBaseLLMEntity):
             await self.entry.runtime_data.client.files.delete_async(
                 file_id=file_id, timeout_ms=TIMEOUT * 1000
             )
-        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+        except (SDKError, TimeoutError, *HTTP_ERRORS) as err:
             _LOGGER.debug("Could not delete generated file %s: %s", file_id, err)
         except Exception:  # noqa: BLE001
             # Deliberately broad. The SDK has exception types that inherit from

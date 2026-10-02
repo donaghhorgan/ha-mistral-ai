@@ -20,6 +20,7 @@ from homeassistant.helpers.httpx_client import get_async_client
 from mistralai.client.errors import SDKError
 from sentence_stream import SentenceBoundaryDetector
 
+from .client import HTTP_ERRORS
 from .const import (
     CONF_API_KEY,
     CONF_MODEL,
@@ -528,7 +529,7 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
 
         try:
             response = await client.audio.speech.complete_async(**request)
-        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+        except (SDKError, TimeoutError, *HTTP_ERRORS) as err:
             _LOGGER.error("Error generating speech with Mistral AI: %s", err)
             return None, None
         except Exception:

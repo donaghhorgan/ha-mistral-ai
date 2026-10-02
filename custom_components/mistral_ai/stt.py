@@ -6,13 +6,13 @@ import logging
 import struct
 from typing import TYPE_CHECKING
 
-import httpx
 from homeassistant.components import stt
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from mistralai.client.errors import SDKError
 
+from .client import HTTP_ERRORS
 from .const import (
     CONF_MODEL,
     CONF_TEMPERATURE,
@@ -170,7 +170,7 @@ class MistralSTTEntity(stt.SpeechToTextEntity, MistralBaseEntity):
                 ),
                 timeout_ms=TIMEOUT * 1000,
             )
-        except (SDKError, TimeoutError, httpx.HTTPError) as err:
+        except (SDKError, TimeoutError, *HTTP_ERRORS) as err:
             # Returning ERROR rather than raising: the pipeline reports a
             # failed transcription to the user and carries on, where an
             # exception would surface as an unhandled integration error.
