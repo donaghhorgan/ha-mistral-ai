@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.httpx_client import get_async_client
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.mistral_ai.client import LAZY_RESOURCES
@@ -122,14 +121,12 @@ async def test_setup_timeout_retries(
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
 
 
-async def test_setup_uses_home_assistants_http_client(
+async def test_setup_lets_the_sdk_own_its_http_client(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, mock_client: MagicMock
 ) -> None:
-    """The SDK is handed Home Assistant's shared httpx client.
+    """The SDK is not handed Home Assistant's httpx client.
 
-    Nothing closes the client, and an options change reloads the entry, so a
-    client of our own would leave an abandoned connection pool behind every
-    time the user touched a setting.
+    Since 3.0.0 it builds httpx2 requests, which an httpx client cannot send.
     """
     with patch(
         "custom_components.mistral_ai.client.Mistral", return_value=mock_client
@@ -137,7 +134,7 @@ async def test_setup_uses_home_assistants_http_client(
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    assert constructor.call_args.kwargs["async_client"] is get_async_client(hass)
+    assert "async_client" not in constructor.call_args.kwargs
 
 
 async def test_client_is_built_off_the_event_loop(
@@ -229,3 +226,14 @@ async def test_seeding_does_not_extend_the_freshness_window(
         await mock_config_entry.runtime_data.async_models(async_fetch_model_cards)
 
     assert mock_client.models.list_async.await_count == fetched + 1
+
+
+def test_httpx2_errors_are_treated_as_transport_errors() -> None:
+    """The SDK raises httpx2 errors, which do not derive from httpx's."""
+    import httpx2
+
+    from custom_components.mistral_ai.client import HTTP_ERRORS
+
+    assert not issubclass(httpx2.ConnectError, httpx.HTTPError)
+    assert issubclass(httpx2.ConnectError, HTTP_ERRORS)
+    assert issubclass(httpx.ConnectError, HTTP_ERRORS)

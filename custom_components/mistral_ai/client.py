@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-from functools import partial
 from typing import TYPE_CHECKING
 
-from homeassistant.helpers.httpx_client import get_async_client
+import httpx
+import httpx2
 from mistralai.client import Mistral
 
 if TYPE_CHECKING:
-    import httpx
     from homeassistant.core import HomeAssistant
+
+# What a failed request can raise. The SDK moved from httpx to httpx2 in 3.0.0,
+# and the two do not share a base class, so an `except httpx.HTTPError` no
+# longer catches what the SDK raises. httpx stays in the tuple for the requests
+# we make with it ourselves.
+HTTP_ERRORS = (httpx.HTTPError, httpx2.HTTPError)
 
 # The SDK imports its resource modules on first attribute access -- touching
 # these five pulls in every module the integration ever reaches for. Home
@@ -31,9 +36,9 @@ if TYPE_CHECKING:
 LAZY_RESOURCES = ("models", "chat", "audio", "files", "beta")
 
 
-def _build(api_key: str, async_client: httpx.AsyncClient) -> Mistral:
+def _build(api_key: str) -> Mistral:
     """Construct a client and import everything it will lazily reach for."""
-    client = Mistral(api_key=api_key, async_client=async_client)
+    client = Mistral(api_key=api_key)
     for resource in LAZY_RESOURCES:
         getattr(client, resource)
     return client
@@ -42,17 +47,16 @@ def _build(api_key: str, async_client: httpx.AsyncClient) -> Mistral:
 async def async_create_client(hass: HomeAssistant, api_key: str) -> Mistral:
     """Return a Mistral AI client, built off the event loop.
 
-    The SDK is handed Home Assistant's shared httpx client rather than being
-    left to build its own. Nothing closes the client we build, and an options
-    change reloads the entry, so a private pool would be abandoned every time
-    the user touched a setting. The SDK records that the client was supplied
-    and leaves it alone on teardown, so the shared one is never closed on us.
+    The SDK builds its own HTTP client rather than being handed Home
+    Assistant's shared one. Since 3.0.0 it speaks httpx2, whose requests and
+    responses are different types from httpx's, so the shared client cannot be
+    passed in -- the SDK would build an httpx2 request and ask an httpx client
+    to send it. An options change reloads the entry, so this abandons a pool
+    each time; the SDK closes clients it created itself when the Mistral
+    object is collected.
 
-    Two reasons this cannot happen inline: the constructor still builds a
-    *synchronous* httpx client when it is not given one, which reads an SSL
-    context from disk, and the SDK's lazy imports run on first use. We never
-    call the synchronous methods, but the client is built either way.
+    This has to happen off the event loop: the constructor builds synchronous
+    and asynchronous clients, which read an SSL context from disk, and the
+    SDK's lazy imports run on first use.
     """
-    return await hass.async_add_executor_job(
-        partial(_build, api_key, get_async_client(hass))
-    )
+    return await hass.async_add_executor_job(_build, api_key)

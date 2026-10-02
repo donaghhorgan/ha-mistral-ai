@@ -6,7 +6,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-import httpx
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -35,7 +34,7 @@ from homeassistant.helpers.selector import (
 )
 from mistralai.client.errors import SDKError
 
-from .client import async_create_client
+from .client import HTTP_ERRORS, async_create_client
 from .const import (
     CAPABILITY_AUDIO_SPEECH,
     CAPABILITY_AUDIO_TRANSCRIPTION,
@@ -172,7 +171,7 @@ async def async_fetch_model_cards(client: Mistral) -> list[Any]:
         if err.status_code == 403:
             raise Forbidden(str(err)) from err
         raise CannotConnect(str(err)) from err
-    except (TimeoutError, httpx.HTTPError) as err:
+    except (TimeoutError, *HTTP_ERRORS) as err:
         raise CannotConnect(str(err)) from err
 
     return [model for model in (response.data or []) if getattr(model, "id", None)]

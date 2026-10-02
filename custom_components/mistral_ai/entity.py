@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 from mimetypes import guess_file_type
 from typing import TYPE_CHECKING, Any, NoReturn
 
-import httpx
 import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
@@ -22,6 +21,7 @@ from homeassistant.util import slugify
 from mistralai.client.errors import SDKError
 from voluptuous_openapi import convert
 
+from .client import HTTP_ERRORS
 from .const import (
     ATTACHMENT_DOCUMENT_TYPE,
     CONF_MAX_TOKENS,
@@ -836,7 +836,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         execution, or from our own conversion, and is already meaningful.
 
         The bare `Exception` arm is deliberate. The SDK keeps adding exception
-        types that inherit from neither SDKError nor httpx.HTTPError -- 2.8.0
+        types that inherit from neither SDKError nor an httpx error -- 2.8.0
         added StreamDisconnectedError for mid-stream SSE errors -- and they are
         only reachable from private modules, so catching them by name would tie
         us to SDK internals. Anything unexpected becomes a clean error rather
@@ -846,7 +846,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
             yield
         except SDKError as err:
             raise self._convert_error(err) from err
-        except (TimeoutError, httpx.HTTPError) as err:
+        except (TimeoutError, *HTTP_ERRORS) as err:
             _LOGGER.error("Error talking to Mistral AI: %s", err)
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

@@ -6,10 +6,10 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-import httpx
 from homeassistant.components.tts import Voice
 from mistralai.client.errors import SDKError
 
+from .client import HTTP_ERRORS
 from .const import TIMEOUT, VOICE_PAGE_SIZE
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ async def async_list_voices(client: Mistral) -> list[Voice]:
                 total = getattr(response, "total", None)
                 if isinstance(total, int) and offset >= total:
                     break
-    except (SDKError, TimeoutError, httpx.HTTPError) as err:
+    except (SDKError, TimeoutError, *HTTP_ERRORS) as err:
         _LOGGER.debug("Could not list Mistral AI voices: %s", err)
         # Whatever arrived before the failure is still better than nothing,
         # and an empty list is what a first-page failure gives.
