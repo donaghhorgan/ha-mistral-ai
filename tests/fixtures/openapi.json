@@ -414,7 +414,8 @@
           "web_search_premium",
           "code_interpreter",
           "image_generation",
-          "document_library"
+          "document_library",
+          "mistral_mcp"
         ],
         "title": "BuiltInConnectors",
         "type": "string"
@@ -436,6 +437,16 @@
             "example": 0,
             "type": "integer"
           },
+          "logprobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCompletionResponseChoiceLogprobs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "message": {
             "$ref": "#/components/schemas/AssistantMessage"
           },
@@ -444,6 +455,16 @@
               "$ref": "#/components/schemas/DeltaMessage"
             },
             "type": "array"
+          },
+          "prompt_logprobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCompletionResponseChoiceLogprobs"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -483,6 +504,17 @@
               }
             ],
             "title": "Guardrails"
+          },
+          "logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logprobs"
           },
           "max_tokens": {
             "anyOf": [
@@ -547,6 +579,18 @@
             ],
             "title": "Metadata"
           },
+          "min_tokens": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Tokens"
+          },
           "model": {
             "description": "ID of the model to use. You can use the [List Available Models](/api/#tag/models/operation/list_models_v1_models_get) API to see all of your available models, or see our [Model overview](/models) for model descriptions.",
             "examples": [
@@ -607,6 +651,17 @@
             ],
             "title": "Prompt Cache Key"
           },
+          "prompt_logprobs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Logprobs"
+          },
           "prompt_mode": {
             "anyOf": [
               {
@@ -640,6 +695,19 @@
                 "type": "null"
               }
             ]
+          },
+          "repetition_penalty": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "maximum": 2,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repetition Penalty"
           },
           "response_format": {
             "$ref": "#/components/schemas/ResponseFormat"
@@ -717,28 +785,16 @@
                 "items": {
                   "discriminator": {
                     "mapping": {
-                      "code_interpreter": "#/components/schemas/CodeInterpreterTool",
                       "connector": "#/components/schemas/CustomConnector",
                       "document_library": "#/components/schemas/DocumentLibraryTool",
                       "function": "#/components/schemas/Tool",
-                      "image_generation": "#/components/schemas/ImageGenerationTool",
-                      "web_search": "#/components/schemas/WebSearchTool",
-                      "web_search_premium": "#/components/schemas/WebSearchPremiumTool"
+                      "image_generation": "#/components/schemas/ImageGenerationTool"
                     },
                     "propertyName": "type"
                   },
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/Tool"
-                    },
-                    {
-                      "$ref": "#/components/schemas/WebSearchTool"
-                    },
-                    {
-                      "$ref": "#/components/schemas/WebSearchPremiumTool"
-                    },
-                    {
-                      "$ref": "#/components/schemas/CodeInterpreterTool"
                     },
                     {
                       "$ref": "#/components/schemas/ImageGenerationTool"
@@ -760,6 +816,29 @@
             "description": "A list of tools the model may call. Use this to provide a list of functions the model may generate JSON inputs for.",
             "title": "Tools"
           },
+          "top_k": {
+            "anyOf": [
+              {
+                "minimum": -1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "top_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Logprobs"
+          },
           "top_p": {
             "anyOf": [
               {
@@ -773,6 +852,17 @@
             ],
             "description": "Nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered. We generally recommend altering this or `temperature` but not both.",
             "title": "Top P"
+          },
+          "top_prompt_logprobs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top Prompt Logprobs"
           }
         },
         "required": [
@@ -826,6 +916,88 @@
             "type": "object"
           }
         ]
+      },
+      "ChatCompletionResponseChoiceLogprobs": {
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCompletionResponseTokenLogprobsTopK"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "ChatCompletionResponseChoiceLogprobs",
+        "type": "object"
+      },
+      "ChatCompletionResponseTokenLogprobs": {
+        "properties": {
+          "bytes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "logprob": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string"
+          },
+          "token_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token",
+          "logprob",
+          "bytes",
+          "token_id"
+        ],
+        "title": "ChatCompletionResponseTokenLogprobs",
+        "type": "object"
+      },
+      "ChatCompletionResponseTokenLogprobsTopK": {
+        "properties": {
+          "bytes": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "logprob": {
+            "type": "number"
+          },
+          "token": {
+            "type": "string"
+          },
+          "token_id": {
+            "type": "integer"
+          },
+          "top_logprobs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ChatCompletionResponseTokenLogprobs"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "logprob",
+          "bytes",
+          "token_id"
+        ],
+        "title": "ChatCompletionResponseTokenLogprobsTopK",
+        "type": "object"
       },
       "CodeInterpreterTool": {
         "additionalProperties": false,
@@ -1054,6 +1226,26 @@
           },
           "index": {
             "type": "integer"
+          },
+          "logprobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCompletionResponseChoiceLogprobs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_logprobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCompletionResponseChoiceLogprobs"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1072,6 +1264,8 @@
             "image_url": "#/components/schemas/ImageURLChunk",
             "input_audio": "#/components/schemas/AudioChunk",
             "reference": "#/components/schemas/ReferenceChunk",
+            "resource": "#/components/schemas/ResourceChunk",
+            "resource_link": "#/components/schemas/ResourceLinkChunk",
             "text": "#/components/schemas/TextChunk",
             "thinking": "#/components/schemas/ThinkChunk"
           },
@@ -1098,6 +1292,12 @@
           },
           {
             "$ref": "#/components/schemas/AudioChunk"
+          },
+          {
+            "$ref": "#/components/schemas/ResourceChunk"
+          },
+          {
+            "$ref": "#/components/schemas/ResourceLinkChunk"
           }
         ],
         "title": "ContentChunk"
@@ -2121,6 +2321,115 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "IPAPhoneme": {
+        "description": "The IPA phone inventory usable in pronunciation hints.\n\n``StrEnum`` members' values are their (lowercase) names via ``auto()``, so each member IS\nthe IPA string it represents. Using an enum makes ``phoneme_hints`` values self-validating\nat the API boundary (pydantic rejects any phone outside this set). **Append-only**: never\nreorder or remove entries, only add new phones (e.g. for future languages) at the end.",
+        "enum": [
+          "a",
+          "a\u026a",
+          "a\u028a",
+          "b",
+          "d",
+          "d\u0292",
+          "e",
+          "e\u026a",
+          "f",
+          "g",
+          "h",
+          "i",
+          "j",
+          "k",
+          "l",
+          "m",
+          "n",
+          "o",
+          "o\u028a",
+          "p",
+          "s",
+          "t",
+          "t\u0283",
+          "u",
+          "v",
+          "w",
+          "z",
+          "\u00e6",
+          "\u00f0",
+          "\u014b",
+          "\u0251",
+          "\u0254",
+          "\u0254\u026a",
+          "\u0256",
+          "\u0259",
+          "\u025a",
+          "\u025b",
+          "\u025c",
+          "\u026a",
+          "\u0271",
+          "\u0279",
+          "\u027e",
+          "\u0283",
+          "\u0288",
+          "\u028a",
+          "\u028b",
+          "\u028c",
+          "\u0292",
+          "\u0294",
+          "\u03b8"
+        ],
+        "title": "IPAPhoneme",
+        "type": "string",
+        "x-speakeasy-enums": {
+          "a": "A",
+          "a\u026a": "A_SMALL_CAPITAL_I",
+          "a\u028a": "A_UPSILON",
+          "b": "B",
+          "d": "D",
+          "d\u0292": "D_EZH",
+          "e": "E",
+          "e\u026a": "E_SMALL_CAPITAL_I",
+          "f": "F",
+          "g": "G",
+          "h": "H",
+          "i": "I",
+          "j": "J",
+          "k": "K",
+          "l": "L",
+          "m": "M",
+          "n": "N",
+          "o": "O",
+          "o\u028a": "O_UPSILON",
+          "p": "P",
+          "s": "S",
+          "t": "T",
+          "t\u0283": "T_ESH",
+          "u": "U",
+          "v": "V",
+          "w": "W",
+          "z": "Z",
+          "\u00e6": "AE",
+          "\u00f0": "ETH",
+          "\u014b": "ENG",
+          "\u0251": "ALPHA",
+          "\u0254": "OPEN_O",
+          "\u0254\u026a": "OPEN_O_SMALL_CAPITAL_I",
+          "\u0256": "D_WITH_TAIL",
+          "\u0259": "SCHWA",
+          "\u025a": "SCHWA_WITH_HOOK",
+          "\u025b": "OPEN_E",
+          "\u025c": "REVERSED_OPEN_E",
+          "\u026a": "SMALL_CAPITAL_I",
+          "\u0271": "M_WITH_HOOK",
+          "\u0279": "TURNED_R",
+          "\u027e": "R_WITH_FISHHOOK",
+          "\u0283": "ESH",
+          "\u0288": "T_WITH_RETROFLEX_HOOK",
+          "\u028a": "UPSILON",
+          "\u028b": "V_WITH_HOOK",
+          "\u028c": "TURNED_V",
+          "\u0292": "EZH",
+          "\u0294": "GLOTTAL_STOP",
+          "\u03b8": "THETA"
+        }
+      },
       "ImageDetail": {
         "enum": [
           "low",
@@ -2991,6 +3300,92 @@
         "title": "RequestedServiceTier",
         "type": "string"
       },
+      "ResourceChunk": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "discriminator": {
+              "mapping": {
+                "image_url": "#/components/schemas/ImageURLChunk",
+                "text": "#/components/schemas/TextChunk"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TextChunk"
+              },
+              {
+                "$ref": "#/components/schemas/ImageURLChunk"
+              }
+            ],
+            "title": "Content"
+          },
+          "type": {
+            "const": "resource",
+            "default": "resource",
+            "title": "Type",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri",
+          "content"
+        ],
+        "title": "ResourceChunk",
+        "type": "object"
+      },
+      "ResourceLinkChunk": {
+        "additionalProperties": false,
+        "properties": {
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "type": {
+            "const": "resource_link",
+            "default": "resource_link",
+            "title": "Type",
+            "type": "string"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri"
+        ],
+        "title": "ResourceLinkChunk",
+        "type": "object"
+      },
       "ResponseBase": {
         "properties": {
           "id": {
@@ -3119,6 +3514,24 @@
               }
             ],
             "title": "Model"
+          },
+          "phoneme_hints": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "$ref": "#/components/schemas/IPAPhoneme"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional pronunciation hints mapping a (case-sensitive) word to its ordered list of IPA phones.",
+            "title": "Phoneme Hints"
           },
           "prompt_cache_key": {
             "anyOf": [
@@ -3926,6 +4339,14 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VoiceKind": {
+        "enum": [
+          "ivc",
+          "pvc"
+        ],
+        "title": "VoiceKind",
+        "type": "string"
+      },
       "VoiceListResponse": {
         "description": "Schema for voice list response",
         "properties": {
@@ -4020,6 +4441,11 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/VoiceKind",
+            "default": "ivc",
+            "description": "Cloning technology behind the voice: ivc for instant cloning, pvc for professional cloning."
           },
           "languages": {
             "default": [],
@@ -4627,6 +5053,7 @@
         "x-deprecated-replacement": "/v2/audio/voices",
         "x-deprecation-date": "2026-09-07",
         "x-speakeasy-deprecation-message": "Offset pagination will not be supported anymore. Use GET /v2/audio/voices instead.",
+        "x-speakeasy-deprecation-replacement": "audio_v2_voices_list",
         "x-sunset-date": "2027-03-31"
       }
     },
