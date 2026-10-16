@@ -766,7 +766,7 @@ class MistralBaseEntity(Entity):
         )
 
     @property
-    def attribution(self) -> str:
+    def attribution(self) -> str:  # ty: ignore[invalid-property-type-override]
         """Return the attribution."""
         return "Powered by Mistral AI"
 

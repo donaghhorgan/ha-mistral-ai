@@ -300,22 +300,22 @@ class MistralTTSEntity(tts.TextToSpeechEntity, MistralBaseEntity):
         return self._voices or None
 
     @property
-    def supported_languages(self) -> list[str]:
+    def supported_languages(self) -> list[str]:  # ty: ignore[invalid-property-type-override]
         """Return the languages this entity accepts."""
         return sorted(SPEECH_LANGUAGES)
 
     @property
-    def default_language(self) -> str:
+    def default_language(self) -> str:  # ty: ignore[invalid-property-type-override]
         """Return the default language."""
         return "en"
 
     @property
-    def supported_options(self) -> list[str]:
+    def supported_options(self) -> list[str]:  # ty: ignore[invalid-property-type-override]
         """Return the options callers may pass per request."""
         return [tts.ATTR_VOICE]
 
     @property
-    def default_options(self) -> dict[str, Any]:
+    def default_options(self) -> dict[str, Any]:  # ty: ignore[invalid-property-type-override]
         """Return the options used when a caller passes none.
 
         The configured voice is the default rather than a hard-coded one:
