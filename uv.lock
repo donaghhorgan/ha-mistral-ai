@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13.2"
 resolution-markers = [
     "python_full_version >= '3.14.2'",
@@ -1380,8 +1380,9 @@ wheels = [
 
 [[package]]
 name = "ha-mistral-ai"
-version = "1.0.3"
+version = "1.0.4"
 source = { virtual = "." }
+default-groups = ["dev", "ha-current"]
 dependencies = [
     { name = "homeassistant" },
     { name = "mistralai" },
