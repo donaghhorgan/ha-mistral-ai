@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -33,7 +33,14 @@ from custom_components.mistral_ai.const import (
 )
 from custom_components.mistral_ai.entity import LAZY_SEARCH_TOOL_NAME
 
-from .helpers import make_chunk, make_sdk_error, make_tool_call, stream_of
+from .helpers import (
+    make_chunk,
+    make_sdk_error,
+    make_tool_call,
+    patch_assist_tools,
+    stream_of,
+    tool_output,
+)
 
 ENTITY_ID = "conversation.mistral_ai_conversation"
 
@@ -184,12 +191,9 @@ async def test_tool_call(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "turn on the light")
 
     assert speech(result) == "Done."
@@ -251,12 +255,9 @@ async def test_tool_call_arguments_split_across_chunks(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         await converse(hass, "turn on the kitchen light")
 
     tool_input = mock_tool.async_call.await_args.args[1]
@@ -695,10 +696,7 @@ async def test_web_search_lazy_tool_is_offered_alongside_real_tools(
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         await converse(hass, "turn on the light")
 
     tools = mock_client.chat.stream_async.await_args.kwargs["tools"]
@@ -760,12 +758,9 @@ async def test_web_search_escalation_discards_a_combined_detection_call(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "turn on the light and check the weather")
 
     assert speech(result) == "Done, and it is raining."
@@ -799,10 +794,7 @@ async def test_web_search_falls_back_when_a_real_tool_claims_the_lazy_name(
     mock_tool.description = "A user-defined tool that happens to share a name"
     mock_tool.parameters = vol.Schema({})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "what is the weather")
 
     assert speech(result) == "It is raining."
@@ -924,12 +916,9 @@ async def test_web_search_runs_home_assistant_tools(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "turn on the light and check the weather")
 
     assert speech(result) == "Done, and it is raining."
@@ -988,12 +977,9 @@ async def test_web_search_drops_a_phantom_tool_call(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "check the weather")
 
     assert speech(result) == "Done, and it is raining."
@@ -1235,12 +1221,9 @@ async def test_web_search_citations_are_not_appended_twice(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         await converse(hass, "turn on the light and check the weather")
 
     second = mock_client.beta.conversations.start_stream_async.await_args_list[1].kwargs
@@ -1511,12 +1494,9 @@ async def test_a_model_that_never_stops_calling_tools_is_reported(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "turn on the light")
 
     # The message, not just the fact of an error. Without the fix this is
@@ -1555,12 +1535,9 @@ async def test_web_search_tool_loop_exhaustion_is_reported(
     mock_tool.name = "test_tool"
     mock_tool.description = "A test tool"
     mock_tool.parameters = vol.Schema({})
-    mock_tool.async_call.return_value = {"result": "ok"}
+    mock_tool.async_call.return_value = tool_output({"result": "ok"})
 
-    with patch(
-        "homeassistant.helpers.llm.AssistAPI._async_get_tools",
-        return_value=[mock_tool],
-    ):
+    with patch_assist_tools([mock_tool]):
         result = await converse(hass, "turn on the light")
 
     assert result.response.response_type is intent.IntentResponseType.ERROR

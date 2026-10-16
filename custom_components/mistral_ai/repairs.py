@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import voluptuous as vol
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import callback
 from homeassistant.helpers import issue_registry as ir
@@ -24,8 +23,17 @@ from homeassistant.helpers import issue_registry as ir
 from .const import CONF_MODEL, DOMAIN
 
 if TYPE_CHECKING:
+    # Home Assistant 2026.9 and later alias `voluptuous` to probatio at
+    # startup, and type their flow APIs with probatio's classes. The checker
+    # cannot see the alias, so it is told directly. At runtime this stays
+    # voluptuous, which is the real thing on older releases.
+    import probatio as vol
+else:
+    import voluptuous as vol
+
+if TYPE_CHECKING:
+    from homeassistant.components.repairs import RepairsFlowResult
     from homeassistant.core import HomeAssistant
-    from homeassistant.data_entry_flow import FlowResult
 
 ISSUE_PREFIX = "deprecated_model_"
 
@@ -53,13 +61,13 @@ class DeprecatedModelRepairFlow(RepairsFlow):
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         """Show what will change, and wait to be told to do it."""
         return await self.async_step_confirm()
 
     async def async_step_confirm(
         self, user_input: dict[str, str] | None = None
-    ) -> FlowResult:
+    ) -> RepairsFlowResult:
         """Switch the model, or show the confirmation form."""
         if user_input is None:
             return self.async_show_form(

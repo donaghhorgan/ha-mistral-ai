@@ -32,7 +32,7 @@ live in the `env:` block of [`ci.yml`](.github/workflows/ci.yml), which is the
 only place they are written down:
 
 ```bash
-uv run --isolated --no-project \
+uv run --isolated --no-project --python 3.13 \
   --with pytest-homeassistant-custom-component==0.13.269 \
   --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
   --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \

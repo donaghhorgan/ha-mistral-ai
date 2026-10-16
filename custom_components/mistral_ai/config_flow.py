@@ -6,7 +6,6 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, NamedTuple
 
-import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigEntryState,
@@ -72,6 +71,15 @@ from .const import (
     WEB_SEARCH_TOOLS,
 )
 from .helpers import async_list_voices
+
+if TYPE_CHECKING:
+    # Home Assistant 2026.9 and later alias `voluptuous` to probatio at
+    # startup, and type their flow APIs with probatio's classes. The checker
+    # cannot see the alias, so it is told directly. At runtime this stays
+    # voluptuous, which is the real thing on older releases.
+    import probatio as vol
+else:
+    import voluptuous as vol
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

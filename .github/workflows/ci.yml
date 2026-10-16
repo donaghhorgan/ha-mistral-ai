@@ -41,7 +41,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          # The Python uv.lock resolves for -- see [tool.uv] environments in
+          # pyproject.toml. Lint syncs the locked environment, so it runs
+          # where that environment can be installed.
+          python-version: "3.14"
 
       - name: Install UV
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -67,13 +70,17 @@ jobs:
     # exactly through pytest-homeassistant-custom-component. Run with
     # --locked so a stale lockfile fails here rather than being regenerated
     # silently.
+    #
+    # On Python 3.14 because that Home Assistant requires it, and uv.lock is
+    # resolved for nothing else. The integration's own floor, Python 3.13, is
+    # Test (ha-minimum)'s to prove.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
 
       - name: Install UV
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
@@ -95,7 +102,9 @@ jobs:
     runs-on: ubuntu-latest
 
     # The oldest supported Home Assistant -- the floor advertised in
-    # hacs.json, so that claim is backed by a passing run.
+    # hacs.json, so that claim is backed by a passing run. It is also the
+    # only job on the oldest supported Python, requires-python in
+    # pyproject.toml, since everything locked runs on a newer one.
     #
     # Resolved on the fly rather than locked, which is the whole point. These
     # pins are a year old and cannot move by design, and while they lived in
@@ -153,8 +162,12 @@ jobs:
         # project normally gets them from its dev group, which an isolated run
         # does not have, so they are named here -- the same arrangement as
         # test-latest below.
+        #
+        # --python is not optional. uv reads .python-version even with
+        # --no-project, and that names the locked Python (3.14), on which this
+        # Home Assistant's dependencies do not even build.
         run: |
-          uv run --isolated --no-project \
+          uv run --isolated --no-project --python 3.13 \
             --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
             --with "hassil==${HASSIL_VERSION}" \
             --with "home-assistant-intents==${INTENTS_VERSION}" \
@@ -172,23 +185,26 @@ jobs:
     name: Test against latest Home Assistant
     runs-on: ubuntu-latest
 
-    # The `test` matrix is bounded by uv.lock, which resolves under the
-    # project's Python 3.13. Home Assistant 2026.5.0 and later require Python 3.14, so
-    # the locked environment can never reach them, and without this job the
-    # most recent Home Assistant releases -- the ones most users are actually
-    # running -- would go untested.
+    # Test (ha-current) is pinned to a stable Home Assistant release, and
+    # moving that pin is a deliberate change. This job instead takes the
+    # newest pytest-homeassistant-custom-component on every run, which often
+    # pins a beta -- so it is the early warning for the Home Assistant release
+    # after the one we test against, while there is still time to adapt.
+    #
+    # It earns its keep: Home Assistant 2026.9 swapped voluptuous for
+    # probatio, and the schema converter this integration used turned tool
+    # definitions and AI task structures into a placeholder that could not be
+    # serialised, so every turn with tools failed. Nothing noticed, because
+    # this job was pinned to 2026.7.4 at the time.
     #
     # This is allowed to fail without blocking: it tracks a moving target and
     # will break when Home Assistant makes a change we have not adapted to
     # yet. That is a signal to act on, not a reason to hold up an unrelated
-    # pull request. The `test` matrix jobs are the blocking ones.
+    # pull request. Test (ha-current) and Test (ha-minimum) are the blocking
+    # ones.
     continue-on-error: true
 
     env:
-      # Pins pytest-homeassistant-custom-component to the newest release with
-      # a stable Home Assistant pin. Dependabot does not manage this, so it
-      # needs bumping by hand every so often.
-      PHCC_VERSION: 0.13.348 # Home Assistant 2026.7.4
       # As above: the declared floor, kept honest by
       # check_manifest_consistency.py.
       MISTRALAI_SPEC: "mistralai>=3.0.0"
@@ -197,6 +213,10 @@ jobs:
       # it from, and compared against the manifest by
       # check_manifest_consistency.py.
       SENTENCE_STREAM_SPEC: "sentence-stream>=1.1.0"
+      # Also from manifest.json. Home Assistant itself depended on this until
+      # 2026.9, so the other jobs get it for free; from 2026.9 on, only the
+      # manifest brings it in, and an isolated run has no manifest install.
+      VOLUPTUOUS_OPENAPI_SPEC: "voluptuous-openapi>=0.2.0"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -213,18 +233,30 @@ jobs:
 
       - name: Run tests against the latest Home Assistant version
         # These are all needed to import or set up Home Assistant components
-        # this integration builds on: hassil and home-assistant-intents for
-        # `conversation`, mutagen and ha-ffmpeg for `tts`, which imports both
-        # at module level. The project gets them from its dev group, which an
-        # isolated run does not have, so they are named here too. Adding a
-        # platform means checking whether this list needs another entry --
-        # nothing else will tell you until this job goes red.
+        # this integration builds on: gazetteer-matcher, hassil and
+        # home-assistant-intents for `conversation`, mutagen and ha-ffmpeg for
+        # `tts`, which imports both at module level. The project gets them
+        # from its dev and ha-current groups, which an isolated run does not
+        # have, so they are named here too. Adding a platform means checking
+        # whether this list needs another entry -- nothing else will tell you
+        # until this job goes red.
+        #
+        # The homeassistant requirement constrains nothing; its job is the
+        # `b0`. uv only takes a pre-release for a package whose own
+        # requirement names one, so without it a harness pinning a Home
+        # Assistant beta fails to resolve and uv falls back to an older one.
+        # --prerelease allow would work too, but would let every other
+        # package drift onto pre-releases as well, and this job is meant to
+        # move with Home Assistant alone.
         run: |
           uv run --isolated --no-project --python 3.14 \
-            --with "pytest-homeassistant-custom-component==${PHCC_VERSION}" \
+            --with pytest-homeassistant-custom-component \
+            --with "homeassistant>=2025.8.0b0" \
             --with "${MISTRALAI_SPEC}" \
             --with "${SENTENCE_STREAM_SPEC}" \
+            --with "${VOLUPTUOUS_OPENAPI_SPEC}" \
             --with PyTurboJPEG \
+            --with gazetteer-matcher \
             --with hassil \
             --with home-assistant-intents \
             --with mutagen \

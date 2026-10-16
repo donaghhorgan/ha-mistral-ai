@@ -469,7 +469,7 @@ uv run pytest
 # Run the tests against the oldest supported Home Assistant version.
 # Resolved on the fly rather than locked -- see CLAUDE.md for why, and
 # .github/workflows/ci.yml for the pins this mirrors.
-uv run --isolated --no-project \
+uv run --isolated --no-project --python 3.13 \
   --with pytest-homeassistant-custom-component==0.13.269 \
   --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
   --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
