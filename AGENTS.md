@@ -54,8 +54,8 @@ copy; see [`brands/README.md`](./brands/README.md).
 #### Home Assistant pins almost everything
 
 `pytest-homeassistant-custom-component` pins Home Assistant to an exact
-version, and Home Assistant pins its own dependencies exactly — 46 of them
-directly in 2026.2.3, plus whatever those pin beneath. So most of the
+version, and Home Assistant pins its own dependencies exactly — 44 of them
+directly in 2026.10.1, plus whatever those pin beneath. So most of the
 resolution is frozen, and a package under that subtree cannot be upgraded on
 its own. Attempting it does not fail a check, it fails resolution:
 
@@ -104,14 +104,21 @@ page.
 
 ### Code Style and Coding Conventions
 
-- Python code should be written for the version in [`.python-version`](.python-version)
+- Python code should be written for the version in `requires-python` in
+  [`pyproject.toml`](./pyproject.toml), which is the oldest Python the
+  integration supports — not the one in [`.python-version`](.python-version),
+  which is newer (see below). Ruff's `target-version` and ty's
+  `python-version` follow `requires-python` so that they enforce this.
 - The integration is tested against three Home Assistant versions, because no
   single environment can cover the supported range:
-  - `Test (ha-current)` — whatever `uv.lock` resolves, on Python 3.13
-  - `Test (ha-minimum)` — the floor named in `hacs.json`, on Python 3.13
-  - `Test against latest Home Assistant` — the newest release, on Python 3.14,
-    since Home Assistant 2026.5.0 and later require it. Advisory only; it
-    tracks a moving target.
+  - `Test (ha-current)` — whatever `uv.lock` resolves, on Python 3.14. Pinned
+    to a stable Home Assistant release, currently 2026.10.1.
+  - `Test (ha-minimum)` — the floor named in `hacs.json`, on Python 3.13, which
+    is also the floor for Python
+  - `Test against latest Home Assistant` — the newest
+    `pytest-homeassistant-custom-component`, which often pins a Home Assistant
+    beta. Advisory only; it tracks a moving target, and is the early warning
+    for the next release.
 
   Only the first comes from `uv.lock`, and it is the only resolution there —
   `uv sync` gets it, and `uv sync --all-groups` works again now that nothing
@@ -122,21 +129,41 @@ page.
   project unresolvable for Dependabot — silently, with no pull request — and
   raised security alerts on versions that cannot move by design. Reproducibility
   barely suffers: `pytest-homeassistant-custom-component` pins Home Assistant
-  exactly, and Home Assistant pins some 46 packages exactly, so the lockfile
+  exactly, and Home Assistant pins some 44 packages exactly, so the lockfile
   was mostly restating pins that already existed upstream.
 
   The trade is that `Test (ha-minimum)` blocks without `--locked`, so a
   transitive re-release can break it independently of any pull request.
 
-  `test-latest` cannot be a group: it needs Python 3.14, which `uv.lock`
-  cannot resolve under `requires-python = ">=3.13.2"`. Marker-gating it makes
-  the lock succeed but silently resolves to nothing on 3.13, which would give
-  a job that passes while testing the wrong version. It stays an isolated
-  `uv run --with` install for that reason.
+  **Two Python versions, on purpose.** Home Assistant 2026.5.0 and later
+  require Python 3.14, and every `pytest-homeassistant-custom-component`
+  after 0.13.316 does too. `requires-python` stays at 3.13 because the
+  integration supports Home Assistant back to the floor, which runs on 3.13.
+  `[tool.uv] environments` in `pyproject.toml` then limits `uv.lock` to
+  Python 3.14.2 and later, so the lock can follow current Home Assistant
+  without that becoming a claim about what the integration supports.
+  `.python-version`, the devcontainer and the locked CI jobs follow the lock;
+  `check_python_version_consistency.py` knows which file follows which.
 
-  The project itself stays on Python 3.13 so that the floor remains
-  reachable. Do not raise `requires-python` to 3.14 without also raising the
-  minimum Home Assistant version to one that requires it.
+  Before this, the lock resolved for 3.13 and so could not move past Home
+  Assistant 2026.2.3. Every advisory against a package that Home Assistant
+  pinned stayed open, and the blocking tests fell eight releases behind the
+  release users were running — long enough to miss the switch to probatio
+  below.
+
+  Do not raise `requires-python` to 3.14 without also raising the minimum Home
+  Assistant version to one that requires it.
+
+  **Home Assistant 2026.9 replaced voluptuous with probatio**, and aliases the
+  `voluptuous` module to probatio for the whole process. So inside a running
+  Home Assistant of that age, `import voluptuous as vol` returns probatio, and
+  `vol.Schema(...)` builds a probatio schema — tools, AI task structures and
+  this integration's own schemas alike. `voluptuous_openapi` cannot convert
+  those: it returned a placeholder that could not be serialised, so every turn
+  with tools and every structured AI task failed on 2026.9 and later.
+  Convert schemas with `_to_json_schema` in `entity.py`, which picks the right
+  converter, and in tests build anything version-specific through the shims
+  in `tests/helpers.py`.
 - Write unit tests for new functionality
 - Consult the [Home Assistant Developer
   Docs](https://developers.home-assistant.io/) when making changes to Home
@@ -310,9 +337,9 @@ So merge the workflow first, let it run once on `main`, and add it to the
 ruleset after.
 
 `Test against latest Home Assistant` is deliberately not among them. It is
-`continue-on-error` because it tracks a moving upstream target, so requiring
-it would let an unrelated Home Assistant release block every merge in the
-repository.
+`continue-on-error` because it tracks a moving upstream target — often a Home
+Assistant beta — so requiring it would let an unrelated Home Assistant release
+block every merge in the repository.
 
 The ruleset is also strict: a branch must be up to date with `main` before it
 can merge. With short-lived branches that is rarely more than a fast-forward.

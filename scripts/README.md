@@ -80,14 +80,16 @@ Checks that the `hassil` and `home-assistant-intents` pins in `pyproject.toml`
 match what the *installed* Home Assistant declares in the conversation
 component's manifest.
 
-Home Assistant pins both to exact versions, and the pins differ between
-releases, so they are pinned beside each Home Assistant version rather than
-shared: `ha-current` in `pyproject.toml`, and the floor in the `env:` block of
+Home Assistant pins these to exact versions — `hassil` and
+`home-assistant-intents`, plus `gazetteer-matcher` in newer releases — and the
+pins differ between releases, so they are pinned beside each Home Assistant
+version rather than shared: `ha-current` in `pyproject.toml`, and the floor in
+the `env:` block of
 `ci.yml`. Both are read. Nothing else keeps the two in step: bumping
 `pytest-homeassistant-custom-component` changes the Home Assistant version
 without touching the pins next to it, and a mismatch can break the build
 outright — `hassil` 3.11 dropped `hassil.fuzzy`, which Home Assistant 2026.2
-imports.
+imported.
 
 Only the source matching the installed Home Assistant is checked; the other
 describes a version that is not present. Run it under both to cover both.
@@ -97,7 +99,7 @@ uv run python scripts/check_intent_pin_consistency.py
 uv run pre-commit run intent-pin-consistency --all-files
 
 # And against the floor, whose pins live in ci.yml rather than pyproject.toml
-uv run --isolated --no-project \
+uv run --isolated --no-project --python 3.13 \
   --with pytest-homeassistant-custom-component==0.13.269 \
   --with hassil==2.2.3 --with home-assistant-intents==2025.7.30 \
   --with pycares==4.9.0 --with ha-ffmpeg --with mutagen \
@@ -108,7 +110,7 @@ uv run --isolated --no-project \
 Example failure:
 
 ```text
-❌ Nothing matches Home Assistant 2026.2.3
+❌ Nothing matches Home Assistant 2026.10.1
 ```
 
 ## `check_manifest_consistency.py`
@@ -126,15 +128,23 @@ uv run pre-commit run sync-manifest --all-files
 ## `check_python_version_consistency.py`
 
 Checks that the Python version agrees across `.python-version`,
-`pyproject.toml` (`requires-python`), `.devcontainer.json` and the CI workflow
-matrix in `.github/workflows/`, so local development, the devcontainer and CI
-cannot silently diverge.
+`pyproject.toml`, `.devcontainer.json` and the CI workflows in
+`.github/workflows/`, so local development, the devcontainer and CI cannot
+silently diverge.
 
-CI is held to a looser rule than the rest: at least one job must run on the
-declared version, and jobs may additionally run on *newer* ones. That allows
-the `test-latest` job to exercise recent Home Assistant releases, which
-require Python 3.14, without the project itself moving off 3.13. A CI job on
-an *older* Python than `requires-python` is still an error.
+There are two versions, and each file follows one of them:
+
+- The **supported** version, from `requires-python` — the oldest Python the
+  integration runs on. Ruff's `target-version` must match it, and at least one
+  CI job must run on it (`Test (ha-minimum)`).
+- The **locked** version, from `[tool.uv] environments` — the Python `uv.lock`
+  resolves for, which current Home Assistant requires. `uv sync` installs
+  nowhere else, so `.python-version` and `.devcontainer.json` must match it,
+  `.python-version` must not be below it, and at least one CI job must run on
+  it.
+
+Without an `environments` entry the two are the same. A CI job on an *older*
+Python than `requires-python` is an error either way.
 
 ```bash
 uv run python scripts/check_python_version_consistency.py

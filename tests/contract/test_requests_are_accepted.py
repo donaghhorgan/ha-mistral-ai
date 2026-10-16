@@ -181,6 +181,83 @@ async def test_a_function_tool_comes_back_as_a_tool_call(post: Callable) -> None
     assert json.loads(calls[0]["function"]["arguments"])
 
 
+def _converted_schema() -> dict[str, Any]:
+    """Return a schema converted the way entity.py converts Home Assistant's.
+
+    Built with `vol`, as integrations write them. Under Home Assistant 2026.9
+    and later that is probatio in disguise, which is the case this exists
+    for: the old converter turned such schemas into placeholder objects, and
+    the probatio one adds `additionalProperties` and keeps `nullable`. The
+    parts are ones Home Assistant's own tools use -- an optional nullable
+    value, an enum, a list and a selector.
+    """
+    # Imported here so the rest of the suite does not need Home Assistant.
+    import voluptuous as vol  # noqa: PLC0415
+    from homeassistant.helpers import llm, selector  # noqa: PLC0415
+
+    from custom_components.mistral_ai.entity import _to_json_schema  # noqa: PLC0415
+
+    schema = vol.Schema(
+        {
+            vol.Required("name", description="Area name"): str,
+            vol.Optional("brightness"): vol.Any(int, None),
+            vol.Required("domain"): vol.In(["light", "switch"]),
+            vol.Optional("entities"): [str],
+            vol.Optional("note"): selector.TextSelector(),
+        }
+    )
+    return _to_json_schema(schema, llm.selector_serializer)
+
+
+async def test_a_converted_schema_is_accepted_as_tool_parameters(
+    post: Callable,
+) -> None:
+    """Tool parameters as the integration converts them are accepted."""
+    response = await post(
+        "/chat/completions",
+        {
+            "model": MODEL,
+            "messages": [{"role": "user", "content": "Turn on the kitchen light."}],
+            "max_tokens": 120,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "HassTurnOn",
+                        "description": "Turn on a device",
+                        "parameters": _converted_schema(),
+                    },
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+
+async def test_a_converted_schema_is_accepted_as_a_structure(post: Callable) -> None:
+    """An AI task structure as the integration converts it returns JSON."""
+    response = await post(
+        "/chat/completions",
+        {
+            "model": MODEL,
+            "messages": [{"role": "user", "content": "Describe a kitchen."}],
+            "max_tokens": 120,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "room",
+                    "schema": _converted_schema(),
+                    "strict": True,
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert json.loads(response.json()["choices"][0]["message"]["content"])
+
+
 # --------------------------------------------------------------------------
 # Conversations -- where the connectors run, and where the bugs were
 # --------------------------------------------------------------------------

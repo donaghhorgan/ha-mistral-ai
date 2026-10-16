@@ -9,7 +9,6 @@ from contextlib import asynccontextmanager
 from mimetypes import guess_file_type
 from typing import TYPE_CHECKING, Any, NoReturn
 
-import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant
@@ -48,6 +47,11 @@ from .const import (
 )
 from .helpers import clamped_temperature
 
+try:
+    import probatio
+except ImportError:  # Home Assistant before 2026.9, which used voluptuous
+    probatio = None
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Callable, Mapping
     from pathlib import Path
@@ -59,6 +63,25 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def _to_json_schema(
+    schema: Any, custom_serializer: Callable[[Any], Any] | None
+) -> dict[str, Any]:
+    """Convert a tool's parameters or a task's structure to JSON schema.
+
+    Home Assistant 2026.9 replaced voluptuous with probatio, and aliases the
+    `voluptuous` module to probatio for the whole process -- so inside a
+    running Home Assistant, even this integration's own `vol.Schema` is a
+    probatio schema. voluptuous_openapi cannot read one: it hands the schema to
+    the custom serializer, which returns a placeholder that is not even
+    JSON-serialisable, so every turn with tools and every structured AI task
+    failed before a request was sent. Older releases have no probatio and keep
+    the old converter.
+    """
+    if probatio is not None and isinstance(schema, probatio.Schema):
+        return probatio.to_openapi(schema, custom_serializer=custom_serializer)
+    return convert(schema, custom_serializer=custom_serializer)
+
+
 def _format_tool(
     tool: llm.Tool, custom_serializer: Callable[[Any], Any] | None
 ) -> dict[str, Any]:
@@ -68,9 +91,21 @@ def _format_tool(
         "function": {
             "name": tool.name,
             "description": tool.description or "",
-            "parameters": convert(tool.parameters, custom_serializer=custom_serializer),
+            "parameters": _to_json_schema(tool.parameters, custom_serializer),
         },
     }
+
+
+def _tool_result_data(content: conversation.ToolResultContent) -> Any:
+    """Return the data a tool produced.
+
+    Newer Home Assistant wraps it in an llm.ToolResult as `result`, and keeps
+    `tool_result` only as a deprecated property that reports each use and is
+    due to be removed in 2027.11. Older releases have only `tool_result`.
+    """
+    if (result := getattr(content, "result", None)) is not None:
+        return result.data
+    return content.tool_result
 
 
 def _parse_arguments(arguments: Any) -> dict[str, Any]:
@@ -258,7 +293,7 @@ def _convert_content(content: conversation.Content) -> dict[str, Any]:
             "role": "tool",
             "name": content.tool_name,
             "tool_call_id": content.tool_call_id,
-            "content": json.dumps(content.tool_result, default=str),
+            "content": json.dumps(_tool_result_data(content), default=str),
         }
 
     raise HomeAssistantError(f"Unsupported content type: {type(content)}")
@@ -1023,7 +1058,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
         self,
         chat_log: conversation.ChatLog,
         structure_name: str | None = None,
-        structure: vol.Schema | None = None,
+        structure: Any = None,
     ) -> None:
         """Generate an answer for the chat log."""
         options = self.subentry.data
@@ -1097,7 +1132,7 @@ class MistralBaseLLMEntity(MistralBaseEntity):
                 "type": "json_schema",
                 "json_schema": {
                     "name": slugify(structure_name),
-                    "schema": convert(structure, custom_serializer=custom_serializer),
+                    "schema": _to_json_schema(structure, custom_serializer),
                     "strict": True,
                 },
             }

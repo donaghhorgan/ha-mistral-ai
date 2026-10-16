@@ -10,8 +10,9 @@ dev = [
   # Only used by scripts/generate_brand_assets.py. This floor used to be held
   # down to what Home Assistant 2025.8.0 pinned, because raising it made the
   # minimum-version group unresolvable. That group is gone, so the constraint
-  # is lifted -- but ha-current still pins pillow exactly (12.0.0), which is
-  # why Dependabot is not allowed to move it either way.
+  # is lifted -- but ha-current still pins pillow exactly (12.3.0 in Home
+  # Assistant 2026.10.1), which is why Dependabot is not allowed to move it
+  # either way.
   "pillow>=11.3.0",
   "pre-commit>=4.3.0",
   "pymarkdownlnt>=0.9.32",
@@ -27,18 +28,25 @@ dev = [
 # version, so this group chooses the version everything here is tested
 # against. It is the only resolution in uv.lock -- `uv sync` gets it.
 #
+# Pick a release that pins a stable Home Assistant; the harness alternates
+# between beta and stable pins. Home Assistant 2026.5.0 and later need Python
+# 3.14, which is why [tool.uv] environments below limits the lock to it.
+#
 # The oldest supported version is tested too, but deliberately not from here:
 # its pins are a year old and cannot move, and carrying them in this file made
 # the project unresolvable for Dependabot and raised security alerts on
 # versions frozen by design. That job resolves on the fly instead, and its
 # pins live in .github/workflows/ci.yml.
 ha-current = [
-  "pytest-homeassistant-custom-component==0.13.316", # HA 2026.2.3
+  "pytest-homeassistant-custom-component==0.13.372", # HA 2026.10.1
   # Pinned to what this Home Assistant version declares in the conversation
-  # component's manifest. They are not interchangeable across versions:
-  # hassil 3.11 dropped hassil.fuzzy, which HA 2026.2 imports.
-  "hassil==3.5.0",
-  "home-assistant-intents==2026.1.28",
+  # component's manifest, kept in step by check_intent_pin_consistency.py.
+  # They are not interchangeable across versions: hassil 3.11 dropped
+  # hassil.fuzzy, which HA 2026.2 imported, and gazetteer-matcher is new in
+  # the conversation manifest since then.
+  "gazetteer-matcher==1.1.0",
+  "hassil==3.12.1",
+  "home-assistant-intents==2026.10.6",
 ]
 
 [project]
@@ -67,6 +75,18 @@ dependencies = [
 
 [tool.uv]
 default-groups = ["dev", "ha-current"]
+# The lock resolves only for the Python that ha-current's Home Assistant
+# needs, while requires-python above stays at what the integration supports.
+# The two are separate claims: requires-python is the oldest Python the
+# integration runs on, backed by the Test (ha-minimum) job in ci.yml, which
+# runs on 3.13 without the lock. This is the Python the locked, current Home
+# Assistant runs on.
+#
+# Without it, uv resolves for every version requires-python admits and fails,
+# because no current pytest-homeassistant-custom-component supports 3.13.
+# Raising requires-python instead would drop support for every Home Assistant
+# release before 2026.5.0. Keep this in step with .python-version.
+environments = ["python_full_version >= '3.14.2'"]
 
 [tool.pytest.ini_options]
 # The contract tests are excluded by default: they make real, billed requests

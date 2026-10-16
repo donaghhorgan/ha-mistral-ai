@@ -2,8 +2,8 @@
 """
 Check that the intent package pins match the installed Home Assistant.
 
-Home Assistant pins hassil and home-assistant-intents to exact versions in
-the conversation component's manifest, and the pins differ between releases.
+Home Assistant pins hassil, home-assistant-intents and, in newer releases,
+gazetteer-matcher to exact versions in the conversation component's manifest, and the pins differ between releases.
 This project therefore pins them beside each Home Assistant version rather
 than sharing one constraint.
 
@@ -25,8 +25,10 @@ import sys
 import tomllib
 from pathlib import Path
 
-# The packages Home Assistant pins exactly and we therefore mirror.
-PACKAGES = ("hassil", "home-assistant-intents")
+# The packages Home Assistant pins exactly and we therefore mirror. A release
+# that does not declare one of them (gazetteer-matcher is newer than the
+# floor) is simply not checked for it.
+PACKAGES = ("gazetteer-matcher", "hassil", "home-assistant-intents")
 
 # Maps the pytest-homeassistant-custom-component pin in a group to the group
 # name, so the script can tell which group is currently installed.

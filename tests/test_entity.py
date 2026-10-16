@@ -27,7 +27,7 @@ from custom_components.mistral_ai.entity import (
     _validation_detail,
 )
 
-from .helpers import make_chunk, make_stream, make_tool_call
+from .helpers import make_chunk, make_stream, make_tool_call, make_tool_result
 
 
 def test_convert_user_content() -> None:
@@ -74,12 +74,7 @@ def test_convert_assistant_content_with_tool_calls() -> None:
 
 def test_convert_tool_result_content() -> None:
     """Tool results become tool messages carrying the call id."""
-    content = conversation.ToolResultContent(
-        agent_id="agent",
-        tool_call_id="call_1",
-        tool_name="turn_on",
-        tool_result={"ok": True},
-    )
+    content = make_tool_result("call_1", "turn_on", {"ok": True})
 
     message = _convert_content(content)
 
@@ -93,11 +88,8 @@ def test_convert_tool_result_content_with_non_json_native_value() -> None:
     """A tool result containing a non-JSON-native value (e.g. HassGetCurrentTime's
     speech_slots) is coerced instead of crashing message replay on a later turn.
     """
-    content = conversation.ToolResultContent(
-        agent_id="agent",
-        tool_call_id="call_1",
-        tool_name="HassGetCurrentTime",
-        tool_result={"speech_slots": {"time": time(14, 30)}},
+    content = make_tool_result(
+        "call_1", "HassGetCurrentTime", {"speech_slots": {"time": time(14, 30)}}
     )
 
     message = _convert_content(content)

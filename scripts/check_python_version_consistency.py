@@ -5,6 +5,16 @@ Python Version Consistency Checker
 This script checks that Python version configurations are consistent across
 all project files including pyproject.toml, .python-version, .devcontainer.json,
 GitHub Actions workflows, and tool configurations.
+
+There are two Python versions, and each file follows one of them:
+
+- The supported version, from requires-python: the oldest Python the
+  integration runs on. Linters target it, and some CI job must run on it.
+- The locked version, from [tool.uv] environments: the Python uv.lock
+  resolves for, which the current Home Assistant needs. `uv sync` can only
+  install there, so .python-version and the devcontainer follow it.
+
+Without an environments entry the two are the same version.
 """
 
 import json
@@ -89,7 +99,33 @@ class VersionChecker:
             ruff_version = data["tool"]["ruff"]["target-version"]
             versions["ruff"] = ruff_version
 
+        # Check tool.uv.environments
+        environments = data.get("tool", {}).get("uv", {}).get("environments")
+        if environments:
+            versions["uv-environments"] = environments
+
         return versions
+
+    def locked_python(self, environments: list[str]) -> str | None:
+        """Return the lowest Python uv.lock resolves for, as a full version.
+
+        Only the form this project uses is understood -- a single
+        `python_full_version >= 'X'` or `python_version >= 'X'` marker. Anything
+        else is reported rather than guessed at, since a misread here would
+        quietly check every file against the wrong version.
+        """
+        pattern = re.compile(
+            r"""^\s*python(?:_full)?_version\s*>=\s*['"]([0-9.]+)['"]\s*$"""
+        )
+        found = [m.group(1) for env in environments if (m := pattern.match(env))]
+        if len(found) != 1 or len(environments) != 1:
+            self.add_error(
+                "[tool.uv] environments should be a single "
+                "\"python_full_version >= 'X'\" marker; found "
+                f"{environments}"
+            )
+            return None
+        return found[0]
 
     def check_python_version_file(self) -> str | None:
         """Check .python-version file."""
@@ -209,6 +245,23 @@ class VersionChecker:
             print()
             return False
 
+        # The Python uv.lock resolves for, if it is narrower than the above.
+        locked_full = None
+        if "uv-environments" in pyproject_versions:
+            locked_full = self.locked_python(pyproject_versions["uv-environments"])
+        locked_version = (
+            self.extract_major_minor(locked_full) if locked_full else canonical_version
+        )
+        if locked_full:
+            print(f"🔒 Locked version (from [tool.uv] environments): {locked_full}")
+            if self.parse_version(locked_version) < self.parse_version(
+                canonical_version
+            ):
+                self.add_error(
+                    f"[tool.uv] environments ({locked_full}) is older than "
+                    f"requires-python ({canonical_version})"
+                )
+
         print()
 
         # Check consistency
@@ -234,22 +287,36 @@ class VersionChecker:
                             f"doesn't match requires-python ({canonical_version})"
                         )
 
+            # .python-version and the devcontainer are where `uv sync` runs,
+            # so they follow the locked version rather than the supported one.
+            locked_source = (
+                "[tool.uv] environments" if locked_full else "requires-python"
+            )
+
             # Check .python-version
             if python_version_file:
                 file_version = self.extract_major_minor(python_version_file)
-                if file_version != canonical_version:
+                if file_version != locked_version:
                     self.add_error(
                         f".python-version ({file_version}) doesn't match "
-                        f"requires-python ({canonical_version})"
+                        f"{locked_source} ({locked_version})"
+                    )
+                elif locked_full and self.parse_version(
+                    python_version_file
+                ) < self.parse_version(locked_full):
+                    self.add_error(
+                        f".python-version ({python_version_file}) is older than "
+                        f"[tool.uv] environments ({locked_full}), so `uv sync` "
+                        "would refuse it"
                     )
 
             # Check devcontainer
             if devcontainer_version:
                 container_version = self.extract_major_minor(devcontainer_version)
-                if container_version != canonical_version:
+                if container_version != locked_version:
                     self.add_error(
                         f".devcontainer.json Python version ({container_version}) "
-                        f"doesn't match requires-python ({canonical_version})"
+                        f"doesn't match {locked_source} ({locked_version})"
                     )
 
             # Check GitHub Actions.
@@ -267,6 +334,15 @@ class VersionChecker:
                 self.add_error(
                     f"No GitHub Actions job runs on the declared Python "
                     f"version ({canonical_version}); found "
+                    f"{', '.join(sorted(gh_versions_clean))}"
+                )
+
+            # The locked jobs (lint, Test (ha-current)) install from uv.lock,
+            # which only resolves for the locked version.
+            if locked_version not in gh_versions_clean:
+                self.add_error(
+                    f"No GitHub Actions job runs on the locked Python version "
+                    f"({locked_version}); found "
                     f"{', '.join(sorted(gh_versions_clean))}"
                 )
 

@@ -73,7 +73,7 @@ updates:
           - ty
           - validate-pyproject
     # An allowlist, not a blocklist, because the blocklist below can never be
-    # complete. Home Assistant 2026.2.3 pins 46 packages exactly and its
+    # complete. Home Assistant 2026.10.1 pins 44 packages exactly and its
     # dependencies pin more beneath that, so the set of things that cannot
     # move is most of the resolution -- and it changes with every Home
     # Assistant release. Enumerating it means regenerating ~50 names each time
@@ -112,8 +112,8 @@ updates:
     #
     # Everything else we declare is here. Audited by cross-referencing the
     # declared packages against what homeassistant and
-    # pytest-homeassistant-custom-component pin exactly -- 46 and 27
-    # respectively, which is why the list above is short and this one is not
+    # pytest-homeassistant-custom-component pin exactly -- 44 and 30
+    # respectively, as of 2026.10.1, which is why the list above is short and this one is not
     # its complement.
     allow:
       - dependency-name: mistralai
@@ -134,32 +134,42 @@ updates:
       - dependency-name: toml-sort
       - dependency-name: ty
       - dependency-name: validate-pyproject
+      # voluptuous and voluptuous-openapi used to be ignored, because Home
+      # Assistant pinned both exactly. It stopped in 2026.9, when it replaced
+      # voluptuous with probatio, so nothing in the resolution holds them any
+      # more. Both are runtime requirements -- voluptuous-openapi is in
+      # manifest.json, and converts schemas on Home Assistant before 2026.9 --
+      # so they are allowed like mistralai.
+      - dependency-name: voluptuous
+      - dependency-name: voluptuous-openapi
     # Kept as belt and braces while the allowlist proves itself, and because
     # each entry records why that package cannot move -- knowledge worth
     # keeping whichever mechanism enforces it.
     ignore:
       # These are not ours to choose. Each Home Assistant release pins them
       # exactly in the conversation component's manifest, and the pins differ
-      # between the versions we test: 2026.2.3 wants hassil 3.5.0 while
+      # between the versions we test: 2026.10.1 wants hassil 3.12.1 while
       # 2025.8.0 wants 2.2.3. The current one is pinned in pyproject.toml to
       # match and moves only when the Home Assistant version does. Bumping
       # them on their own upstream release schedule breaks the build --
       # hassil 3.11 dropped hassil.fuzzy, which Home Assistant 2026.2
-      # imports.
+      # imported. gazetteer-matcher joined that manifest after 2026.2 and is
+      # pinned the same way.
       #
       # pycares used to be here too, pinned to 4.9.0 because later releases
       # removed attributes the aiodns in Home Assistant 2025.8.0 reads at
       # import time. That constrained only the floor, and the floor is no
       # longer in this resolution, so the entry is gone with it.
+      - dependency-name: gazetteer-matcher
       - dependency-name: hassil
       - dependency-name: home-assistant-intents
-      # pyjwt is pinned exactly by Home Assistant itself -- PyJWT==2.10.1, in
-      # both 2025.8.0 and 2026.2.3 -- rather than by a component manifest, and
-      # nothing else in the tree constrains it harder than >=2.8.0. So it
-      # cannot move while Home Assistant is in the resolution, and attempting
-      # it does not produce a failed check, it produces a "Dependabot can't
-      # resolve your Python dependency files" error with no pull request at
-      # all:
+      # pyjwt is pinned exactly by Home Assistant itself -- PyJWT==2.15.1 in
+      # 2026.10.1 -- rather than by a component manifest, and nothing else in
+      # the tree constrains it harder than >=2.8.0. So it cannot move while
+      # Home Assistant is in the resolution, and attempting it does not
+      # produce a failed check, it produces a "Dependabot can't resolve your
+      # Python dependency files" error with no pull request at all. From when
+      # 2026.2.3 was the tested version:
       #
       #   Because homeassistant==2026.2.3 depends on pyjwt==2.10.1 and
       #   pyjwt==2.13.0, we can conclude that homeassistant==2026.2.3 cannot
@@ -167,23 +177,12 @@ updates:
       #
       # It moves when Home Assistant moves.
       - dependency-name: pyjwt
-      # voluptuous is the same as pyjwt -- Home Assistant pins it exactly,
-      # voluptuous==0.15.2 -- with one difference: we also declare it in
-      # [project] dependencies, because the integration imports it. That floor
-      # is decorative. Home Assistant's exact pin always wins, and everything
-      # else in the tree asks only for >=0.15, so no bump can ever resolve.
-      - dependency-name: voluptuous
-      # voluptuous-openapi is the same situation as voluptuous: Home Assistant
-      # pins it exactly too, voluptuous-openapi==0.2.0, so the floor declared
-      # in [project] dependencies (needed because entity.py imports it
-      # directly) is equally decorative -- Home Assistant's pin always wins.
-      - dependency-name: voluptuous-openapi
-      # pillow is the same again: we declare it for
-      # scripts/generate_brand_assets.py, but Home Assistant pins it exactly
-      # -- pillow==12.0.0 in 2026.2.3. It used to be left off the allowlist
-      # and nothing more, which keeps it out of version updates but not
-      # security updates: the allowlist does not apply to those, and an
-      # advisory against 12.0.0 failed the whole uv security-update run with
+      # pillow is the same: we declare it for scripts/generate_brand_assets.py,
+      # but Home Assistant pins it exactly -- Pillow==12.3.0 in 2026.10.1. It
+      # used to be left off the allowlist and nothing more, which keeps it out
+      # of version updates but not security updates: the allowlist does not
+      # apply to those, and an advisory against 12.0.0 failed the whole uv
+      # security-update run, when 2026.2.3 was the tested version, with
       #
       #   Because homeassistant==2026.2.3 depends on pillow==12.0.0 and
       #   pillow==12.3.0, we can conclude that homeassistant==2026.2.3
