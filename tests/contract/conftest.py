@@ -7,6 +7,7 @@ run by --ignore in pyproject.toml, so `uv run pytest` stays offline and free.
 from __future__ import annotations
 
 import os
+import socket
 from typing import TYPE_CHECKING
 
 import httpx
@@ -16,6 +17,16 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Generator
 
 BASE_URL = "https://api.mistral.ai/v1"
+
+# The resolver as it was before any test ran. Newer releases of the Home
+# Assistant test plugin replace these before every test with versions that
+# refuse any hostname, so this module captures the real ones while it is
+# being imported -- collection happens before the first test's setup, so
+# nothing has replaced them yet.
+_REAL_RESOLVER = {
+    name: getattr(socket, name)
+    for name in ("getaddrinfo", "gethostbyname", "gethostbyname_ex")
+}
 
 # The cheapest model that can do everything asked of it here. Nothing in this
 # suite depends on the quality of an answer, only on the shape of a response,
@@ -61,8 +72,8 @@ def api_key() -> str:
 
 
 @pytest.fixture
-def unrestricted_network() -> Generator[None]:
-    """Lift pytest-socket's restrictions for the duration of a test.
+def unrestricted_network(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
+    """Lift the test plugin's network restrictions for the duration of a test.
 
     The Home Assistant test plugin blocks outbound connections and allows
     127.0.0.1 only. That is the right default everywhere else in this suite,
@@ -82,10 +93,19 @@ def unrestricted_network() -> Generator[None]:
     behind a CDN that answers with different ones over time, so a connection
     to an address resolved later would be blocked. That is a flaky test rather
     than a safe one.
+
+    Newer releases of the plugin also block DNS, by replacing the resolver
+    functions in `socket` with ones that raise "DNS resolution disabled in
+    tests" for any hostname. pytest-socket knows nothing of that, so the real
+    resolver is put back too, and monkeypatch restores the blocking one after.
+    The proxy hid this as well: through it, only the proxy's address is ever
+    resolved, so every contract test passed locally and failed in CI.
     """
     import pytest_socket
 
     pytest_socket._remove_restrictions()  # noqa: SLF001
+    for name, function in _REAL_RESOLVER.items():
+        monkeypatch.setattr(socket, name, function)
     try:
         yield
     finally:
