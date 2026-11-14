@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.5](https://github.com/donaghhorgan/ha-mistral-ai/compare/v1.0.4...v1.0.5) (2026-11-14)
+
+
+### Bug Fixes
+
+* **deps:** bump mistralai from 3.2.0 to 3.3.0 ([#249](https://github.com/donaghhorgan/ha-mistral-ai/issues/249)) ([b2d2b97](https://github.com/donaghhorgan/ha-mistral-ai/commit/b2d2b976e3915f300806674453e1eda6c626ecd7))
+* **deps:** bump mistralai from 3.3.0 to 3.5.0 ([#254](https://github.com/donaghhorgan/ha-mistral-ai/issues/254)) ([f0fe9b6](https://github.com/donaghhorgan/ha-mistral-ai/commit/f0fe9b61a1cd6328161eba2a9b9446f8a1d55f95))
+* **deps:** bump mistralai from 3.5.0 to 3.7.0 ([#259](https://github.com/donaghhorgan/ha-mistral-ai/issues/259)) ([7b0cab7](https://github.com/donaghhorgan/ha-mistral-ai/commit/7b0cab725c34ec2ebb18b69d9d2fc8813cf6b5a1))
+* **deps:** bump opentelemetry-api from 1.45.1 to 1.45.2 ([#262](https://github.com/donaghhorgan/ha-mistral-ai/issues/262)) ([efa4d48](https://github.com/donaghhorgan/ha-mistral-ai/commit/efa4d48476441ccc748c70ef064b59dd06d19dd3))
+* **deps:** bump sentence-stream from 1.3.0 to 1.4.0 ([#258](https://github.com/donaghhorgan/ha-mistral-ai/issues/258)) ([d7fc5d5](https://github.com/donaghhorgan/ha-mistral-ai/commit/d7fc5d5d26e6a40caab152a413b3b5f69e66e1a8))
+
 ## [1.0.4](https://github.com/donaghhorgan/ha-mistral-ai/compare/v1.0.3...v1.0.4) (2026-10-16)
 
 
