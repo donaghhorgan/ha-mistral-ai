@@ -1380,7 +1380,7 @@ wheels = [
 
 [[package]]
 name = "ha-mistral-ai"
-version = "1.0.4"
+version = "1.0.5"
 source = { virtual = "." }
 default-groups = ["dev", "ha-current"]
 dependencies = [
